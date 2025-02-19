@@ -10,9 +10,9 @@ import LandingView from './components/LandingView.jsx'
 import TextView from './components/TextView.jsx'
 import SignUpView from './components/SignUpView.jsx'
 import SignInView from './components/SignInView.jsx'
+import SettingsView from './components/SettingsView.jsx'
 import NotFound from './components/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
-import { getState } from './context.jsx'
 
 const ProtectedRoute = () => {
   if (!isAuthenticated()) {
@@ -37,7 +37,7 @@ createRoot(document.getElementById('root')).render(
               <Route index element={<Navigate to="main" replace />} />
               <Route path="main" element={<MainView />} />
               <Route path="other" element={<OtherView />} />
-              <Route path="settings" element={<NotFound />} />
+              <Route path="settings" element={<SettingsView />} />
             </Route>
           </Route>
           <Route path="/" element={<LandingView />} />
