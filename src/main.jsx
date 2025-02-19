@@ -7,6 +7,9 @@ import Layout from './components/Layout.jsx';
 import MainView from './components/MainView.jsx'
 import OtherView from './components/OtherView.jsx'
 import LandingView from './components/LandingView.jsx'
+import TextView from './components/TextView.jsx'
+import SignUpView from './components/SignUpView.jsx'
+import SignInView from './components/SignInView.jsx'
 import NotFound from './components/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
 import { getState } from './context.jsx'
@@ -18,9 +21,8 @@ const ProtectedRoute = () => {
   return <Outlet />;
 };
 
-
-function isAuthenticated(){
-  const { state } = getState(); // Destructure state and dispatch from the context
+function isAuthenticated() {
+  const { state } = getState();
   return Boolean(localStorage.getItem(`${state.constants.appURL}_TOKEN`));
 }
 
@@ -38,12 +40,13 @@ createRoot(document.getElementById('root')).render(
             </Route>
           </Route>
           <Route path="/" element={<LandingView />} />
+          <Route path="/signin" element={<SignInView />} />
+          <Route path="/signup" element={<SignUpView />} />
+          <Route path="/terms" element={<TextView />} />
+          <Route path="/privacy" element={<TextView />} />
+          <Route path="/eula" element={<TextView />} />
+          <Route path="/subs" element={<TextView />} />
           <Route path="*" element={<NotFound />} />
-
-
-
-
-
         </Routes>
       </Router>
     </ContextProvider>
