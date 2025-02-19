@@ -14,7 +14,7 @@ const Layout = () => {
             left: '0px',
             top: 'env(safe-area-inset-top, 0px)',
           }}
-            className="fixed flex h-full w-full">
+            className="fixed flex h-full w-full bg-light-back dark:bg-dark-back text-light-text dark:text-dark-text">
             <Sidebar />
             <div className="flex-1" style={{
               overflowY: 'auto',

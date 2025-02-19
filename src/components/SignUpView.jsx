@@ -1,7 +1,7 @@
 function SignUpView() {
   return (
     <>
-      <h1>SignUpView</h1>
+      <div>SignUpView</div>
     </>
   )
 }

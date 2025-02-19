@@ -1,7 +1,7 @@
 function OtherView() {
   return (
     <>
-      <h1>Other View</h1>
+      <div>Other View</div>
     </>
   )
 }
