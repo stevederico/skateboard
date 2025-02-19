@@ -5,4 +5,5 @@ This starter template provides:
     Tailwindcss v4,
     Javascript,
     React-Router,
+    Bootstrap-icons,
     Vite
