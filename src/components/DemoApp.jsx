@@ -5,7 +5,6 @@ import './DemoApp.css'
 
 function DemoApp() {
   const [count, setCount] = useState(0)
-  console.log("HELLO")
   return (
     <>
       <div>
