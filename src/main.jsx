@@ -22,8 +22,9 @@ const ProtectedRoute = () => {
 };
 
 function isAuthenticated() {
-  const { state } = getState();
-  return Boolean(localStorage.getItem(`${state.constants.appURL}_TOKEN`));
+  const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] || null;
+  console.log("TOKEN: ", token)
+  return Boolean(token);
 }
 
 createRoot(document.getElementById('root')).render(
