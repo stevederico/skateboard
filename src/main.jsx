@@ -23,7 +23,6 @@ const ProtectedRoute = () => {
 
 function isAuthenticated() {
   const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] || null;
-  console.log("TOKEN: ", token)
   return Boolean(token);
 }
 
