@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* @variant dark (&:where(.dark, .dark *)); */
+/* @variant dark (&:where(.dark, .dark *)); // enables manual darkmode */
 
 @theme {
     --color-primary: var(--color-blue-500);
@@ -17,5 +17,4 @@
     --color-dark-border: #2E2E2E;
     --color-dark-text: #EDEDED;
     --color-dark-back: #000;
-
   }

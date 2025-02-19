@@ -1,5 +1,10 @@
 {
     "appName": "React-Starter App Name Here",
     "backendURL": "http://www.example.com/backend",
-    "version": "0.0.0"
+    "version": "0.0.0",
+    "pages": [
+        { "title": "Main", "icon": "star" },
+        { "title": "Other", "icon": "lightning" }
+    ]
+      
 }

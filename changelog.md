@@ -23,3 +23,5 @@ added constants setup with localhost override
 added package version
 0.0.1
 added settingsView
+added auto dark mode
+added basic pages to sidebar
