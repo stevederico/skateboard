@@ -7,3 +7,5 @@ This starter template provides:
     React-Router,
     Bootstrap-icons,
     Vite
+
+Get Started by calling $ npx degit stevederico/react-starter my-project
