@@ -1,35 +1,21 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx'
-import TabBar  from './TabBar.jsx'
-
+import TabBar from './TabBar.jsx'
 
 export default function Layout() {
-    return (
-        <>
-          <div style={{
-            overflow: 'hidden',
-            overscrollBehaviorY: 'none',
-            bottom: '0px',
-            right: '0px',
-            left: '0px',
-            top: 'env(safe-area-inset-top, 0px)',
-          }}
-            className="fixed flex h-full w-full bg-light-back dark:bg-dark-back text-light-text dark:text-dark-text">
-            <Sidebar />
-            <div className="flex-1 px-4 md:px-6" style={{
-              overflowY: 'auto',
-              overscrollBehavior: 'contain',
-              top: 'env(safe-area-inset-top, 0px)',
-              bottom: '0',
-              width: '100%',
-              paddingBottom: '4rem', // Space for mobile TabBar
-            }}>
-              <Outlet />
-            </div>
+  return (
+    <div className="min-h-screen bg-light-back dark:bg-dark-back">
+      <div className="fixed inset-0 flex overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 relative overflow-y-auto scrollbar-hide">
+          <div className="container mx-auto px-4 py-8 mb-16 md:mb-0">
+            <Outlet />
           </div>
-          <TabBar />
-        </>
-      );
+        </main>
+      </div>
+      <TabBar className="md:hidden" />
+    </div>
+  );
 }
 
 

@@ -22,8 +22,15 @@ const ProtectedRoute = () => {
 };
 
 function isAuthenticated() {
-  const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] || null;
-  return Boolean(token);
+  try {
+    const token = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('token='))
+      ?.split('=')[1];
+    return Boolean(token);
+  } catch (e) {
+    return false;
+  }
 }
 
 createRoot(document.getElementById('root')).render(
