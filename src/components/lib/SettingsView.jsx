@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { getState } from '../context.jsx';
+import { getState } from '../../context.jsx';
 
 export default function SettingsView() {
   const navigate = useNavigate();

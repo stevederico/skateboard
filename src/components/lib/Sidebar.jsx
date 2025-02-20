@@ -1,4 +1,4 @@
-import { getState } from '../context.jsx'
+import { getState } from '../../context.jsx'
 import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function Sidebar(){

@@ -3,15 +3,15 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import './assets/styles.css'
 import "./assets/bootstrap-icons/bootstrap-icons.min.css"
-import Layout from './components/Layout.jsx';
+import Layout from './components/lib/Layout.jsx';
 import MainView from './components/MainView.jsx'
 import OtherView from './components/OtherView.jsx'
-import LandingView from './components/LandingView.jsx'
-import TextView from './components/TextView.jsx'
-import SignUpView from './components/SignUpView.jsx'
-import SignInView from './components/SignInView.jsx'
-import SettingsView from './components/SettingsView.jsx'
-import NotFound from './components/NotFound.jsx'
+import LandingView from './components/lib/LandingView.jsx'
+import TextView from './components/lib/TextView.jsx'
+import SignUpView from './components/lib/SignUpView.jsx'
+import SignInView from './components/lib/SignInView.jsx'
+import SettingsView from './components/lib/SettingsView.jsx'
+import NotFound from './components/lib/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
 
 const ProtectedRoute = () => {

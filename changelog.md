@@ -42,4 +42,7 @@ error handlign context
 sign out user clean up
 mobile support
 centered settings view
+added sign in and sign up to starter-backend
+added lib folder to components
+
 
