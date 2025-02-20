@@ -4,7 +4,7 @@ import TabBar from './TabBar.jsx'
 
 export default function Layout() {
   return (
-    <div className="min-h-screen bg-light-back dark:bg-dark-back">
+    <div className="min-h-screen bg-light-back dark:bg-dark-back text-light-text dark:text-dark-text">
       <div className="fixed inset-0 flex overflow-hidden">
         <Sidebar />
         <main className="flex-1 relative overflow-y-auto scrollbar-hide">
