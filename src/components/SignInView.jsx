@@ -1,5 +1,5 @@
 import { useNavigate, Link } from 'react-router-dom';
-function SignInView() {
+export default function SignInView() {
   const navigate = useNavigate()
   return (
 <div className="flex flex-col">
@@ -13,4 +13,4 @@ function SignInView() {
     </div>
   )
 }
-export default SignInView
+

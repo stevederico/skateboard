@@ -1,8 +1,8 @@
-function SignUpView() {
+export default function SignUpView() {
   return (
     <>
       <div>SignUpView</div>
     </>
   )
 }
-export default SignUpView
+

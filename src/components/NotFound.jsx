@@ -1,4 +1,4 @@
-function NotFound() {
+export default function NotFound() {
 
   return (
     <>
@@ -11,4 +11,4 @@ function NotFound() {
   )
 }
 
-export default NotFound
+

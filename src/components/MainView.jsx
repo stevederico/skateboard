@@ -1,4 +1,4 @@
-function MainView() {
+export default function MainView() {
 
   return (
     <>
@@ -6,4 +6,4 @@ function MainView() {
     </>
   )
 }
-export default MainView
+

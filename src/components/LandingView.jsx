@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-function LandingView() {
+export default function LandingView() {
   let navigate = useNavigate()
   return (
     <div className="flex flex-col ">
@@ -10,4 +10,3 @@ function LandingView() {
     </div>
   )
 }
-export default LandingView

@@ -25,3 +25,4 @@ added package version
 added settingsView
 added auto dark mode
 added basic pages to sidebar
+improved export default

@@ -2,7 +2,7 @@
 import { getState } from '../context.jsx'
 import { Link, useLocation } from 'react-router-dom';
 
-const TabBar = () => {
+export default function TabBar(){
     const location = useLocation();
     const { state } = getState();
     return (
@@ -31,5 +31,3 @@ const TabBar = () => {
       </div>
     );
   };
-
-  export default TabBar;

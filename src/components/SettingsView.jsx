@@ -1,6 +1,6 @@
 import { useNavigate, Link } from 'react-router-dom';
 
-function SettingsView() {
+export default function SettingsView() {
   const navigate = useNavigate()
   return (
     <div className="flex flex-col">
@@ -9,4 +9,4 @@ function SettingsView() {
     </div>
   )
 }
-export default SettingsView
+

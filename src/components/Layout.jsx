@@ -3,7 +3,7 @@ import Sidebar from './Sidebar.jsx'
 import TabBar  from './TabBar.jsx'
 
 
-const Layout = () => {
+export default function Layout() {
     return (
         <>
           <div style={{
@@ -31,7 +31,7 @@ const Layout = () => {
       );
 }
 
-export default Layout;
+
 
 
   

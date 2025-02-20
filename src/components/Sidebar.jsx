@@ -2,7 +2,7 @@
 import { getState } from '../context.jsx'
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const Sidebar = () => {
+export default function Sidebar(){
   const { state } = getState();
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,6 +47,4 @@ const Sidebar = () => {
       </div>
     </div>
   );
-};
-
-export default Sidebar;
+}
