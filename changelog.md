@@ -26,3 +26,13 @@ added settingsView
 added auto dark mode
 added basic pages to sidebar
 improved export default
+fixed tabbar links
+darkmode toggle
+added user persistence
+version display settings
+sidebar width
+layout improvmenets
+default appName
+default version
+improved reducer
+0.0.2
