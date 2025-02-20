@@ -36,3 +36,9 @@ default appName
 default version
 improved reducer
 0.0.2
+manual dark mode
+simplied layout
+error handlign context
+sign out user clean up
+mobile support
+
