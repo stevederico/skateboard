@@ -41,5 +41,5 @@ simplied layout
 error handlign context
 sign out user clean up
 mobile support
-more
+centered settings view
 
