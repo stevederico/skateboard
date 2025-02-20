@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useRef } from 'react';
+import React, { createContext, useContext, useReducer } from 'react';
 import pkg from '../package.json';
 const context = createContext();
 import constants from './constants.json';
@@ -16,11 +16,22 @@ function setupConstants() {
   }
 
 const initialState = {
-    "constants": setupConstants()
+    constants: setupConstants(),
+    user: JSON.parse(localStorage.getItem('user')) || null,
+    theme: localStorage.getItem('theme') || 'light'
 };
 
 function reducer(state, action) {
-    return state;
+    switch (action.type) {
+        case 'SET_USER':
+            localStorage.setItem('user', JSON.stringify(action.payload));
+            return { ...state, user: action.payload };
+        case 'SET_THEME':
+            localStorage.setItem('theme', action.payload);
+            return { ...state, theme: action.payload };
+        default:
+            return state;
+    }
 }
 
 export function ContextProvider({ children }) {

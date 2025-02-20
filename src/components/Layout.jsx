@@ -16,12 +16,13 @@ export default function Layout() {
           }}
             className="fixed flex h-full w-full bg-light-back dark:bg-dark-back text-light-text dark:text-dark-text">
             <Sidebar />
-            <div className="flex-1" style={{
+            <div className="flex-1 px-4 md:px-6" style={{
               overflowY: 'auto',
               overscrollBehavior: 'contain',
               top: 'env(safe-area-inset-top, 0px)',
               bottom: '0',
               width: '100%',
+              paddingBottom: '4rem', // Space for mobile TabBar
             }}>
               <Outlet />
             </div>
