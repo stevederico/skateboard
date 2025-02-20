@@ -7,10 +7,10 @@ function setupConstants() {
   try {
     const c = { ...constants };
     document.title = c.appName;
-    if (import.meta.env.MODE !== "production") {
-      c.backendURL = "http://localhost:3000";
-      document.title = `LOCAL: ${c.appName}`;
-    }
+    // if (import.meta.env.MODE !== "production") {
+    //   c.backendURL = "http://localhost:3000";
+    //   document.title = `LOCAL: ${c.appName}`;
+    // }
     c.version = pkg.version;
     return c;
   } catch (e) {
