@@ -56,6 +56,7 @@ Logo on SignIn and Sign Up
 Header on Main and Other
 Cleaned up spacing in SettingsView and ensured uniform heights for flex-column divs
 Contact Support on Settings
+improved constants import
 - add shadcn
 
 LATER
