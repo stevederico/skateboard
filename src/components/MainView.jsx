@@ -1,11 +1,8 @@
-import { Button } from "@/shadcn/ui/components/ui/button.jsx";
-
-function App() {
+export default function MainView() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-svh">
-      <Button>Click me</Button>
-    </div>
-  );
+    <>
+      <div className="text-xl font-semibold mb-3">Main</div>
+    </>
+  )
 }
 
-export default App;
