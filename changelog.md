@@ -44,5 +44,10 @@ mobile support
 centered settings view
 added sign in and sign up to starter-backend
 added lib folder to components
+0.0.3
+image on sidebar
 
+
+- something breaks on deno outdated --update
+- add shadcn
 
