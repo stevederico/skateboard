@@ -3,15 +3,15 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import './assets/styles.css'
 import "./assets/bootstrap-icons/bootstrap-icons.min.css"
-import Layout from './components/lib/Layout.jsx';
+import Layout from '@/starter-components/Layout.jsx';
 import MainView from './components/MainView.jsx'
 import OtherView from './components/OtherView.jsx'
-import LandingView from './components/lib/LandingView.jsx'
-import TextView from './components/lib/TextView.jsx'
-import SignUpView from './components/lib/SignUpView.jsx'
-import SignInView from './components/lib/SignInView.jsx'
-import SettingsView from './components/lib/SettingsView.jsx'
-import NotFound from './components/lib/NotFound.jsx'
+import LandingView from '@/starter-components/LandingView.jsx'
+import TextView from '@/starter-components/TextView.jsx'
+import SignUpView from '@/starter-components/SignUpView.jsx'
+import SignInView from '@/starter-components/SignInView.jsx'
+import SettingsView from '@/starter-components/SettingsView.jsx'
+import NotFound from '@/starter-components/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
 import constants from "./constants.json"
 

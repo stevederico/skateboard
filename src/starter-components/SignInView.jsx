@@ -1,24 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getState } from '../../context.jsx';
-import constants from "../../constants.json";
+import { getState } from '@/context.jsx';
+import constants from "@/constants.json";
 
-export default function SignUpView() {
+export default function SignInView() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
   const { state } = getState();
   const [errorMessage, setErrorMessage] = useState('')
 
-  async function signUpClicked() {
+  async function signInClicked() {
     try {
-      console.log(`${state.constants.backendURL}/signup`);
-      const response = await fetch(`${state.constants.backendURL}/signup`, {
+      let uri = `${state.constants.backendURL}/signin`
+      console.log("URI: ", uri)
+      const response = await fetch(uri, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const expireDate = new Date();
@@ -27,30 +28,41 @@ export default function SignUpView() {
         navigate('/app');
       } else {
         setErrorMessage('Invalid Credentials')
-        console.log("error with /signup")
+        console.log("error with /signin")
       }
     } catch (error) {
-      console.error('Signup failed:', error);
+      console.error('Signin failed:', error);
     }
+  }
+
+  function signUpClicked() {
+    navigate('/signup');
   }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen">
       <div className="w-full max-w-md p-8 space-y-3 rounded-xl bg-white">
-      <div className="flex flex-row items-center justify-center w-full  mb-6">
+        <div className="flex flex-row items-center justify-center w-full  mb-6">
           <div className="w-5 md:w-12 mr-0">
             <img src={"/icons/icon.svg"} />
           </div>
           <div className="text-lg md:text-xl font-semibold ">{constants.appName}</div>
         </div>
-        {errorMessage != '' && <div className="bg-red-200 text-red-500 text-center font-semibold border-2 border-red-500">{errorMessage}</div>}
+        {errorMessage !== '' && (
+          <div className="bg-red-200 text-red-500 text-center font-semibold border-2 border-red-500">
+            {errorMessage}
+          </div>
+        )}
         <div className="space-y-4">
           <input
             type="email"
             placeholder="Email"
             className="w-full px-3 py-2 border rounded-md"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setErrorMessage('');
+            }}
           />
           <input
             type="password"
@@ -60,13 +72,20 @@ export default function SignUpView() {
             onChange={(e) => setPassword(e.target.value)}
           />
           <button
-            onClick={signUpClicked}
+            onClick={signInClicked}
             className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-md hover:bg-blue-600"
           >
-            Sign Up
+            Sign In
+          </button>
+          <button
+            onClick={signUpClicked}
+            className="w-full px-4 py-2 font-bold text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+          >
+            Create Account
           </button>
         </div>
       </div>
     </div>
   );
+
 }

@@ -57,7 +57,8 @@ Header on Main and Other
 Cleaned up spacing in SettingsView and ensured uniform heights for flex-column divs
 Contact Support on Settings
 improved constants import
-- add shadcn
+0.0.4
+added shadcn button
 
 LATER
 - Show current user details, add getUserDetails on signIn
