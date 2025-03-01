@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { getState } from '../../context.jsx';
+import constants from "../../constants.json";
 
 
 export default function SettingsView() {
@@ -20,7 +21,7 @@ export default function SettingsView() {
           <div>Welcome</div>
           <div className="ml-auto">
             <div
-              className="rounded px-3 py-2 border cursor-pointer m-1"
+              className="rounded px-3 py-1 border cursor-pointer m-1"
               onClick={() => {
                 document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
                 navigate('/');

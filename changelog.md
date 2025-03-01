@@ -50,20 +50,20 @@ version on SettingsView
 TextView working
 added privacy policy, eula, terms, and subscriptions 
 added SignUp Add error handling
-NotFound
+NotFound Improvements
+LandingView
+Logo on SignIn and Sign Up
+Header on Main and Other
+Cleaned up spacing in SettingsView and ensured uniform heights for flex-column divs
+Contact Support on Settings
+- add shadcn
 
-- LandingView
-
-- SettingsView
-    - Show current user details
-    - Detail account
-    - Contact Support
-    - More Apps
-    - Billing Current Plan
+LATER
+- Show current user details, add getUserDetails on signIn
 - Modal Sheet
 - Support View
 - Checkout- StripeView
-- add shadcn
+
 
 
 

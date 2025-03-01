@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getState } from '../../context.jsx';
 import constants from "../../constants.json";
-const c = { ...constants };
 
 export default function SignInView() {
   const [email, setEmail] = useState('');
@@ -47,7 +46,7 @@ export default function SignInView() {
           <div className="w-5 md:w-12 mr-0">
             <img src={"/icons/icon.svg"} />
           </div>
-          <div className="text-lg md:text-xl font-semibold ">{c.appName}</div>
+          <div className="text-lg md:text-xl font-semibold ">{constants.appName}</div>
         </div>
         {errorMessage !== '' && (
           <div className="bg-red-200 text-red-500 text-center font-semibold border-2 border-red-500">
@@ -90,4 +89,3 @@ export default function SignInView() {
   );
 
 }
-
