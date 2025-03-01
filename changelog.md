@@ -60,6 +60,9 @@ improved constants import
 0.0.4
 added shadcn button
 added all shadcn/ui components, check out ShadExample.jsx
+added Shadcn/ui Sidebar
+
+- sidebar read constants.json pages
 
 LATER
 - Show current user details, add getUserDetails on signIn
