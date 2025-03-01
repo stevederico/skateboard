@@ -1,7 +1,7 @@
 import { getState } from '../../context.jsx'
 import { useNavigate, useLocation } from 'react-router-dom';
 
-export default function Sidebar(){
+export default function Sidebar() {
   const { state } = getState();
   const navigate = useNavigate();
   const location = useLocation();
@@ -10,12 +10,12 @@ export default function Sidebar(){
   return (
     <div className="bg-light-component dark:bg-dark-back dark:text-dark-text text-light-text flex flex-col h-full z-10 border-r border-gray-200 dark:border-dark-border w-full md:w-48 hidden md:flex">
       {/* LOGO */}
-      <div className="pt-8 pb-9 px-3">
-        <div className="flex flex-col items-center" onClick={() => navigate(`/app`)}>
-              <div><img className="w-24 md:w-32 h-auto mb-5" src={"/icons/icon.svg"} /></div>
-              <div className="text-lg md:text-xl font-semibold">{state.constants.appName}</div>
-        </div>
+
+      <div className="flex flex-row align-items pt-8 pb-9 px-3" onClick={() => navigate(`/app`)}>
+        <div className="w-5 md:w-12 mb-4 ml-1"><img src={"/icons/icon.svg"} /></div>
+        <div className="text-lg md:text-xl font-semibold">{state.constants.appName}</div>
       </div>
+
 
       {/* PAGES */}
       {state.constants?.pages?.map((item, index) => (
