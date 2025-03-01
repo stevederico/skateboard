@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getState } from '../../context.jsx';
+import constants from "../../constants.json";
+const c = { ...constants };
 
 export default function SignUpView() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
   const { state } = getState();
+  const [errorMessage, setErrorMessage] = useState('')
 
   async function signUpClicked() {
     try {
@@ -23,6 +26,9 @@ export default function SignUpView() {
         expireDate.setTime(expireDate.getTime() + 24 * 60 * 60 * 1000);
         document.cookie = `token=${data.token}; path=/; expires=${expireDate.toUTCString()}; Secure; SameSite=Strict;`;
         navigate('/app');
+      } else {
+        setErrorMessage('Invalid Credentials')
+        console.log("error with /signup")
       }
     } catch (error) {
       console.error('Signup failed:', error);
@@ -31,8 +37,14 @@ export default function SignUpView() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen">
-      <div className="w-full max-w-md p-8 space-y-3 rounded-xl bg-white dark:bg-dark-component">
-        <h1 className="text-2xl font-bold text-center">Sign Up</h1>
+      <div className="w-full max-w-md p-8 space-y-3 rounded-xl bg-white">
+      <div className="flex flex-row items-center justify-center w-full  mb-6">
+          <div className="w-5 md:w-12 mr-0">
+            <img src={"/icons/icon.svg"} />
+          </div>
+          <div className="text-lg md:text-xl font-semibold ">{c.appName}</div>
+        </div>
+        {errorMessage != '' && <div className="bg-red-200 text-red-500 text-center font-semibold border-2 border-red-500">{errorMessage}</div>}
         <div className="space-y-4">
           <input
             type="email"

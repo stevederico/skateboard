@@ -1,7 +1,7 @@
 export default function OtherView() {
   return (
     <>
-      <div>Other View</div>
+      <div className="text-xl font-semibold mb-3">Other</div>
     </>
   )
 }

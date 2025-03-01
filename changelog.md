@@ -49,12 +49,22 @@ image on sidebar
 version on SettingsView
 TextView working
 added privacy policy, eula, terms, and subscriptions 
+added SignUp Add error handling
+NotFound
 
-- add shadcn
 - LandingView
-- NotFound.jsx
+
 - SettingsView
-- SignUp Add error handling
+    - Show current user details
+    - Detail account
+    - Contact Support
+    - More Apps
+    - Billing Current Plan
+- Modal Sheet
+- Support View
+- Checkout- StripeView
+- add shadcn
+
 
 
 

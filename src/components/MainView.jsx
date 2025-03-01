@@ -2,7 +2,7 @@ export default function MainView() {
 
   return (
     <>
-      <div>Main</div>
+      <div className="text-xl font-semibold mb-3">Main</div>
     </>
   )
 }
