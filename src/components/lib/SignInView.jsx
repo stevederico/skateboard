@@ -7,10 +7,13 @@ export default function SignInView() {
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
   const { state } = getState();
+  const [errorMessage, setErrorMessage] = useState('')
 
   async function signInClicked() {
     try {
-      const response = await fetch(`${state.constants.backendURL}/signin`, {
+      let uri = `${state.constants.backendURL}/signin`
+      console.log("URI: ", uri)
+      const response = await fetch(uri, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -22,6 +25,9 @@ export default function SignInView() {
         expireDate.setTime(expireDate.getTime() + 24 * 60 * 60 * 1000);
         document.cookie = `token=${data.token}; path=/; expires=${expireDate.toUTCString()}; Secure; SameSite=Strict;`;
         navigate('/app');
+      } else {
+        setErrorMessage('Invalid Credentials')
+        console.log("error with /signin")
       }
     } catch (error) {
       console.error('Signin failed:', error);
@@ -36,13 +42,14 @@ export default function SignInView() {
     <div className="flex flex-col items-center justify-center min-h-screen">
       <div className="w-full max-w-md p-8 space-y-3 rounded-xl bg-white dark:bg-dark-component">
         <h1 className="text-2xl font-bold text-center">Sign In</h1>
+        {errorMessage != '' && <div className="bg-red-200 text-red-500 text-center font-semibold border-2 border-red-500">{errorMessage}</div>}
         <div className="space-y-4">
           <input
             type="email"
             placeholder="Email"
             className="w-full px-3 py-2 border rounded-md"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {setEmail(e.target.value); setErrorMessage('')}}
           />
           <input
             type="password"
