@@ -59,6 +59,7 @@ Contact Support on Settings
 improved constants import
 0.0.4
 added shadcn button
+added all shadcn/ui components, check out ShadExample.jsx
 
 LATER
 - Show current user details, add getUserDetails on signIn
