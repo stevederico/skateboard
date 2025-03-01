@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getState } from '../../context.jsx';
+import constants from "../../constants.json";
+const c = { ...constants };
 
 export default function SignInView() {
   const [email, setEmail] = useState('');
@@ -18,7 +20,7 @@ export default function SignInView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const expireDate = new Date();
@@ -40,16 +42,28 @@ export default function SignInView() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen">
-      <div className="w-full max-w-md p-8 space-y-3 rounded-xl bg-white dark:bg-dark-component">
-        <h1 className="text-2xl font-bold text-center">Sign In</h1>
-        {errorMessage != '' && <div className="bg-red-200 text-red-500 text-center font-semibold border-2 border-red-500">{errorMessage}</div>}
+      <div className="w-full max-w-md p-8 space-y-3 rounded-xl bg-white">
+        <div className="flex flex-row items-center justify-center w-full  mb-6">
+          <div className="w-5 md:w-12 mr-0">
+            <img src={"/icons/icon.svg"} />
+          </div>
+          <div className="text-lg md:text-xl font-semibold ">{c.appName}</div>
+        </div>
+        {errorMessage !== '' && (
+          <div className="bg-red-200 text-red-500 text-center font-semibold border-2 border-red-500">
+            {errorMessage}
+          </div>
+        )}
         <div className="space-y-4">
           <input
             type="email"
             placeholder="Email"
             className="w-full px-3 py-2 border rounded-md"
             value={email}
-            onChange={(e) => {setEmail(e.target.value); setErrorMessage('')}}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setErrorMessage('');
+            }}
           />
           <input
             type="password"
@@ -74,5 +88,6 @@ export default function SignInView() {
       </div>
     </div>
   );
+
 }
 
