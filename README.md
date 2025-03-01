@@ -8,4 +8,6 @@ This starter template provides:
     Bootstrap-icons,
     Vite
 
-Get Started by calling $ npx degit stevederico/starter-react my-project
+Get Started by calling:
+
+$ npx degit stevederico/starter-react my-project
