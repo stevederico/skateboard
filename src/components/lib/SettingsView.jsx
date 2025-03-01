@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { getState } from '../../context.jsx';
 
+
 export default function SettingsView() {
   const navigate = useNavigate();
   const { state } = getState();
@@ -24,4 +25,3 @@ export default function SettingsView() {
 
   );
 }
-

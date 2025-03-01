@@ -46,8 +46,16 @@ added sign in and sign up to starter-backend
 added lib folder to components
 0.0.3
 image on sidebar
+version on SettingsView
+TextView working
+added privacy policy, eula, terms, and subscriptions
 
-
-- something breaks on deno outdated --update
 - add shadcn
+- LandingView
+- NotFound.jsx
+- SettingsView
+- SignUp Add error handling
+
+
+
 

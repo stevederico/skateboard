@@ -13,7 +13,9 @@ import SignInView from './components/lib/SignInView.jsx'
 import SettingsView from './components/lib/SettingsView.jsx'
 import NotFound from './components/lib/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
+import constants from "./constants.json"
 
+const c = { ...constants };
 const ProtectedRoute = () => {
   if (!isAuthenticated()) {
     return <Navigate to="/signin" replace />;
@@ -49,10 +51,10 @@ createRoot(document.getElementById('root')).render(
           <Route path="/" element={<LandingView />} />
           <Route path="/signin" element={<SignInView />} />
           <Route path="/signup" element={<SignUpView />} />
-          <Route path="/terms" element={<TextView />} />
-          <Route path="/privacy" element={<TextView />} />
-          <Route path="/eula" element={<TextView />} />
-          <Route path="/subs" element={<TextView />} />
+          <Route path="/terms" element={<TextView details={c.terms_of_service} />} />
+          <Route path="/privacy" element={<TextView details={c.privacyPolicy} />} />
+          <Route path="/eula" element={<TextView details={c.EULA} />} />
+          <Route path="/subs" element={<TextView details={c.subscriptionDetails}/>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
