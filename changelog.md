@@ -48,7 +48,7 @@ added lib folder to components
 image on sidebar
 version on SettingsView
 TextView working
-added privacy policy, eula, terms, and subscriptions
+added privacy policy, eula, terms, and subscriptions 
 
 - add shadcn
 - LandingView
