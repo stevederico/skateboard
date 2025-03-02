@@ -24,5 +24,6 @@
 - Support Email
   
 ## Get Started
-
-$ npx degit stevederico/starter-react my-project-name
+```shell
+npx degit stevederico/starter-react my-project-name
+```
