@@ -6,7 +6,7 @@ import { AppSidebar } from "@/shadcn/ui/components/ui/app-sidebar"
 
 export default function Layout({ children }) {
   return (
-    <div className="min-h-screen bg-light-back dark:bg-dark-back text-light-text dark:text-dark-text">
+    <div className="min-h-screen bg-sidebar text-sidebar-foreground">
       <div className="fixed inset-0 flex overflow-hidden">
         <SidebarProvider>
           <AppSidebar />

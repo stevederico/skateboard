@@ -13,11 +13,15 @@ export default function SettingsView() {
 
   return (
     <>
-      <div className="text-xl font-semibold mb-3">Settings</div>
+      <div className="flex border-b w-full">
+        <div className="m-3 p-2 text-sm hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium">
+          Settings
+        </div>
+      </div>
 
-      <div className="flex flex-col items-center justify-center"> 
+      <div className="flex flex-col items-center justify-center p-4">
 
-        <div className="w-full flex rounded bg-gray-300 dark:text-gray-700 p-4 my-4 items-center h-16"> 
+        <div className="w-full flex rounded bg-accent  p-4 my-4 items-center h-16">
           <div>Welcome</div>
           <div className="ml-auto">
             <div
@@ -29,7 +33,7 @@ export default function SettingsView() {
           </div>
         </div>
 
-        <div className="w-full flex rounded bg-gray-300 dark:text-gray-700 p-4 my-4 items-center h-16"> 
+        <div className="w-full flex rounded bg-accent  p-4 my-4 items-center h-16">
           <div>Contact Us</div>
           <div className="ml-auto">
             <a
@@ -42,7 +46,7 @@ export default function SettingsView() {
         </div>
 
 
-        <div className="w-full flex rounded bg-gray-300 dark:text-gray-700 p-4 my-4 items-center h-16"> 
+        <div className="w-full flex rounded bg-accent  p-4 my-4 items-center h-16">
           <div>Dark Mode</div>
           <div className="ml-auto">
             <div className="rounded px-3 border cursor-pointer m-1" onClick={toggleDarkMode}> Toggle</div>
@@ -50,7 +54,7 @@ export default function SettingsView() {
         </div>
 
 
-        <div className="text-sm my-2">v{state.constants.version}</div> 
+        <div className="text-sm my-2">v{state.constants.version}</div>
       </div>
     </>
 
