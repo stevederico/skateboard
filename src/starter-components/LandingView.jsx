@@ -7,13 +7,13 @@ export default function LandingView() {
       <section className="py-4 ">
         <div className="flex flex-row align-items ">
           <div className="w-5 md:w-12 ml-3"><img src={"/icons/icon.svg"} /></div>
-          <div className="text-lg md:text-xl font-semibold text-base">{constants.appName}</div>
+          <div className="text-lg md:text-xl font-semibold text-app">{constants.appName}</div>
         </div>
       </section>
-      <section className="py-24 md:py-48 bg-base">
+      <section className="py-24 md:py-48 bg-app">
         <div className="flex flex-col items-center mb-6">
           <h1 className="text-center tracking-tight font-bold text-5xl md:text-7xl mb-10 text-white">{constants.appName}</h1>
-          <a href={'/app'} target="_blank" className="mx-auto bg-white text-base shadow-sm rounded-3xl p-4 md:px-8 cursor-pointer">
+          <a href={'/app'} target="_blank" className="mx-auto bg-white text-app shadow-sm rounded-3xl p-4 md:px-8 cursor-pointer">
             Get Started
           </a>
         </div>
