@@ -41,29 +41,28 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" >
-      <SidebarHeader>
+    <Sidebar collapsible="icon" className="min-w-[40px]">
+      <SidebarHeader className="p-0">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              className="my-2 hover:bg-transparent !hover:bg-transparent"
-            >
-              <span>
-                {open ? (
-                  <>
-                    <div className="bg-gray-800 rounded flex aspect-square size-6 items-center justify-center -ml-1">
-                      <DynamicIcon name={constants.appIcon} size={18} color="white" strokeWidth={2} />
+            <span>
+              {open ? (
+                <>
+                  <div className="flex flex-row items-center m-2 mt-3">
+                    <div className="bg-app dark:border rounded flex aspect-square size-10 items-center justify-center">
+                      <DynamicIcon name={constants.appIcon} size={24} color="white" strokeWidth={2} />
                     </div>
-                    <span className="font-semibold ml-0">{constants.appName}</span>
-                  </>
-                ) : (
-                  <div className="bg-gray-800 rounded flex aspect-square size-6  items-center justify-center -ml-1">
-                    <DynamicIcon name="command" size={18} color="white" strokeWidth={2} />
+                    <div className="font-semibold ml-1 text-xl">{constants.appName}</div>
                   </div>
-                )}
-              </span>
-            </SidebarMenuButton>
+                </>
+              ) : (
+                <div className="flex flex-row items-center m-2 mt-3">
+                  <div className="bg-app dark:border rounded flex aspect-square size-8 items-center justify-center">
+                    <DynamicIcon name={constants.appIcon} size={18} color="white" strokeWidth={2} />
+                  </div>
+                </div>
+              )}
+            </span>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -80,8 +79,8 @@ export function AppSidebar() {
                     onClick={() => handleNavigation(`/app/${item.url.toLowerCase()}`, item.title)}
                   >
                     <span>
-                      <DynamicIcon name={item.icon} strokeWidth={2} />
-                      <span>{item.title}</span>
+                      <DynamicIcon name={item.icon} size={24} className="w-24 h-24" />
+                      <span className="text-">{item.title}</span>
                     </span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

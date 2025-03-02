@@ -1,36 +1,32 @@
 import { useNavigate } from 'react-router-dom';
 import { getState } from '@/context.jsx';
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DynamicIcon } from "lucide-react/dynamic";
 
 export default function SettingsView() {
   const navigate = useNavigate();
   const { state } = getState();
 
-  const toggleDarkMode = () => {
- 
-  };
-
   return (
     <>
-     <div className="flex border-b w-full items-center">
-  <div className="m-3 p-2 hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium text-xl">
-    Settings
-  </div>
-  <div className="ml-auto mr-5 pt-1">
-    <ThemeToggle />
-  </div>
-</div>
+      <div className="flex border-b w-full items-center">
+        <div className="m-3 p-2 hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium text-xl">
+          Settings
+        </div>
+        <div className="ml-auto mr-5 pt-1">
+          <ThemeToggle />
+        </div>
+      </div>
 
       <div className="flex flex-col items-center justify-center p-4 gap-6">
 
         {/* PROFILE */}
         <div className="w-full  bg-accent p-6 rounded flex items-center justify-between">
-          <div className="w-10 h-10 bg-primary dark:text-black text-white flex justify-center items-center rounded-full "> <span className="uppercase">{state.currentUser?.name.split(' ').map(word => word[0]).join('') || "A"}</span></div>
+          <div className="w-10 h-10 bg-app dark:text-black text-white flex justify-center items-center rounded-full "> <span className="uppercase">{state.currentUser?.name.split(' ').map(word => word[0]).join('') || "A"}</span></div>
           {/* NAME */}
           <div className="ml-4">
-            <div className="text font-medium block mb-0 capitalize">{state.currentUser?.name || "Test User"}</div>
-            <div className="text-sm text-gray-500">{state.currentUser?.email || "user@test.com" }</div>
+            <div className="text font-medium block mb-1 capitalize">{state.currentUser?.name || "Test User"}</div>
+            <div className="text-sm text-gray-500">{state.currentUser?.email || "user@test.com"}</div>
           </div >
           {/* BUTTON */}
           <div className="ml-auto">
@@ -64,12 +60,12 @@ export default function SettingsView() {
 
         {/* LINKS */}
         <div className="my-10 text-center">
-          <span onClick={() => { navigate('/terms') }} className="m-2   text-gray-500 cursor-pointer">Terms</span>
-          <span onClick={() => { navigate('/privacy') }} className="m-2  font-medium text-gray-500 cursor-pointer">Privacy</span>
-          <span onClick={() => { navigate('/eula') }} className="m-2  font-medium text-gray-500 cursor-pointer">EULA</span>
+          <span onClick={() => { navigate('/terms') }} className="m-2   text-sm text-gray-500 cursor-pointer">Terms</span>
+          <span onClick={() => { navigate('/privacy') }} className="m-2  text-sm text-gray-500 cursor-pointer">Privacy</span>
+          <span onClick={() => { navigate('/eula') }} className="m-2  text-sm text-gray-500 cursor-pointer">Eula</span>
 
           <div className="m-2 block text-sm text-gray-500">v{state.constants.version}</div>
- 
+
         </div>
 
 
@@ -97,20 +93,19 @@ const ThemeToggle = () => {
 
   const toggleTheme = () => {
     setTheme((prevTheme) => (prevTheme === 'dark' ? 'light' : 'dark'));
-    document.body.classList.toggle('dark');
   };
 
   return (
-    <button onClick={toggleTheme} className="">
+    <button onClick={toggleTheme} className="cursor-pointer">
       {theme === 'dark' &&
-         <span className="text-gray-500">
-         <DynamicIcon name={'sun'} size={24}/>
-         </span>
+        <span className="text-gray-500">
+          <DynamicIcon name={'sun'} size={24} />
+        </span>
       }
       {theme !== 'dark' &&
-         <span className="text-gray-500">
-         <DynamicIcon name={'moon'} size={24} />
-         </span>
+        <span className="text-gray-500">
+          <DynamicIcon name={'moon'} size={24} />
+        </span>
       }
     </button>
   );
