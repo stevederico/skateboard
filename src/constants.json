@@ -4,8 +4,8 @@
     "backendURL": "http://localhost:8000",
     "pages": [
         {
-            "title": "Main",
-            "url": "main",
+            "title": "Home",
+            "url": "home",
             "icon": "house"
         },
         {
