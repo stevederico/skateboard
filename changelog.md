@@ -57,7 +57,27 @@ Header on Main and Other
 Cleaned up spacing in SettingsView and ensured uniform heights for flex-column divs
 Contact Support on Settings
 improved constants import
-- add shadcn
+0.0.4
+added shadcn button
+added all shadcn/ui components, check out ShadExample.jsx
+added Shadcn/ui Sidebar
+added cursor-pointer to collapse button
+sidebar read constants.json pages
+add isActive on sidebar click and settings
+fixed icons in tabbar
+added DynamicIcon from lucide-icons
+0.0.5
+added brand header to sidebar
+fixed full page refresh
+added basic headers to homeview and other
+settings improvemnts
+landing page
+moved darkMode toggle to top
+bigger head icon on sidebar
+- bigger icons on sidebar
+- header icon on collapse
+
+
 
 LATER
 - Show current user details, add getUserDetails on signIn

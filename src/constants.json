@@ -1,14 +1,17 @@
 {
     "appName": "TestApp",
+    "appIcon": "command",
     "backendURL": "http://localhost:8000",
     "pages": [
         {
-            "title": "Main",
-            "icon": "star"
+            "title": "Home",
+            "url": "home",
+            "icon": "house"
         },
         {
             "title": "Other",
-            "icon": "lightning"
+            "url": "other",
+            "icon": "inbox"
         }
     ],
     "companyName": "Company Inc",
