@@ -41,7 +41,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" style={{ "--sidebar-width": "12rem" }}>
+    <Sidebar collapsible="icon" >
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>

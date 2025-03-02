@@ -11,9 +11,7 @@ export default function Layout({ children }) {
         <SidebarProvider>
           <AppSidebar />
           <main className="flex-1 relative overflow-y-auto scrollbar-hide">
-            <div className="container mx-auto px-4 py-8 mb-16 md:mb-0">
               <Outlet />
-            </div>
           </main>
         </SidebarProvider>
       </div>
