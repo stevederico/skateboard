@@ -48,16 +48,16 @@ export function AppSidebar() {
             <span>
               {open ? (
                 <>
-                  <div className="flex flex-row items-center m-2 mt-3">
-                    <div className="bg-app dark:border rounded flex aspect-square size-10 items-center justify-center">
+                  <div className="flex flex-row items-center m-2 mt-4">
+                    <div className="bg-app dark:border rounded-lg flex aspect-square size-10 items-center justify-center">
                       <DynamicIcon name={constants.appIcon} size={24} color="white" strokeWidth={2} />
                     </div>
-                    <div className="font-semibold ml-1 text-xl">{constants.appName}</div>
+                    <div className="font-semibold ml-2 text-xl">{constants.appName}</div>
                   </div>
                 </>
               ) : (
                 <div className="flex flex-row items-center m-2 mt-3">
-                  <div className="bg-app dark:border rounded flex aspect-square size-8 items-center justify-center">
+                  <div className="bg-app dark:border rounded-lg flex aspect-square size-8 items-center justify-center">
                     <DynamicIcon name={constants.appIcon} size={18} color="white" strokeWidth={2} />
                   </div>
                 </div>
