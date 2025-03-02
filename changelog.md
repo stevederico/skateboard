@@ -73,7 +73,9 @@ added basic headers to homeview and other
 settings improvemnts
 landing page
 moved darkMode toggle to top
-
+bigger head icon on sidebar
+- bigger icons on sidebar
+- header icon on collapse
 
 
 
