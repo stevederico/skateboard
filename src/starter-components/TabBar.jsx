@@ -16,10 +16,14 @@ export default function TabBar() {
             {
               location.pathname.includes(item.url.toLowerCase())
                 ? (
-                  <DynamicIcon name={item.icon} color="black" size={32} />
+                  <span className="text-base">
+                    <DynamicIcon name={item.icon} size={32} strokeWidth={1} />
+                  </span>
                 )
                 : (
-                  <DynamicIcon name={item.icon} color="gray" size={32} />
+                  <span className="text-gray-500">
+                    <DynamicIcon name={item.icon} size={32} strokeWidth={1} />
+                  </span>
                 )
             }
           </Link>
@@ -27,15 +31,20 @@ export default function TabBar() {
       ))}
       <span className="px-3">
         <Link to={`/app/settings`}>
-        {
-              location.pathname.includes('Settings'.toLowerCase())
-                ? (
-                  <DynamicIcon name={"settings"} size={32} color="black" />
-                )
-                : (
-                  <DynamicIcon name={"settings"} color="gray" size={32} />
-                )
-            }
+          {
+            location.pathname.includes('Settings'.toLowerCase())
+              ? (
+
+                <span className="text-base">
+                  <DynamicIcon name={"settings"} size={32} strokeWidth={1} />
+                </span>
+              )
+              : (
+                <span className="text-gray-500">
+                  <DynamicIcon name={"settings"} size={32} strokeWidth={1} />
+                </span>
+              )
+          }
         </Link></span>
     </div>
   );
