@@ -69,6 +69,7 @@ added DynamicIcon from lucide-icons
 0.0.5
 added brand header to sidebar
 fixed full page refresh
+added basic headers to homeview and other
  
 
 
