@@ -61,8 +61,12 @@ improved constants import
 added shadcn button
 added all shadcn/ui components, check out ShadExample.jsx
 added Shadcn/ui Sidebar
-
-- sidebar read constants.json pages
+added cursor-pointer to collapse button
+sidebar read constants.json pages
+add isActive on sidebar click and settings
+- icons in tabbar
+- switch to icon font?
+- 
 
 LATER
 - Show current user details, add getUserDetails on signIn
