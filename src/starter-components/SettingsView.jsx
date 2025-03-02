@@ -13,11 +13,14 @@ export default function SettingsView() {
 
   return (
     <>
-      <div className="flex border-b w-full">
-        <div className="m-3 p-2  hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium text-xl">
-          Settings
-        </div>
-      </div>
+     <div className="flex border-b w-full items-center">
+  <div className="m-3 p-2 hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium text-xl">
+    Settings
+  </div>
+  <div className="ml-auto mr-5 pt-1">
+    <ThemeToggle />
+  </div>
+</div>
 
       <div className="flex flex-col items-center justify-center p-4 gap-6">
 
@@ -61,12 +64,12 @@ export default function SettingsView() {
 
         {/* LINKS */}
         <div className="my-10 text-center">
-          <span onClick={() => { navigate('/terms') }} className="m-2  font-medium text-gray-500 cursor-pointer">Terms</span>
+          <span onClick={() => { navigate('/terms') }} className="m-2   text-gray-500 cursor-pointer">Terms</span>
           <span onClick={() => { navigate('/privacy') }} className="m-2  font-medium text-gray-500 cursor-pointer">Privacy</span>
           <span onClick={() => { navigate('/eula') }} className="m-2  font-medium text-gray-500 cursor-pointer">EULA</span>
 
-          <div className="m-2 block font-semibold text-gray-500">v{state.constants.version}</div>
-          <ThemeToggle />
+          <div className="m-2 block text-sm text-gray-500">v{state.constants.version}</div>
+ 
         </div>
 
 
@@ -100,10 +103,14 @@ const ThemeToggle = () => {
   return (
     <button onClick={toggleTheme} className="">
       {theme === 'dark' &&
-         <DynamicIcon name={'sun'} size={24} color="gray" strokeWidth={2} />
+         <span className="text-gray-500">
+         <DynamicIcon name={'sun'} size={24}/>
+         </span>
       }
       {theme !== 'dark' &&
-        <DynamicIcon name={'moon'} size={24} color="gray" strokeWidth={2} />
+         <span className="text-gray-500">
+         <DynamicIcon name={'moon'} size={24} />
+         </span>
       }
     </button>
   );

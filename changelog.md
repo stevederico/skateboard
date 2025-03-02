@@ -70,7 +70,10 @@ added DynamicIcon from lucide-icons
 added brand header to sidebar
 fixed full page refresh
 added basic headers to homeview and other
- 
+settings improvemnts
+landing page
+moved darkMode toggle to top
+
 
 
 
