@@ -9,7 +9,7 @@ export default function TabBar() {
     <div style={{
       overflow: "hidden",
       overscrollBehavior: "none"
-    }} className="fixed flex md:hidden pt-2 pb-4 bottom-0 inset-x-0 justify-around text-center border-t border-gray-200 dark:border-dark-border shadow-lg bg-light-back dark:bg-dark-back">
+    }} className="fixed flex md:hidden pt-2 pb-4 bottom-0 inset-x-0 justify-around text-center border-t shadow-lg bg-sidebar">
       {constants?.pages?.map((item) => (
         <span className="px-3" key={item.title}>
           <Link to={`/app/${item.url.toLowerCase()}`} >
