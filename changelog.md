@@ -67,6 +67,7 @@ add isActive on sidebar click and settings
 fixed icons in tabbar
 added DynamicIcon from lucide-icons
 0.0.5
+added brand header to sidebar
  
 
 
