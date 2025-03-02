@@ -52,13 +52,13 @@ export function AppSidebar() {
               <span>
                 {open ? (
                   <>
-                    <div className="bg-black rounded flex aspect-square w-6 items-center justify-center ml-0">
+                    <div className="bg-gray-800 rounded flex aspect-square size-6 items-center justify-center -ml-1">
                       <DynamicIcon name={constants.appIcon} size={18} color="white" strokeWidth={2} />
                     </div>
                     <span className="font-semibold ml-0">{constants.appName}</span>
                   </>
                 ) : (
-                  <div className="bg-black rounded flex aspect-square w-6 items-center justify-center -ml-1">
+                  <div className="bg-gray-800 rounded flex aspect-square size-6  items-center justify-center -ml-1">
                     <DynamicIcon name="command" size={18} color="white" strokeWidth={2} />
                   </div>
                 )}
@@ -75,6 +75,7 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
+                    className="cursor-pointer"
                     isActive={activeItem === item.title}
                     onClick={() => handleNavigation(`/app/${item.url.toLowerCase()}`, item.title)}
                   >
@@ -105,6 +106,7 @@ export function AppSidebar() {
           <SidebarMenuItem key="Settings">
             <SidebarMenuButton
               asChild
+              className="cursor-pointer"
               isActive={activeItem === "Settings"}
               onClick={() => handleNavigation("/app/settings", "Settings")}
             >
