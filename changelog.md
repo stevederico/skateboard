@@ -37,7 +37,7 @@
 * default appName
 * default version
 * improved reducer
-## 0.0.2
+### released 0.0.2
 
 * manual dark mode
 * simplied layout
@@ -47,8 +47,8 @@
 * centered settings view
 * added sign in and sign up to starter-backend
 * added lib folder to components
- 
-## 0.0.3
+### released 0.0.3
+
 * image on sidebar
 * version on SettingsView
 * TextView working
@@ -61,8 +61,8 @@
 * Cleaned up spacing in SettingsView and ensured uniform heights for flex-column divs
 * Contact Support on Settings
 * improved constants import
+### released 0.0.4
 
-## 0.0.4
 * added shadcn button
 * added all shadcn/ui components, check out ShadExample.jsx
 * added Shadcn/ui Sidebar
@@ -71,8 +71,9 @@
 * add isActive on sidebar click and settings
 * fixed icons in tabbar
 * added DynamicIcon from lucide-icons
+### 0.0.5
 
-## 0.0.5
+
 * added brand header to sidebar
 * fixed full page refresh
 * added basic headers to homeview and other
