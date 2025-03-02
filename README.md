@@ -23,6 +23,7 @@
 - TabBar for Mobile
 - Settings Page
 - Support Email
+- Configure Static Text in Constants.json
   
 ## Get Started
 ```shell
