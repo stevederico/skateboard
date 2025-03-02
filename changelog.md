@@ -64,9 +64,12 @@ added Shadcn/ui Sidebar
 added cursor-pointer to collapse button
 sidebar read constants.json pages
 add isActive on sidebar click and settings
-- icons in tabbar
-- switch to icon font?
-- 
+fixed icons in tabbar
+added DynamicIcon from lucide-icons
+0.0.5
+ 
+
+
 
 LATER
 - Show current user details, add getUserDetails on signIn
