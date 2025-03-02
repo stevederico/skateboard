@@ -22,7 +22,7 @@
 * added basic cookie sign in and sign out
 * added constants setup with localhost override
 * added package version
-## 0.0.1
+### released 0.0.1 
 
 * added settingsView
 * added auto dark mode
