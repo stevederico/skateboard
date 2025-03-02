@@ -1,4 +1,6 @@
-import { Calendar, Home, Inbox, Search, Settings, PanelLeftClose } from "lucide-react"
+import { useState, useEffect } from "react";
+import constants from "@/constants.json";
+import { DynamicIcon } from 'lucide-react/dynamic';
 
 import {
     Sidebar,
@@ -13,30 +15,6 @@ import {
     useSidebar
 } from "@/shadcn/ui/components/ui/sidebar"
 
-// Menu items.
-const items = [
-    {
-        title: "Home",
-        url: "/app/main",
-        icon: Home,
-    },
-    {
-        title: "Inbox",
-        url: "/app/other",
-        icon: Inbox,
-    },
-    {
-        title: "Calendar",
-        url: "/app/main",
-        icon: Calendar,
-    },
-    {
-        title: "Search",
-        url: "/app/main",
-        icon: Search,
-    }
-]
-
 export function AppSidebar() {
     const {
         state,
@@ -46,47 +24,59 @@ export function AppSidebar() {
         setOpenMobile,
         isMobile,
         toggleSidebar,
-      } = useSidebar()
+    } = useSidebar()
+    const [activeItem, setActiveItem] = useState(() => {
+        return localStorage.getItem("activeItem") || "Main";
+      });
+
+      useEffect(() => {
+        localStorage.setItem("activeItem", activeItem);
+      }, [activeItem]);
+
+
     return (
-        <Sidebar collapsible={'icon'}   style={{
+        <Sidebar collapsible={'icon'} style={{
             "--sidebar-width": "12rem"
-          }}>
+        }}>
             <SidebarContent>
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {items.map((item) => (
-                                <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton asChild >
-                                        <a href={item.url}>
-                                            <item.icon />
-                                            <span>{item.title}</span>
-                                        </a>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
+                            {constants.pages.map((item) => {
+
+                                return (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton asChild isActive={activeItem === item.title}
+                                            onClick={() => setActiveItem(item.title)}>
+                                            <a href={`/app/${item.url.toLowerCase()}`}>
+                                                <DynamicIcon name={item.icon} />
+                                                <span>{item.title}</span>
+                                            </a>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                );
+                            })}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
-
             </SidebarContent>
             <SidebarFooter>
                 {/*  */}
                 <SidebarMenu>
                     <SidebarMenuItem key={"Collapse"}>
                         <SidebarMenuButton asChild>
-                            <div onClick={()=>{
+                            <div className="cursor-pointer" onClick={() => {
                                 setOpen(!open)
                             }}>
-                                <PanelLeftClose />
+                                <DynamicIcon name={"panel-left-close"} />
                                 <span>{"Collapse"}</span>
                             </div>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem key={"Settings"}>
-                        <SidebarMenuButton asChild>
-                            <a href={"/app/settings"}>
-                                <Settings />
+                        <SidebarMenuButton asChild isActive={activeItem === "Settings"} onClick={() => setActiveItem("Settings")}>
+                            <a href={"/app/settings"} >
+                                <DynamicIcon name={"settings"} />
                                 <span>{"Settings"}</span>
                             </a>
                         </SidebarMenuButton>

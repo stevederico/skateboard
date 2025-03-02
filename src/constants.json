@@ -4,11 +4,13 @@
     "pages": [
         {
             "title": "Main",
-            "icon": "star"
+            "url": "main",
+            "icon": "house"
         },
         {
             "title": "Other",
-            "icon": "lightning"
+            "url": "other",
+            "icon": "inbox"
         }
     ],
     "companyName": "Company Inc",

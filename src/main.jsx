@@ -2,7 +2,6 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import './assets/styles.css'
-import "./assets/bootstrap-icons/bootstrap-icons.min.css"
 import Layout from '@/starter-components/Layout.jsx';
 import MainView from './components/MainView.jsx'
 import OtherView from './components/OtherView.jsx'
