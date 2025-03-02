@@ -1,7 +1,8 @@
 # Starter-React
 
 
-<img width="885" alt="example-dark" src="https://github.com/user-attachments/assets/f8233f14-1dd7-4221-b621-d8007395fc0b" />
+
+![example](https://github.com/user-attachments/assets/a99f5298-42ae-46a3-b5d2-0a401750612e)
 
 
 ## Stack
