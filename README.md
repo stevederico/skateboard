@@ -23,6 +23,6 @@
 - Settings Page
 - Support Email
   
-Get Started by calling:
+## Get Started
 
 $ npx degit stevederico/starter-react my-project-name
