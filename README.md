@@ -4,8 +4,7 @@
 <img width="885" alt="example-dark" src="https://github.com/user-attachments/assets/f8233f14-1dd7-4221-b621-d8007395fc0b" />
 
 
-#
-This starter template provides:
+## Stack
 - React v19
 - Shadcn/ui
 - Tailwindcss v4
@@ -14,7 +13,7 @@ This starter template provides:
 - Lucide Icons
 - Vite
 
-#Features
+## Features
 - Landing Page
 - Legal Pages - Privacy, Terms of Service, EULA
 - Sign Up and Sign In
