@@ -11,6 +11,7 @@ import {
     SidebarRail,
     SidebarMenuButton,
     SidebarFooter,
+    SidebarHeader,
     SidebarMenuItem,
     useSidebar
 } from "@/shadcn/ui/components/ui/sidebar"
@@ -27,29 +28,51 @@ export function AppSidebar() {
     } = useSidebar()
     const [activeItem, setActiveItem] = useState(() => {
         return localStorage.getItem("activeItem") || "Main";
-      });
+    });
 
-      useEffect(() => {
+    useEffect(() => {
         localStorage.setItem("activeItem", activeItem);
-      }, [activeItem]);
+    }, [activeItem]);
 
 
     return (
         <Sidebar collapsible={'icon'} style={{
             "--sidebar-width": "12rem"
         }}>
+            <SidebarHeader>
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton asChild className="my-2 hover:bg-transparent !hover:bg-transparent">
+                            <span >
+                                {open ? (
+                                    <>
+                                        <div className="bg-black rounded flex aspect-square size-6 items-center justify-center ml-0">
+                                            <DynamicIcon name={constants.appIcon} size={18} color="white" strokeWidth={2} />
+                                        </div>
+                                        <span className="font-semibold ml-0">{constants.appName}</span>
+                                    </>
+                                ) : (
+                                    <div className="bg-black rounded flex aspect-square size-6 items-center justify-center -ml-1">
+                                        <DynamicIcon name="command" size={18} color="white" strokeWidth={2} />
+                                    </div>
+                                )}
+                            </span>
+                        </SidebarMenuButton>
+
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
                             {constants.pages.map((item) => {
-
                                 return (
                                     <SidebarMenuItem key={item.title}>
                                         <SidebarMenuButton asChild isActive={activeItem === item.title}
                                             onClick={() => setActiveItem(item.title)}>
                                             <a href={`/app/${item.url.toLowerCase()}`}>
-                                                <DynamicIcon name={item.icon} />
+                                                <DynamicIcon name={item.icon} strokeWidth={2} />
                                                 <span>{item.title}</span>
                                             </a>
                                         </SidebarMenuButton>
