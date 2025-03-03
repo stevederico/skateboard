@@ -2,8 +2,9 @@
 
 - SSR
 - Stripe
+    - pre-fill stripe checkout
     - Save session_id to user for manage
-    - Backend Support - webhooks
+    - Backend Support - webhooks - update database
 - Sheet Component
 - Chat Component
 - Recommendations Component
