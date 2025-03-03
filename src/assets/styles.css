@@ -6,19 +6,6 @@
 
 @theme {
   --color-app: var(--color-blue-500);
-  
-  --color-light-component: var(--color-white);
-  --color-light-buttonBorder: #878787;
-  --color-light-border: #2E2E2E;
-  --color-light-text: var(--color-black);
-  --color-light-back: var(--color-white);
-  --color-light-outletBack: #F2F2F2;
-
-  --color-dark-component: #1A1A1A;
-  --color-dark-buttonBorder: #878787;
-  --color-dark-border: #2E2E2E;
-  --color-dark-text: #EDEDED;
-  --color-dark-back: #000;
 }
 
 :root {
