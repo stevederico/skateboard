@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite --force --mode development ",
     "start": "vite --force --mode development ",
-    "build": "vite build --mode development;",
-    "prod": "vite build --mode production"
+    "build": "vite build --mode development && vite build --ssr src/entry-server.jsx",
+    "prod": "vite build --mode production && vite build --ssr src/entry-server.jsx",
+    "ssr": "deno run --allow-net --allow-read --allow-env --allow-run --allow-write --allow-sys --allow-ffi server.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.2",
@@ -42,6 +43,7 @@
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.2",
+    "express": "^4.21.2",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.477.0",
     "next-themes": "^0.4.4",

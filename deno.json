@@ -1,0 +1,27 @@
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "react": "npm:react@19.0.0",
+    "react-dom": "npm:react-dom@19.0.0",
+    "react-dom/server": "npm:react-dom@19.0.0/server",
+    "react-router-dom": "npm:react-router-dom@7.2.0",
+    "express": "npm:express@4.18.2",
+    "vite": "npm:vite@6.1.0",
+    "node:fs": "node:fs",
+    "node:path": "node:path",
+    "node:url": "node:url",
+    "node:crypto": "node:crypto",
+    "node:process": "node:process",
+    "@/": "./src/"
+  },
+  "tasks": {
+    "dev": "vite --force --mode development",
+    "start": "vite --force --mode development",
+    "build": "vite build --mode development && vite build --ssr src/entry-server.jsx",
+    "ssr": "deno run --allow-net --allow-read --allow-env --allow-run --allow-write --allow-sys --allow-ffi server.js"
+  },
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  }
+} 
