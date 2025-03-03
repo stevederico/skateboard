@@ -41,13 +41,13 @@ npx degit stevederico/starter-react my-project-name
 ## Usage
 1. install packages
 ```shell
-npm install
+deno install
 ```
 2. configure details in constants.json
 
 3. start dev server
 ```shell
-npm run dev
+deno run dev
 ```
 4. checkout [starter-backend](https://github.com/stevederico/starter-backend) for a backend auth and sqlite service
 
