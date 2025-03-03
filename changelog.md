@@ -1,13 +1,21 @@
 ## To-Do
 
+- SSR
 - Stripe
     - Backend Support - webhooks
     - Billing Section in Settings
     - Checkout sessions
-- SSR
-- Support Chat
-- More
+- Sheet Component
+- Chat Component
+- Recommendations Component
 - Utility Functions
+    - credits-system
+    - analytics wrapper
+    - appMode
+    - subscriber check
+    - date/timestamp conversions
+    - getUserDetails
+- CRUD SDK
 - iOS Support
     - Delete Account
     - Trigger IAP
@@ -18,7 +26,9 @@
     - Native Share Sheet 
     - Push Notifications 
     - Subscription URL
+    - Event Listener
     - Native Loading Indicator
+    - Subscriptions Legal Notice
 
 
 ### 0.0.7
