@@ -1,7 +1,17 @@
 import constants from "@/constants.json";
 
 import { DynamicIcon } from "lucide-react/dynamic";
+import { useEffect, useState } from "react";
+
 export default function LandingView() {
+  // Use state for year that is only updated on client-side
+  const [year, setYear] = useState(""); 
+  
+  // Client-side only code in useEffect to avoid hydration mismatch
+  useEffect(() => {
+    setYear(new Date().getFullYear().toString());
+  }, []);
+  
   return (
     <div className="flex flex-col bg-white h-screen">
       <section className="py-2 ">
@@ -22,12 +32,11 @@ export default function LandingView() {
       </section>
       <section className="py-4 mx-3">
         <div className="flex gap-3 text-gray-500 hover:text-gray-600 cursor-pointer">
-          <div className="mr-auto">&copy; {new Date().getFullYear()} {constants.companyName}</div>
+          <div className="mr-auto">&copy; {year} {constants.companyName}</div>
           <a href={'/privacy'} target="_blank">Privacy</a>
           <a href={'/terms'} target="_blank">Terms</a>
           <a href={'/eula'} target="_blank" className="mr-3">EULA</a>
         </div>
-
       </section>
     </div>
   )
