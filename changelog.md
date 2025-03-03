@@ -2,9 +2,8 @@
 
 - SSR
 - Stripe
+    - Save session_id to user for manage
     - Backend Support - webhooks
-    - Billing Section in Settings
-    - Checkout sessions
 - Sheet Component
 - Chat Component
 - Recommendations Component
@@ -30,6 +29,10 @@
     - Native Loading Indicator
     - Subscriptions Legal Notice
 
+* added checkoutView button
+* added billing section in settings
+* added stripe checkout integration
+* changed starter components to skateboard components
 
 ### 0.0.7
 * removed localStorage isActive, fixed bug

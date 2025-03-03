@@ -2,10 +2,37 @@ import { useNavigate } from 'react-router-dom';
 import { getState } from '@/context.jsx';
 import { useEffect, useState } from 'react';
 import { DynamicIcon } from "lucide-react/dynamic";
+import constants from "@/constants.json";
+import CheckoutView from '@/skateboard-ui/CheckoutView.jsx'
 
 export default function SettingsView() {
   const navigate = useNavigate();
   const { state, dispatch } = getState();
+
+  async function manageClicked(sessionId) {
+    try {
+      const uri = `${constants.backendURL}/create-portal-session`;
+      const response = await fetch(uri, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("/create-portal-session response: ", data);
+        if (data.url) {
+          window.location.href = data.url; // Redirect to Stripe billing portal
+        } else {
+          console.error("No URL returned from server");
+        }
+      } else {
+        console.error("Error with /create-portal-session. Status:", response.status);
+      }
+    } catch (error) {
+      console.error("Request failed:", error);
+    }
+  }
 
   return (
     <>
@@ -30,7 +57,7 @@ export default function SettingsView() {
           </div >
           {/* BUTTON */}
           <div className="ml-auto">
-            <button className="bg-accent  dark:border-dark-buttonBorder text-black dark:text-white ml-2 px-3 py-2 rounded text-sm border cursor-pointer" onClick={() => {
+            <button className="bg-accent  border-foreground border  ml-2 px-3 py-2 rounded text-sm border cursor-pointer" onClick={() => {
               document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
               navigate('/');
               dispatch({ type: 'CLEAR_USER', payload: null });
@@ -40,11 +67,11 @@ export default function SettingsView() {
 
         {/* SUPPORT */}
 
-        <div className="flex gap-6 mb-10 w-full">
+        <div className="flex gap-6  w-full">
           <div className="bg-accent p-6 rounded flex-1">
             <div className="flex items-center">
               <div>
-                <div className="text-black dark:text-white mb-2 font-medium">
+                <div className=" mb-2 font-medium">
                   Contact Support
                 </div>
                 <div className="text-sm text-gray-500">
@@ -52,7 +79,30 @@ export default function SettingsView() {
                 </div>
               </div>
               <div className="ml-auto">
-                <div onClick={() => { window.location.href = `mailto:${state.constants.companyEmail}`; }} className="bg-accent dark:border-dark-buttonBorder border text-black dark:text-white ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Support</div>
+                <div onClick={() => { window.location.href = `mailto:${state.constants.companyEmail}`; }} className="bg-accent border-foreground border  ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Support</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* BILLING */}
+        <div className="flex gap-6 mb-10 w-full">
+          <div className="bg-accent p-6 rounded flex-1">
+            <div className="flex items-center">
+              <div>
+                <div className="mb-2 font-medium">
+                  {state.user?.subscription?.amount || "Free"} Plan
+                </div>
+                <div className="text-sm text-gray-500">
+                  Your current plan details
+                </div>
+              </div>
+              <div className="ml-auto">
+                {state.user?.subscription &&
+                  <div onClick={() => { manageClicked('ABC') }} className="bg-accent border border-foreground ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Manage</div>
+                } {
+                  <CheckoutView></CheckoutView>
+                }
               </div>
             </div>
           </div>
@@ -64,12 +114,8 @@ export default function SettingsView() {
           <span onClick={() => { navigate('/terms') }} className="m-2   text-sm text-gray-500 cursor-pointer">Terms</span>
           <span onClick={() => { navigate('/privacy') }} className="m-2  text-sm text-gray-500 cursor-pointer">Privacy</span>
           <span onClick={() => { navigate('/eula') }} className="m-2  text-sm text-gray-500 cursor-pointer">Eula</span>
-
           <div className="m-2 block text-sm text-gray-500">v{state.constants.version}</div>
-
         </div>
-
-
       </div>
     </>
 

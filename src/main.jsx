@@ -2,15 +2,15 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import './assets/styles.css'
-import Layout from '@/starter-components/Layout.jsx';
+import Layout from '@/skateboard-ui/Layout.jsx';
 import HomeView from './components/HomeView.jsx'
 import OtherView from './components/OtherView.jsx'
-import LandingView from '@/starter-components/LandingView.jsx'
-import TextView from '@/starter-components/TextView.jsx'
-import SignUpView from '@/starter-components/SignUpView.jsx'
-import SignInView from '@/starter-components/SignInView.jsx'
-import SettingsView from '@/starter-components/SettingsView.jsx'
-import NotFound from '@/starter-components/NotFound.jsx'
+import LandingView from '@/skateboard-ui/LandingView.jsx'
+import TextView from '@/skateboard-ui/TextView.jsx'
+import SignUpView from '@/skateboard-ui/SignUpView.jsx'
+import SignInView from '@/skateboard-ui/SignInView.jsx'
+import SettingsView from '@/skateboard-ui/SettingsView.jsx'
+import NotFound from '@/skateboard-ui/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
 import constants from "./constants.json"
 
@@ -50,7 +50,7 @@ createRoot(document.getElementById('root')).render(
           <Route path="/" element={<LandingView />} />
           <Route path="/signin" element={<SignInView />} />
           <Route path="/signup" element={<SignUpView />} />
-          <Route path="/terms" element={<TextView details={c.terms_of_service} />} />
+          <Route path="/terms" element={<TextView details={c.termsOfService} />} />
           <Route path="/privacy" element={<TextView details={c.privacyPolicy} />} />
           <Route path="/eula" element={<TextView details={c.EULA} />} />
           <Route path="/subs" element={<TextView details={c.subscriptionDetails}/>} />
