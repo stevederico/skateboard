@@ -94,7 +94,10 @@
 * landing page colors
 * added legal links to sign up
 * added name to sign up
-- Show current user details, add getUserDetails on signIn
+* get current user data to state.user on sign IN
+* get user data on signup
+
+- isActive is wrong if you leave on settings and come backt home
 
 ## LATER
 - Checkout- Stripe Support

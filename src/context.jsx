@@ -36,6 +36,7 @@ function reducer(state, action) {
   try {
     switch (action.type) {
       case 'SET_USER':
+        console.log("SET_USER: ", action.payload)
         localStorage.setItem('user', JSON.stringify(action.payload));
         return { ...state, user: action.payload };
       case 'SET_THEME':
