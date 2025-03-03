@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import constants from "@/constants.json";
 import { DynamicIcon } from "lucide-react/dynamic";
 import {
@@ -13,30 +12,16 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarMenuItem,
-  useSidebar
+  useSidebar,
 } from "@/shadcn/ui/components/ui/sidebar";
 
 export function AppSidebar() {
-  const {
-    state,
-    open,
-    setOpen,
-    openMobile,
-    setOpenMobile,
-    isMobile,
-    toggleSidebar,
-  } = useSidebar();
+  const { open, setOpen } = useSidebar();
   const navigate = useNavigate();
-  const [activeItem, setActiveItem] = useState(() => {
-    return localStorage.getItem("activeItem") || "Main";
-  });
+  const location = useLocation();
+  const currentPage = (location.pathname.split("/")[2] || "").toLowerCase();
 
-  useEffect(() => {
-    localStorage.setItem("activeItem", activeItem);
-  }, [activeItem]);
-
-  const handleNavigation = (url, title) => {
-    setActiveItem(title);
+  const handleNavigation = (url) => {
     navigate(url);
   };
 
@@ -45,24 +30,20 @@ export function AppSidebar() {
       <SidebarHeader className="p-0">
         <SidebarMenu>
           <SidebarMenuItem>
-            <span>
-              {open ? (
-                <>
-                  <div className="flex flex-row items-center m-2 mt-4">
-                    <div className="bg-app dark:border rounded-lg flex aspect-square size-10 items-center justify-center">
-                      <DynamicIcon name={constants.appIcon} size={24} color="white" strokeWidth={2} />
-                    </div>
-                    <div className="font-semibold ml-2 text-xl">{constants.appName}</div>
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-row items-center m-2 mt-3">
-                  <div className="bg-app dark:border rounded-lg flex aspect-square size-8 items-center justify-center">
-                    <DynamicIcon name={constants.appIcon} size={18} color="white" strokeWidth={2} />
-                  </div>
+            {open ? (
+              <div className="flex flex-row items-center m-2 mt-4">
+                <div className="bg-app dark:border rounded-lg flex aspect-square size-10 items-center justify-center">
+                  <DynamicIcon name={constants.appIcon} size={24} color="white" strokeWidth={2} />
                 </div>
-              )}
-            </span>
+                <div className="font-semibold ml-2 text-xl">{constants.appName}</div>
+              </div>
+            ) : (
+              <div className="flex flex-row items-center m-2 mt-3">
+                <div className="bg-app dark:border rounded-lg flex aspect-square size-8 items-center justify-center">
+                  <DynamicIcon name={constants.appIcon} size={18} color="white" strokeWidth={2} />
+                </div>
+              </div>
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -70,21 +51,24 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {constants.pages.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    className="cursor-pointer"
-                    isActive={activeItem === item.title}
-                    onClick={() => handleNavigation(`/app/${item.url.toLowerCase()}`, item.title)}
-                  >
-                    <span>
-                      <DynamicIcon name={item.icon} size={24} className="w-24 h-24" />
-                      <span className="text-">{item.title}</span>
-                    </span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {constants.pages.map((item) => {
+                const isActive = currentPage === item.url.toLowerCase();
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      className="cursor-pointer"
+                      isActive={isActive}
+                      onClick={() => handleNavigation(`/app/${item.url.toLowerCase()}`)}
+                    >
+                      <span>
+                        <DynamicIcon name={item.icon} size={24} className="w-24 h-24" />
+                        <span>{item.title}</span>
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -93,10 +77,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem key="Collapse">
             <SidebarMenuButton asChild>
-              <div
-                className="cursor-pointer"
-                onClick={() => setOpen(!open)}
-              >
+              <div className="cursor-pointer" onClick={() => setOpen(!open)}>
                 <DynamicIcon name="panel-left-close" />
                 <span>Collapse</span>
               </div>
@@ -106,8 +87,8 @@ export function AppSidebar() {
             <SidebarMenuButton
               asChild
               className="cursor-pointer"
-              isActive={activeItem === "Settings"}
-              onClick={() => handleNavigation("/app/settings", "Settings")}
+              isActive={location.pathname.toLowerCase().includes("settings")}
+              onClick={() => handleNavigation("/app/settings")}
             >
               <span>
                 <DynamicIcon name="settings" />
