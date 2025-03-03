@@ -1,6 +1,8 @@
 import { renderToString } from 'react-dom/server';
 import { StrictMode } from 'react';
 import { ContextProvider } from './context.jsx';
+import { StaticRouter } from 'react-router-dom/server';
+import App from './App.jsx';
 
 // Simple SSR component that doesn't depend on external modules
 const SSRShell = () => {
@@ -18,14 +20,13 @@ export async function render(url) {
     timestamp: Date.now()
   };
   
-  // Only render a minimal app shell for SSR to avoid router issues
-  // The client will handle full routing after hydration
+  // Use StaticRouter to match client-side BrowserRouter
   const html = renderToString(
     <StrictMode>
       <ContextProvider initialState={initialState}>
-        <div id="ssr-app">
-          <SSRShell />
-        </div>
+        <StaticRouter location={url}>
+          <App ssrUrl={url} />
+        </StaticRouter>
       </ContextProvider>
     </StrictMode>
   );

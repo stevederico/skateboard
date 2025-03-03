@@ -222,9 +222,13 @@ async function createServer() {
       }
       
       // 5. Inject the app-rendered HTML into the template
+      const serializedState = JSON.stringify(initialState)
+        .replace(/</g, '\\u003c')  // Escape HTML tags
+        .replace(/>/g, '\\u003e');
+      
       const responseHtml = template
         .replace('<div id="root"></div>', `<div id="root">${html}</div>`)
-        .replace('<!--initial-state-->', `<script>window.__INITIAL_STATE__ = ${JSON.stringify(initialState)}</script>`);
+        .replace('<!--initial-state-->', `<script>window.__INITIAL_STATE__ = ${serializedState}</script>`);
       
       // 6. Send the rendered HTML back
       res.status(200).set({ 'Content-Type': 'text/html' }).end(responseHtml);
