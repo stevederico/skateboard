@@ -13,7 +13,6 @@ import { DynamicIcon } from "lucide-react/dynamic";
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getState } from '@/context.jsx';
 import constants from "@/constants.json";
 
 export default function LoginForm({
@@ -22,23 +21,20 @@ export default function LoginForm({
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const navigate = useNavigate();
-  const { state } = getState();
   const [errorMessage, setErrorMessage] = useState('')
-
-  async function signInClicked() {
-    navigate('/signin');
-  }
 
   async function signUpClicked() {
     try {
       console.log(`${constants.backendURL}/signup`);
+      console.log(`name: ${name}`);
       const response = await fetch(`${constants.backendURL}/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, name })
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         const expireDate = new Date();
@@ -76,6 +72,14 @@ export default function LoginForm({
           <form>
             <div className="flex flex-col gap-6">
               <div className="grid gap-3">
+                <Label htmlFor="name">Name</Label>
+                <Input id="name" placeholder="John Smith" required value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setErrorMessage('');
+                  }} />
+              </div>
+              <div className="grid gap-3">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" placeholder="m@example.com" required value={email}
                   onChange={(e) => {
@@ -87,23 +91,37 @@ export default function LoginForm({
                 <div className="flex items-center">
                   <Label htmlFor="password">Password</Label>
                 </div>
-                <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Input id="password" type="password" placeholder="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <div className="flex flex-col gap-3">
-                <Button onClick={(e) => { e.preventDefault(); signUpClicked() }} className="w-full cursor-pointer">
+                <Button onClick={(e) => { e.preventDefault(); signUpClicked() }} className="w-full cursor-pointer py-6">
                   Sign Up
                 </Button>
               </div>
             </div>
             <div className="mt-4 text-center text-sm">
               Already have an account?{" "}
-              <span onClick={(e)=>{e.preventDefault(); signInClicked()}} className="underline underline-offset-4 cursor-pointer">
+              <span onClick={(e) => { e.preventDefault(); navigate('/signin'); }} className="underline underline-offset-4 cursor-pointer">
                 Sign In
               </span>
             </div>
+
           </form>
         </CardContent>
       </Card>
+
+      <div className="mt-6 text-center text-sm">
+        By registering you agree to our
+        <span onClick={(e) => { e.preventDefault(); navigate('/terms'); }} className="ml-1 underline underline-offset-4 cursor-pointer">
+          Terms of Service
+        </span>,
+        <span onClick={(e) => { e.preventDefault(); navigate('/eula'); }} className="ml-1 underline underline-offset-4 cursor-pointer">
+          EULA
+        </span>,
+        <span onClick={(e) => { e.preventDefault(); navigate('/privacy'); }} className="ml-1 underline underline-offset-4 cursor-pointer">
+          Privacy Policy
+        </span>
+      </div>
     </div>)
   );
 }
