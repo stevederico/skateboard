@@ -55,7 +55,7 @@ export default function LoginForm({
   }
 
   return (
-    (<div className={cn("flex flex-col gap-6 p-4 max-w-[50%] mx-auto", className)} {...props}>
+    (<div className={cn("flex flex-col gap-6 p-4 md:max-w-[50%] mx-auto", className)} {...props}>
       <Card>
         <CardHeader>
           <div className="flex flex-row items-center m-2 mx-auto">
