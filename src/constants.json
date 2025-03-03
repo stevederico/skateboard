@@ -1,6 +1,7 @@
 {
     "appName": "TestApp",
     "appIcon": "command",
+    "tagline": "Try Something New",
     "backendURL": "http://localhost:8000",
     "pages": [
         {
