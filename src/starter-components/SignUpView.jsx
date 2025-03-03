@@ -14,7 +14,7 @@ import { DynamicIcon } from "lucide-react/dynamic";
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import constants from "@/constants.json";
-
+import { getState } from '@/context.jsx';
 export default function LoginForm({
   className,
   ...props
@@ -23,6 +23,7 @@ export default function LoginForm({
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const navigate = useNavigate();
+  const { state, dispatch } = getState();
   const [errorMessage, setErrorMessage] = useState('')
 
   async function signUpClicked() {
@@ -40,6 +41,8 @@ export default function LoginForm({
         const expireDate = new Date();
         expireDate.setTime(expireDate.getTime() + 24 * 60 * 60 * 1000);
         document.cookie = `token=${data.token}; path=/; expires=${expireDate.toUTCString()}; Secure; SameSite=Strict;`;
+        delete data.token
+        dispatch({ type: 'SET_USER', payload: data });
         navigate('/app');
       } else {
         setErrorMessage('Invalid Credentials')

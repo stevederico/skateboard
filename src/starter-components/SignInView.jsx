@@ -11,7 +11,7 @@ import { Input } from "@/shadcn/ui/components/ui/input"
 import { Label } from "@/shadcn/ui/components/ui/label"
 import { DynamicIcon } from "lucide-react/dynamic";
 
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getState } from '@/context.jsx';
 import constants from "@/constants.json";
@@ -23,7 +23,8 @@ export default function LoginForm({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
-  const { state } = getState();
+  const { state, dispatch } = getState();
+
   const [errorMessage, setErrorMessage] = useState('')
 
   async function signInClicked() {
@@ -40,6 +41,8 @@ export default function LoginForm({
         const expireDate = new Date();
         expireDate.setTime(expireDate.getTime() + 24 * 60 * 60 * 1000);
         document.cookie = `token=${data.token}; path=/; expires=${expireDate.toUTCString()}; Secure; SameSite=Strict;`;
+        delete data.token
+        dispatch({ type: 'SET_USER', payload: data });
         navigate('/app');
       } else {
         setErrorMessage('Invalid Credentials')

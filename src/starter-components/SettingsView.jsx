@@ -5,7 +5,7 @@ import { DynamicIcon } from "lucide-react/dynamic";
 
 export default function SettingsView() {
   const navigate = useNavigate();
-  const { state } = getState();
+  const { state, dispatch } = getState();
 
   return (
     <>
@@ -22,17 +22,18 @@ export default function SettingsView() {
 
         {/* PROFILE */}
         <div className="w-full  bg-accent p-6 rounded flex items-center justify-between">
-          <div className="w-10 h-10 bg-app dark:text-black text-white flex justify-center items-center rounded-full "> <span className="uppercase">{state.currentUser?.name.split(' ').map(word => word[0]).join('') || "A"}</span></div>
+          <div className="w-10 h-10 bg-app dark:text-black text-white flex justify-center items-center rounded-full "> <span className="uppercase">{state.user?.name?.split(' ').map(word => word[0]).join('') || "A"}</span></div>
           {/* NAME */}
           <div className="ml-4">
-            <div className="text font-medium block mb-1 capitalize">{state.currentUser?.name || "Test User"}</div>
-            <div className="text-sm text-gray-500">{state.currentUser?.email || "user@test.com"}</div>
+            <div className="text font-medium block mb-1 capitalize">{state.user?.name || "Test User"}</div>
+            <div className="text-sm text-gray-500">{state.user?.email || "user@test.com"}</div>
           </div >
           {/* BUTTON */}
           <div className="ml-auto">
             <button className="bg-accent  dark:border-dark-buttonBorder text-black dark:text-white ml-2 px-3 py-2 rounded text-sm border cursor-pointer" onClick={() => {
               document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
               navigate('/');
+              dispatch({ type: 'CLEAR_USER', payload: null });
             }} >Sign Out</button>
           </div>
         </div>
