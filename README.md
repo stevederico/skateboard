@@ -1,9 +1,9 @@
-# starter-react
-starter-react is a react starter template/boilerplate with Tailwind, Shadcn, Vite, and React 19+. It is meant to get you started quickly with everything you need for a basic web app.
+# skateboard
+skateboard is a react starter/template/boilerplate with Tailwind, Shadcn, Vite, and React 19+. It is meant to get you started quickly with everything you need for a basic web app.
 
 # Getting Started
 ```shell
-npx degit stevederico/starter-react my-project-name
+npx degit stevederico/skateboard my-project-name
 ```
 
 ## Stack
@@ -52,7 +52,7 @@ deno run dev
 4. checkout [starter-backend](https://github.com/stevederico/starter-backend) for a backend auth and sqlite service
 
 ## Roadmap
-Follow progress and what's next in the [CHANGELOG](https://github.com/stevederico/starter-react/blob/master/changelog.md)
+Follow progress and what's next in the [CHANGELOG](https://github.com/stevederico/skateboard/blob/master/changelog.md)
 
 ## Contributing
 
