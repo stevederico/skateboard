@@ -1,5 +1,22 @@
+<div align="center">
+  <a href="#" />
+    <img alt="" height="200px" src="https://github.com/user-attachments/assets/19ca1353-6e8d-4808-b7a2-cb830b3539e7">
+  </a>
+</div>
+
+<h3 align="center">skateboard</h3>
+
+<p align="center">
+  a starter/template/boilerplate with react 19+, tailwind, shadcn, vite, and javascript
+  <br>
+  <p align="center">
+  <a href="https://opensource.org/licenses/mit">
+    <img src="https://img.shields.io/badge/License-MIT-blue.svg">
+  </a>
+</p>
+
 # skateboard
-skateboard is a starter/template/boilerplate with react 19+, tailwind, shadcn, vite, and javascript It is meant to get you started quickly with everything you need for a basic web app.
+skateboard is a starter/template/boilerplate with react 19+, tailwind, shadcn, vite, and javascript. It is meant to get you started quickly with everything you need for a basic web app.
 
 # Getting Started
 ```shell
@@ -16,19 +33,18 @@ npx degit stevederico/skateboard my-project-name
 - Vite
 
 ## Features
-- Landing Page
-- Legal Pages - Privacy, Terms of Service, EULA
 - Sign Up and Sign In
-- Dark Mode
 - Collapsible Sidebar
 - TabBar for Mobile
 - Settings Page
+- Dark Mode
+- Landing Page
+- Protected Routes for users only
+- Legal Pages - Privacy, Terms of Service, EULA
 - Support Email
 - 404 Handling
-- Protected Routes for users only
 - 8 Customizable UI Components 
 - `constants.json` - Easily configure all static text
-
 
 ## Example
 <div align="center">
