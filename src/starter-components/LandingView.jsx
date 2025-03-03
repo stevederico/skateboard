@@ -18,7 +18,6 @@ export default function LandingView() {
           <a href={'/app'} target="_blank" className="mx-auto bg-white font-medium text-app shadow-sm rounded-3xl p-4 md:px-8 cursor-pointer">
             Get Started
           </a>
-          
         </div>
       </section>
       <section className="py-4 mx-3">

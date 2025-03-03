@@ -92,13 +92,16 @@
 
 * landing page logo
 * landing page colors
-
+* added legal links to sign up
+* added name to sign up
+- Show current user details, add getUserDetails on signIn
 
 ## LATER
-- Show current user details, add getUserDetails on signIn
+- Checkout- Stripe Support
+
+- Support Chat
 - Modal Sheet
-- Support View
-- Checkout- StripeView
+- Make this SSR?
 
 
 
