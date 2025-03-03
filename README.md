@@ -35,7 +35,6 @@ npx degit stevederico/starter-react my-project-name
 </div>
   
 
-
 ## Usage
 1. install packages
 ```shell
