@@ -96,18 +96,24 @@
 * added name to sign up
 * get current user data to state.user on sign IN
 * get user data on signup
-
-- isActive is wrong if you leave on settings and come backt home
+* removed localStorage isActive, fixed bug
 
 ## LATER
-- Checkout- Stripe Support
-
+- Stripe
+    - Checkout
+    - Billing Section in Settings
+    - Backend Support
+- Make this SSR?
+- More
 - Support Chat
 - Modal Sheet
-- Make this SSR?
 
 
 
 
 
+
+
+##iOS
+- Delete Account
 
