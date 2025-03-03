@@ -90,6 +90,9 @@
 * fixed header icon on collapse
 * 0.0.6
 
+* landing page logo
+* landing page colors
+
 
 ## LATER
 - Show current user details, add getUserDetails on signIn
