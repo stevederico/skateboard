@@ -1,5 +1,5 @@
 # starter-react
-starter-react is a react starter template/boilerplate with Tailwind, Shadcn, Vite, and React 19+. It is meant to get you started quickly with everything you need for a basic web app. It
+starter-react is a react starter template/boilerplate with Tailwind, Shadcn, Vite, and React 19+. It is meant to get you started quickly with everything you need for a basic web app.
 
 # Getting Started
 ```shell
