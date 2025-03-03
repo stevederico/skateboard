@@ -29,3 +29,6 @@
 ```shell
 npx degit stevederico/starter-react my-project-name
 ```
+
+## Roadmap
+Follow progress and what's next in the [CHANGELOG](https://github.com/stevederico/starter-react/blob/master/changelog.md)
