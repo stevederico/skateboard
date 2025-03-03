@@ -47,6 +47,7 @@ npm install
 ```shell
 npm run dev
 ```
+4. checkout [starter-backend](https://github.com/stevederico/starter-backend) for a backend auth and sqlite service
 
 ## Roadmap
 Follow progress and what's next in the [CHANGELOG](https://github.com/stevederico/starter-react/blob/master/changelog.md)
