@@ -1,119 +1,102 @@
-# Changelog
-
-* removed eslint
-* added tailwindcss
-* switch to plugin-react-swc
-* drop logs from prod
-* managed devDependices 
-* index.html 
-* icons
-* package scripts
-* add react-router-dom
-* setup components and a
-* added bootstrap-icons
-* added --color-primary to styles.css
-* added ContextProvider
-* added basic constants.json
-* added basic layout
-* added getState function
-* changed console to app
-* added console routes
-* added misc routes
-* added basic cookie sign in and sign out
-* added constants setup with localhost override
-* added package version
-*# released 0.0.1 
-
-* added settingsView
-* added auto dark mode
-* added basic pages to sidebar
-* improved export default
-* fixed tabbar links
-* darkmode toggle
-* added user persistence
-* version display settings
-* sidebar width
-* layout improvmenets
-* default appName
-* default version
-* improved reducer
-* 0.0.2
-### released 0.0.2
-
-* manual dark mode
-* simplied layout
-* error handlign context
-* sign out user clean up
-* mobile support
-* centered settings view
-* added sign in and sign up to starter-backend
-* added lib folder to components
-* 0.0.3
-
-### released 0.0.3
-
-* image on sidebar
-* version on SettingsView
-* TextView working
-* added privacy policy, eula, terms, and subscriptions 
-* added SignUp Add error handling
-* NotFound Improvements
-* LandingView
-* Logo on SignIn and Sign Up
-* Header on Main and Other
-* Cleaned up spacing in SettingsView and ensured uniform heights for flex-column divs
-* Contact Support on Settings
-* improved constants import
-* 0.0.4
-### released 0.0.4
-
-* added shadcn button
-* added all shadcn/ui components, check out ShadExample.jsx
-* added Shadcn/ui Sidebar
-* added cursor-pointer to collapse button
-* sidebar read constants.json pages
-* add isActive on sidebar click and settings
-* fixed icons in tabbar
-* added DynamicIcon from lucide-icons
-* 0.0.5
-### 0.0.5
-
-
-* added brand header to sidebar
-* fixed full page refresh
-* added basic headers to homeview and other
-* settings improvemnts
-* landing page
-* moved darkMode toggle to top
-* bigger head icon on sidebar
-* bigger icons on sidebar
-* fixed header icon on collapse
-* 0.0.6
-
-* landing page logo
-* landing page colors
-* added legal links to sign up
-* added name to sign up
-* get current user data to state.user on sign IN
-* get user data on signup
-* removed localStorage isActive, fixed bug
-
-## LATER
-- Stripe
-    - Checkout
-    - Billing Section in Settings
-    - Backend Support
-- Make this SSR?
-- More
-- Support Chat
+## To-Do
 - Modal Sheet
+- Support Chat
+- More
+- Make this SSR?
+- Stripe
+    - Backend Support
+    - Billing Section in Settings
+    - Checkout
 
+### 0.0.7
+* removed localStorage isActive, fixed bug
+* get user data on signup
+* get current user data to state.user on sign IN
+* added name to sign up
+* added legal links to sign up
+* landing page colors
+* landing page logo
 
+### 0.0.6
+* fixed header icon on collapse
+* bigger icons on sidebar
+* bigger head icon on sidebar
+* moved darkMode toggle to top
+* landing page
+* settings improvemnts
+* added basic headers to homeview and other
+* fixed full page refresh
+* added brand header to sidebar
 
+### 0.0.5
+* added DynamicIcon from lucide-icons
+* fixed icons in tabbar
+* add isActive on sidebar click and settings
+* sidebar read constants.json pages
+* added cursor-pointer to collapse button
+* added Shadcn/ui Sidebar
+* added all shadcn/ui components, check out ShadExample.jsx
+* added shadcn button
 
+### 0.0.4
+* improved constants import
+* Contact Support on Settings
+* Cleaned up spacing in SettingsView and ensured uniform heights for flex-column divs
+* Header on Main and Other
+* Logo on SignIn and Sign Up
+* LandingView
+* NotFound Improvements
+* added SignUp Add error handling
+* added privacy policy, eula, terms, and subscriptions 
+* TextView working
+* version on SettingsView
+* image on sidebar
 
+### 0.0.3 
+* added lib folder to components
+* added sign in and sign up to starter-backend
+* centered settings view
+* mobile support
+* sign out user clean up
+* error handlign context
+* simplied layout
+* manual dark mode
 
+### 0.0.2
+* improved reducer
+* default version
+* default appName
+* layout improvmenets
+* sidebar width
+* version display settings
+* user persistence
+* darkmode toggle
+* fixed tabbar links
+* improved export default
+* added basic pages to sidebar
+* added auto dark mode
+* added settingsView
 
-##iOS
-- Delete Account
-
+### 0.0.1 
+* added package version
+* added constants setup with localhost override
+* added basic cookie sign in and sign out
+* added misc routes
+* added console routes
+* changed console to app
+* added getState function
+* added basic layout
+* added basic constants.json
+* added ContextProvider
+* added --color-primary to styles.css
+* added bootstrap-icons
+* setup components and a
+* add react-router-dom
+* package scripts
+* icons
+* index.html 
+* managed devDependices 
+* drop logs from prod
+* switch to plugin-react-swc
+* added tailwindcss
+* removed eslint
