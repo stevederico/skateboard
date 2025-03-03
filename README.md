@@ -24,7 +24,8 @@ npx degit stevederico/starter-react my-project-name
 - TabBar for Mobile
 - Settings Page
 - Support Email
-- Configure Static Text in Constants.json
+- Protected Routes for users only
+- `constants.json` - Easily configure all static text
 
 
 ## Example
