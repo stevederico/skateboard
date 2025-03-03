@@ -1,9 +1,10 @@
-# Starter-React
+# starter-react
+starter-react is a react starter template/boilerplate with Tailwind, Shadcn, Vite, and React 19+. It is meant to get you started quickly with everything you need for a basic web app. It
 
-
-
-![example](https://github.com/user-attachments/assets/a99f5298-42ae-46a3-b5d2-0a401750612e)
-
+# Getting Started
+```shell
+npx degit stevederico/starter-react my-project-name
+```
 
 ## Stack
 - React v19
@@ -24,11 +25,58 @@
 - Settings Page
 - Support Email
 - Configure Static Text in Constants.json
+
+
+## Example
+<div align="center">
+  <a href="#" />
+    <img alt="silo" height="600px" src="https://github.com/user-attachments/assets/a99f5298-42ae-46a3-b5d2-0a401750612e"> 
+  </a>
+</div>
   
-## Get Started
+
+
+## Usage
+1. install packages
 ```shell
-npx degit stevederico/starter-react my-project-name
+npm install
+```
+2. configure details in constants.json
+
+3. start dev server
+```shell
+npm run dev
 ```
 
 ## Roadmap
 Follow progress and what's next in the [CHANGELOG](https://github.com/stevederico/starter-react/blob/master/changelog.md)
+
+## Contributing
+
+We welcome contributions from the community! Please follow these guidelines:
+
+1. Fork the repository.
+2. Create a new branch for your feature or bug fix:
+   ```sh
+   git checkout -b feature/your-feature-name
+   ```
+3. Make your changes and commit them with descriptive messages.
+4. Push your branch to your fork:
+   ```sh
+   git push origin feature/your-feature-name
+   ```
+5. Open a pull request against the `master` branch.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgements 
+
+- [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
+- [react](https://github.com/facebook/react)
+- [shadcn-ui](https://github.com/shadcn-ui/ui)
+
+## Contact
+
+For any questions or support, please open an issue in this repository.
