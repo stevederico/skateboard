@@ -1,12 +1,25 @@
 ## To-Do
-- Modal Sheet
+
+- Stripe
+    - Backend Support - webhooks
+    - Billing Section in Settings
+    - Checkout sessions
+- SSR
 - Support Chat
 - More
-- Make this SSR?
-- Stripe
-    - Backend Support
-    - Billing Section in Settings
-    - Checkout
+- Utility Functions
+- iOS Support
+    - Delete Account
+    - Trigger IAP
+    - Swift Wrapper
+    - Guest Mode
+    - Restore Purchases
+    - Rate Us
+    - Native Share Sheet 
+    - Push Notifications 
+    - Subscription URL
+    - Native Loading Indicator
+
 
 ### 0.0.7
 * removed localStorage isActive, fixed bug
