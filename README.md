@@ -24,7 +24,9 @@ npx degit stevederico/starter-react my-project-name
 - TabBar for Mobile
 - Settings Page
 - Support Email
+- 404 Handling
 - Protected Routes for users only
+- 8 Customizable UI Components 
 - `constants.json` - Easily configure all static text
 
 
