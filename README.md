@@ -33,19 +33,18 @@ npx degit stevederico/skateboard my-project-name
 - Vite
 
 ## Features
-- Landing Page
-- Legal Pages - Privacy, Terms of Service, EULA
 - Sign Up and Sign In
-- Dark Mode
 - Collapsible Sidebar
 - TabBar for Mobile
 - Settings Page
+- Dark Mode
+- Landing Page
+- Protected Routes for users only
+- Legal Pages - Privacy, Terms of Service, EULA
 - Support Email
 - 404 Handling
-- Protected Routes for users only
 - 8 Customizable UI Components 
 - `constants.json` - Easily configure all static text
-
 
 ## Example
 <div align="center">
