@@ -22,7 +22,7 @@
 * added basic cookie sign in and sign out
 * added constants setup with localhost override
 * added package version
-* 0.0.1
+*# released 0.0.1 
 
 * added settingsView
 * added auto dark mode
@@ -38,6 +38,7 @@
 * default version
 * improved reducer
 * 0.0.2
+### released 0.0.2
 
 * manual dark mode
 * simplied layout
@@ -48,6 +49,8 @@
 * added sign in and sign up to starter-backend
 * added lib folder to components
 * 0.0.3
+
+### released 0.0.3
 
 * image on sidebar
 * version on SettingsView
@@ -62,6 +65,7 @@
 * Contact Support on Settings
 * improved constants import
 * 0.0.4
+### released 0.0.4
 
 * added shadcn button
 * added all shadcn/ui components, check out ShadExample.jsx
@@ -72,6 +76,9 @@
 * fixed icons in tabbar
 * added DynamicIcon from lucide-icons
 * 0.0.5
+### 0.0.5
+
+
 * added brand header to sidebar
 * fixed full page refresh
 * added basic headers to homeview and other
