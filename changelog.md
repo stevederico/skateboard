@@ -2,9 +2,7 @@
 
 - SSR
 - Stripe
-    - pre-fill stripe checkout
-    - Save session_id to user for manage
-    - Backend Support - webhooks - update database
+    - Backend Support - webhooks - update database Save customerID to user for manage
 - Sheet Component
 - Chat Component
 - Recommendations Component
@@ -30,6 +28,9 @@
     - Native Loading Indicator
     - Subscriptions Legal Notice
 
+
+* added customerID based stripe portal
+* added email prefill to stripe checkout
 * added checkoutView button
 * added billing section in settings
 * added stripe checkout integration
