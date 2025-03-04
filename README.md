@@ -19,7 +19,7 @@
 </p>
 
 # skateboard
-skateboard is a starter/template/boilerplate with react 19+, tailwind, shadcn, vite, and javascript. It is meant to get you started quickly with everything you need for a basic web app.
+skateboard is a starter/template/boilerplate with react, tailwindcss, shadcn/ui, vite, and javascript. It is meant to get you started quickly with everything you need for a basic web app.
 
 # Getting Started
 ```shell
