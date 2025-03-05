@@ -35,7 +35,6 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="min-w-[40px]">
       <SidebarHeader className="p-0">
         <SidebarMenu>
-
           <div className={`flex flex-row m-2 mt-3 items-center  ${open ? "" : "justify-center"}`}>
             <div className="bg-app dark:border rounded-lg flex aspect-square size-10 items-center justify-center">
               <DynamicIconComponent
@@ -56,7 +55,7 @@ export function AppSidebar() {
             return (
               <li key={item.title}>
                 <div
-                  className={`cursor-pointer items-center flex w-full p-2 rounded-lg ${open ? "h-10" : "h-10 w-8"} ${isActive ? "bg-foreground text-background" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
+                  className={`cursor-pointer items-center flex w-full p-2 rounded-lg ${open ? "h-10" : "h-10 w-8"} ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
                   onClick={() => handleNavigation(`/app/${item.url.toLowerCase()}`)}
                 >
                   <span className="flex  w-full">
@@ -95,7 +94,7 @@ export function AppSidebar() {
           <li>
             <div
               className={`cursor-pointer items-center rounded-lg flex w-full p-2 ${open ? "h-10" : "h-10 w-8"} 
-              ${location.pathname.toLowerCase().includes("settings") ? "bg-foreground text-background" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
+              ${location.pathname.toLowerCase().includes("settings") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
               onClick={() => handleNavigation("/app/settings")}
             >
               <span className="flex  w-full">
