@@ -64,19 +64,20 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <ul className={`flex flex-col gap-3 p-2 ${open ? "" : "items-center"}`}>
+        <ul className={`flex flex-col gap-2 p-2 ${open ? "" : "items-center"}`}>
           {constants.pages.map((item) => {
             const isActive = currentPage === item.url.toLowerCase();
             return (
               <li key={item.title}>
                 <div
-                  className={`cursor-pointer items-center flex w-full p-2 rounded-lg ${open ? "h-8" : "h-8 w-8"} ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
+                  className={`cursor-pointer items-center flex w-full p-2 rounded-lg ${open ? "h-10" : "h-10 w-8"} ${isActive ? "bg-foreground text-background" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
                   onClick={() => handleNavigation(`/app/${item.url.toLowerCase()}`)}
                 >
                   <span className="flex  w-full">
                     <DynamicIconComponent
                       name={item.icon}
                       size={24}
+                      strokeWidth={1.5}
                       className={"!size-6"}
                     />
                     {open && <span className="ml-2">{item.title}</span>}
@@ -88,16 +89,17 @@ export function AppSidebar() {
         </ul>
       </SidebarContent>
       <SidebarFooter>
-        <ul className={`flex flex-col gap-3  ${open ? "" : "items-center"}`}>
+        <ul className={`flex flex-col gap-1  ${open ? "" : "items-center"}`}>
           <li>
             <div
-              className={`cursor-pointer flex w-full p-2 ${open ? "h-8" : "h-8 w-8"}`}
+              className={`cursor-pointer flex w-full p-2 ${open ? "h-10" : "h-10 w-8"}`}
               onClick={() => setOpen(!open)}
             >
               <span className="flex  w-full">
                 <DynamicIconComponent
                   name="panel-left-close"
                   size={24}
+                  strokeWidth={1.5}
                   className={"!size-6"}
                 />
                 {open && <span className="ml-2">Collapse</span>}
@@ -106,13 +108,15 @@ export function AppSidebar() {
           </li>
           <li>
             <div
-              className={`cursor-pointer items-center rounded-lg flex w-full p-2 ${open ? "h-8" : "h-8 w-8"} ${location.pathname.toLowerCase().includes("settings") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
+              className={`cursor-pointer items-center rounded-lg flex w-full p-2 ${open ? "h-10" : "h-10 w-8"} 
+              ${location.pathname.toLowerCase().includes("settings") ? "bg-foreground text-background" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
               onClick={() => handleNavigation("/app/settings")}
             >
               <span className="flex  w-full">
                 <DynamicIconComponent
                   name="settings"
                   size={24}
+                  strokeWidth={1.5}
                   className={"!size-6"}
                 />
                 {open && <span className="ml-2">Settings</span>}
