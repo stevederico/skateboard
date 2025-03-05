@@ -1,19 +1,25 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import constants from "@/constants.json";
-import { DynamicIcon } from "lucide-react/dynamic";
+import { DynamicIcon } from "lucide-react/dynamic"; // Verify this import
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
   SidebarMenu,
   SidebarRail,
-  SidebarMenuButton,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenuItem,
   useSidebar,
 } from "@/shadcn/ui/components/ui/sidebar";
+
+// Fallback DynamicIcon implementation if not already defined
+const DynamicIconFallback = ({ name, size = 24, ...props }) => {
+  const icons = require('lucide-react');
+  const IconComponent = icons[name];
+  return IconComponent ? <IconComponent size={size} {...props} /> : null;
+};
+
+// Use this if your DynamicIcon import isn't working
+const DynamicIconComponent = DynamicIcon || DynamicIconFallback;
 
 export function AppSidebar() {
   const { open, setOpen } = useSidebar();
@@ -29,74 +35,91 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="min-w-[40px]">
       <SidebarHeader className="p-0">
         <SidebarMenu>
-          <SidebarMenuItem>
+          <div>
             {open ? (
-              <div className="flex flex-row items-center m-2 mt-4">
-                <div className="bg-app dark:border rounded-lg flex aspect-square size-10 items-center justify-center">
-                  <DynamicIcon name={constants.appIcon} size={24} color="white" strokeWidth={2} />
+              <div className="flex flex-row items-center justify-center m-2 mt-4">
+                <div className="bg-app dark:border rounded-lg flex aspect-square size-12 items-center justify-center">
+                  <DynamicIconComponent
+                    name={constants.appIcon}
+                    size={32}
+                    color="white"
+                    strokeWidth={2}
+                  />
                 </div>
                 <div className="font-semibold ml-2 text-xl">{constants.appName}</div>
               </div>
             ) : (
-              <div className="flex flex-row items-center m-2 mt-3">
-                <div className="bg-app dark:border rounded-lg flex aspect-square size-8 items-center justify-center">
-                  <DynamicIcon name={constants.appIcon} size={18} color="white" strokeWidth={2} />
+              <div className="flex flex-col items-center justify-center m-2 mt-3">
+                <div className="bg-app dark:border rounded-lg flex aspect-square size-10 items-center justify-center">
+                  <DynamicIconComponent
+                    name={constants.appIcon}
+                    size={28}
+                    color="white"
+                    strokeWidth={2}
+                  />
                 </div>
               </div>
             )}
-          </SidebarMenuItem>
+          </div>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {constants.pages.map((item) => {
-                const isActive = currentPage === item.url.toLowerCase();
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      className="cursor-pointer"
-                      isActive={isActive}
-                      onClick={() => handleNavigation(`/app/${item.url.toLowerCase()}`)}
-                    >
-                      <span>
-                        <DynamicIcon name={item.icon} size={24} className="w-24 h-24" />
-                        <span>{item.title}</span>
-                      </span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <ul className={`flex flex-col gap-3 p-2 ${open ? "" : "items-center"}`}>
+          {constants.pages.map((item) => {
+            const isActive = currentPage === item.url.toLowerCase();
+            return (
+              <li key={item.title}>
+                <div
+                  className={`cursor-pointer items-center flex w-full p-2 rounded-lg ${open ? "h-8" : "h-8 w-8"} ${isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
+                  onClick={() => handleNavigation(`/app/${item.url.toLowerCase()}`)}
+                >
+                  <span className="flex  w-full">
+                    <DynamicIconComponent
+                      name={item.icon}
+                      size={24}
+                      className={"!size-6"}
+                    />
+                    {open && <span className="ml-2">{item.title}</span>}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem key="Collapse">
-            <SidebarMenuButton asChild>
-              <div className="cursor-pointer" onClick={() => setOpen(!open)}>
-                <DynamicIcon name="panel-left-close" />
-                <span>Collapse</span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem key="Settings">
-            <SidebarMenuButton
-              asChild
-              className="cursor-pointer"
-              isActive={location.pathname.toLowerCase().includes("settings")}
+        <ul className={`flex flex-col gap-3  ${open ? "" : "items-center"}`}>
+          <li>
+            <div
+              className={`cursor-pointer flex w-full p-2 ${open ? "h-8" : "h-8 w-8"}`}
+              onClick={() => setOpen(!open)}
+            >
+              <span className="flex  w-full">
+                <DynamicIconComponent
+                  name="panel-left-close"
+                  size={24}
+                  className={"!size-6"}
+                />
+                {open && <span className="ml-2">Collapse</span>}
+              </span>
+            </div>
+          </li>
+          <li>
+            <div
+              className={`cursor-pointer items-center rounded-lg flex w-full p-2 ${open ? "h-8" : "h-8 w-8"} ${location.pathname.toLowerCase().includes("settings") ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent  hover:text-sidebar-accent-foreground"}`}
               onClick={() => handleNavigation("/app/settings")}
             >
-              <span>
-                <DynamicIcon name="settings" />
-                <span>Settings</span>
+              <span className="flex  w-full">
+                <DynamicIconComponent
+                  name="settings"
+                  size={24}
+                  className={"!size-6"}
+                />
+                {open && <span className="ml-2">Settings</span>}
               </span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+            </div>
+          </li>
+        </ul>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
