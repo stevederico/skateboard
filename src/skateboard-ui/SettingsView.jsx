@@ -15,7 +15,7 @@ export default function SettingsView() {
       const response = await fetch(uri, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerID: state.user?.customerID }),
+        body: JSON.stringify({ customerID: state.user?.stripeID }),
       });
 
       if (response.ok) {
@@ -122,18 +122,18 @@ export default function SettingsView() {
             <div className="flex items-center">
               <div>
                 <div className="mb-2 font-medium">
-                  {state.user?.subscription?.amount || "Free"} Plan
+                  {state.user?.subscription || "Free"} Plan
                 </div>
                 <div className="text-sm text-gray-500">
                   Your current plan details
                 </div>
               </div>
               <div className="ml-auto">
-              {state.user?.subscription &&
+              {state.user?.stripeID ? (
                 <div onClick={() => { showManage() }} className="bg-background border-foreground border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer text-center">Manage</div>
-              } {
+              ) : (
                 <div onClick={() => { showCheckout() }} className="bg-app text-white border-app border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Subscribe</div>
-              }
+              )}
               </div>
             </div>
           </div>
