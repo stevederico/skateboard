@@ -128,3 +128,4 @@
 * switch to plugin-react-swc
 * added tailwindcss
 * removed eslint
+
