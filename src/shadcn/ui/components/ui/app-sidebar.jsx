@@ -35,31 +35,17 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="min-w-[40px]">
       <SidebarHeader className="p-0">
         <SidebarMenu>
-          <div>
-            {open ? (
-              <div className="flex flex-row items-center justify-center m-2 mt-4">
-                <div className="bg-app dark:border rounded-lg flex aspect-square size-12 items-center justify-center">
-                  <DynamicIconComponent
-                    name={constants.appIcon}
-                    size={32}
-                    color="white"
-                    strokeWidth={2}
-                  />
-                </div>
-                <div className="font-semibold ml-2 text-xl">{constants.appName}</div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center m-2 mt-3">
-                <div className="bg-app dark:border rounded-lg flex aspect-square size-10 items-center justify-center">
-                  <DynamicIconComponent
-                    name={constants.appIcon}
-                    size={28}
-                    color="white"
-                    strokeWidth={2}
-                  />
-                </div>
-              </div>
-            )}
+
+          <div className={`flex flex-row m-2 mt-3 items-center  ${open ? "" : "justify-center"}`}>
+            <div className="bg-app dark:border rounded-lg flex aspect-square size-10 items-center justify-center">
+              <DynamicIconComponent
+                name={constants.appIcon}
+                size={28}
+                color="white"
+                strokeWidth={2}
+              />
+            </div>
+            {open && <div className="font-semibold ml-2 text-xl">{constants.appName}</div>}
           </div>
         </SidebarMenu>
       </SidebarHeader>
