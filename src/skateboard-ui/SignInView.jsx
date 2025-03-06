@@ -9,7 +9,7 @@ import {
 } from "@/shadcn/ui/components/ui/card"
 import { Input } from "@/shadcn/ui/components/ui/input"
 import { Label } from "@/shadcn/ui/components/ui/label"
-import { DynamicIcon } from "lucide-react/dynamic";
+import { DynamicIcon } from "@/skateboard-ui/Utilities.js";
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';

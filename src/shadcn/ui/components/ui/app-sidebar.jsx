@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import constants from "@/constants.json";
-import { DynamicIcon } from "lucide-react/dynamic"; // Verify this import
+import { DynamicIcon } from "@/skateboard-ui/Utilities.js"; // Using our fallback
 import {
   Sidebar,
   SidebarContent,

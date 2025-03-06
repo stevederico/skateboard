@@ -9,15 +9,38 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      jsxRuntime: 'automatic'
+    }),
     tailwindcss()
   ],
   esbuild: {
-    drop: ['console', 'debugger']
+    drop: ['console', 'debugger'],
+    jsxInject: `import React from 'react'`
   },
   resolve: {
     alias: {
       '@': resolve(__dirname, './src')
+    },
+    extensions: ['.js', '.jsx', '.json']
+  },
+  build: {
+    minify: true,
+    rollupOptions: {
+      input: {
+        client: resolve(__dirname, 'src/entry-client.jsx'),
+        server: resolve(__dirname, 'src/entry-server.jsx')
+      },
+      output: {
+        entryFileNames: '[name].js'
+      }
     }
+  },
+  optimizeDeps: {
+    include: ['react-router-dom', 'react-router-dom/server']
+  },
+  ssr: {
+    external: ['react', 'react-dom'],
+    noExternal: ['react-router-dom']
   }
 })

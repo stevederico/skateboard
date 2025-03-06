@@ -1,4 +1,5 @@
 import constants from "@/constants.json";
+import React from 'react';
 
 export function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -34,4 +35,19 @@ export async function getCurrentUser() {
         console.error('Error fetching user:', error);
         return null
     }
+}
+
+// Simple fallback for DynamicIcon that just renders a div
+export function DynamicIcon({ name, size = 24, color = 'currentColor', strokeWidth = 2 }) {
+  return React.createElement('div', {
+    className: 'dynamic-icon-fallback',
+    style: {
+      width: size,
+      height: size,
+      background: 'currentColor',
+      opacity: 0.2,
+      borderRadius: '4px'
+    },
+    'data-icon': name
+  });
 }

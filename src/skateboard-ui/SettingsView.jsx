@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { getState } from '@/context.jsx';
 import { useEffect, useState } from 'react';
-import { DynamicIcon } from "lucide-react/dynamic";
+import { Button } from "@/shadcn/ui/components/ui/button"
+import { Separator } from "@/shadcn/ui/components/ui/separator"
+import { DynamicIcon } from '@/skateboard-ui/Utilities.js';
 import constants from "@/constants.json";
 import pkg from '../../package.json';
 

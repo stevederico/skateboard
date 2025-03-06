@@ -4,10 +4,10 @@
   "version": "0.0.8",
   "type": "module",
   "scripts": {
-    "dev": "vite --force --mode development ",
-    "start": "vite --force --mode development ",
-    "build": "vite build --mode development;",
-    "prod": "vite build --mode production"
+    "dev": "deno run -A server.js",
+    "start": "deno run -A server.js",
+    "build": "vite build --mode development",
+    "prod": "vite build --mode production && deno run -A server.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.2",
@@ -37,6 +37,7 @@
     "@radix-ui/react-toggle": "^1.1.2",
     "@radix-ui/react-toggle-group": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.8",
+    "@remix-run/router": "^1.13.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
@@ -50,7 +51,7 @@
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.2",
     "react-resizable-panels": "^2.1.7",
-    "react-router-dom": "^7.2.0",
+    "react-router-dom": "6.19.0",
     "recharts": "^2.15.1",
     "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",

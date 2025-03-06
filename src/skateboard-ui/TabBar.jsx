@@ -1,6 +1,7 @@
+import { cn } from "@/shadcn/ui/lib/utils"
 import constants from "@/constants.json";
 import { Link, useLocation } from 'react-router-dom';
-import { DynamicIcon } from 'lucide-react/dynamic';
+import { DynamicIcon } from '@/skateboard-ui/Utilities.js';
 
 export default function TabBar() {
   const location = useLocation();

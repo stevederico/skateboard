@@ -1,6 +1,6 @@
 import constants from "@/constants.json";
+import { DynamicIcon } from '@/skateboard-ui/Utilities.js';
 
-import { DynamicIcon } from "lucide-react/dynamic";
 export default function LandingView() {
   return (
     <div className="flex flex-col bg-white h-screen">

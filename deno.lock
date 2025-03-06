@@ -28,6 +28,7 @@
     "npm:@radix-ui/react-toggle-group@^1.1.2": "1.1.2_react@19.0.0_react-dom@19.0.0__react@19.0.0",
     "npm:@radix-ui/react-toggle@^1.1.2": "1.1.2_react@19.0.0_react-dom@19.0.0__react@19.0.0",
     "npm:@radix-ui/react-tooltip@^1.1.8": "1.1.8_react@19.0.0_react-dom@19.0.0__react@19.0.0",
+    "npm:@remix-run/router@^1.13.0": "1.22.0",
     "npm:@tailwindcss/vite@^4.0.7": "4.0.9_vite@6.2.0__lightningcss@1.29.1_lightningcss@1.29.1",
     "npm:@vitejs/plugin-react-swc@^3.8.0": "3.8.0_vite@6.2.0__lightningcss@1.29.1",
     "npm:class-variance-authority@~0.7.1": "0.7.1",
@@ -42,7 +43,7 @@
     "npm:react-dom@19": "19.0.0_react@19.0.0",
     "npm:react-hook-form@^7.54.2": "7.54.2_react@19.0.0",
     "npm:react-resizable-panels@^2.1.7": "2.1.7_react@19.0.0_react-dom@19.0.0__react@19.0.0",
-    "npm:react-router-dom@^7.2.0": "7.2.0_react@19.0.0_react-dom@19.0.0__react@19.0.0",
+    "npm:react-router-dom@6.19.0": "6.19.0_react@19.0.0_react-dom@19.0.0__react@19.0.0",
     "npm:react@19": "19.0.0",
     "npm:recharts@^2.15.1": "2.15.1_react@19.0.0_react-dom@19.0.0__react@19.0.0",
     "npm:sonner@^2.0.1": "2.0.1_react@19.0.0_react-dom@19.0.0__react@19.0.0",
@@ -770,6 +771,12 @@
     "@radix-ui/rect@1.1.0": {
       "integrity": "sha512-A9+lCBZoaMJlVKcRBz2YByCG+Cp2t6nAnMnNba+XiWxnj6r4JUFqfsgwocMBZU9LPtdxC6wB56ySYpc7LQIoJg=="
     },
+    "@remix-run/router@1.12.0": {
+      "integrity": "sha512-2hXv036Bux90e1GXTWSMfNzfDDK8LA8JYEWfyHxzvwdp6GyoWEovKc9cotb3KCKmkdwsIBuFGX7ScTWyiHv7Eg=="
+    },
+    "@remix-run/router@1.22.0": {
+      "integrity": "sha512-MBOl8MeOzpK0HQQQshKB7pABXbmyHizdTpqnrIseTbsv0nAepwC2ENZa1aaBExNQcpLoXmWthhak8SABLzvGPw=="
+    },
     "@rollup/rollup-android-arm-eabi@4.34.8": {
       "integrity": "sha512-q217OSE8DTp8AFHuNHXo0Y86e1wtlfVrXiAlwkIvGRQv9zbc6mE3sjIVfwI8sYUyNxwOg0j/Vm1RKM04JcWLJw=="
     },
@@ -953,9 +960,6 @@
         "vite@6.2.0_lightningcss@1.29.1"
       ]
     },
-    "@types/cookie@0.6.0": {
-      "integrity": "sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA=="
-    },
     "@types/d3-array@3.2.1": {
       "integrity": "sha512-Y2Jn2idRrLzUfAKV2LyRImR+y4oa2AntrgID95SHJxuMUrkNXmanDSed71sRNZysveJVt1hLLemQZIady0FpEg=="
     },
@@ -1027,9 +1031,6 @@
         "react-dom",
         "use-sync-external-store"
       ]
-    },
-    "cookie@1.0.2": {
-      "integrity": "sha512-9Kr/j4O16ISv8zBBhJoi4bXOYNTkFLOqSL3UDB0njXxCXNezjeyVrJyGOWtgfs/q2km1gwBcfH8q1yEGoMYunA=="
     },
     "csstype@3.1.3": {
       "integrity": "sha512-M1uQkMl8rQK/szD0LNhtqxIPLpimGm8sOBwU7lLnCpSbTyY3yeU1Vc7l4KT5zT4s/yOxHH5O7tIuuLOCnLADRw=="
@@ -1338,23 +1339,20 @@
         "react-dom"
       ]
     },
-    "react-router-dom@7.2.0_react@19.0.0_react-dom@19.0.0__react@19.0.0": {
-      "integrity": "sha512-cU7lTxETGtQRQbafJubvZKHEn5izNABxZhBY0Jlzdv0gqQhCPQt2J8aN5ZPjS6mQOXn5NnirWNh+FpE8TTYN0Q==",
+    "react-router-dom@6.19.0_react@19.0.0_react-dom@19.0.0__react@19.0.0": {
+      "integrity": "sha512-N6dWlcgL2w0U5HZUUqU2wlmOrSb3ighJmtQ438SWbhB1yuLTXQ8yyTBMK3BSvVjp7gBtKurT554nCtMOgxCZmQ==",
       "dependencies": [
+        "@remix-run/router@1.12.0",
         "react@19.0.0",
         "react-dom",
         "react-router"
       ]
     },
-    "react-router@7.2.0_react@19.0.0_react-dom@19.0.0__react@19.0.0": {
-      "integrity": "sha512-fXyqzPgCPZbqhrk7k3hPcCpYIlQ2ugIXDboHUzhJISFVy2DEPsmHgN588MyGmkIOv3jDgNfUE3kJi83L28s/LQ==",
+    "react-router@6.19.0_react@19.0.0": {
+      "integrity": "sha512-0W63PKCZ7+OuQd7Tm+RbkI8kCLmn4GPjDbX61tWljPxWgqTKlEpeQUwPkT1DRjYhF8KSihK0hQpmhU4uxVMcdw==",
       "dependencies": [
-        "@types/cookie",
-        "cookie",
-        "react@19.0.0",
-        "react-dom",
-        "set-cookie-parser",
-        "turbo-stream"
+        "@remix-run/router@1.12.0",
+        "react@19.0.0"
       ]
     },
     "react-smooth@4.0.4_react@19.0.0_react-dom@19.0.0__react@19.0.0": {
@@ -1448,9 +1446,6 @@
     "scheduler@0.25.0": {
       "integrity": "sha512-xFVuu11jh+xcO7JOAGJNOXld8/TcEHK/4CituBUeUb5hqxJLj9YuemAEuvm9gQ/+pgXYfbQuqAkiYu+u7YEsNA=="
     },
-    "set-cookie-parser@2.7.1": {
-      "integrity": "sha512-IOc8uWeOZgnb3ptbCURJWNjWUPcO3ZnTTdzsurqERrP6nPyv+paC55vJM0LpOlT2ne+Ix+9+CRG1MNLlyZ4GjQ=="
-    },
     "sonner@2.0.1_react@19.0.0_react-dom@19.0.0__react@19.0.0": {
       "integrity": "sha512-FRBphaehZ5tLdLcQ8g2WOIRE+Y7BCfWi5Zyd8bCvBjiW8TxxAyoWZIxS661Yz6TGPqFQ4VLzOF89WEYhfynSFQ==",
       "dependencies": [
@@ -1481,9 +1476,6 @@
     },
     "tslib@2.8.1": {
       "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="
-    },
-    "turbo-stream@2.4.0": {
-      "integrity": "sha512-FHncC10WpBd2eOmGwpmQsWLDoK4cqsA/UT/GqNoaKOQnT8uzhtCbg3EoUDMvqpOSAI0S26mr0rkjzbOO6S3v1g=="
     },
     "use-callback-ref@1.3.3_react@19.0.0": {
       "integrity": "sha512-jQL3lRnocaFtu3V00JToYz/4QkNWswxijDaCVNZRiRTO3HQDLsdu1ZtmIUvV4yPp+rvWm5j0y0TG/S61cuijTg==",
@@ -1556,6 +1548,10 @@
       "integrity": "sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ=="
     }
   },
+  "remote": {
+    "https://deno.land/std@0.208.0/async/delay.ts": "a6142eb44cdd856b645086af2b811b1fcce08ec06bb7d50969e6a872ee9b8659",
+    "https://deno.land/std@0.208.0/http/server.ts": "f3cde6672e631d3e00785743cfa96bfed275618c0352c5ae84abbe5a2e0e4afc"
+  },
   "workspace": {
     "packageJson": {
       "dependencies": [
@@ -1586,6 +1582,7 @@
         "npm:@radix-ui/react-toggle-group@^1.1.2",
         "npm:@radix-ui/react-toggle@^1.1.2",
         "npm:@radix-ui/react-tooltip@^1.1.8",
+        "npm:@remix-run/router@^1.13.0",
         "npm:@tailwindcss/vite@^4.0.7",
         "npm:@vitejs/plugin-react-swc@^3.8.0",
         "npm:class-variance-authority@~0.7.1",
@@ -1600,7 +1597,7 @@
         "npm:react-dom@19",
         "npm:react-hook-form@^7.54.2",
         "npm:react-resizable-panels@^2.1.7",
-        "npm:react-router-dom@^7.2.0",
+        "npm:react-router-dom@6.19.0",
         "npm:react@19",
         "npm:recharts@^2.15.1",
         "npm:sonner@^2.0.1",

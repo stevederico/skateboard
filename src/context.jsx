@@ -5,6 +5,8 @@ const context = createContext();
 
 // Safely parse user from localStorage, fallback to null on error
 const getInitialUser = () => {
+  if (typeof window === 'undefined') return null;
+  
   try {
     const storedUser = localStorage.getItem('user');
     if (!storedUser || storedUser === "undefined") return null;
@@ -14,20 +16,19 @@ const getInitialUser = () => {
   }
 };
 
-const initialState = {
-  user: getInitialUser()
-};
-
 function reducer(state, action) {
   try {
     switch (action.type) {
       case 'SET_USER':
-        console.log("SET_USER: ", action.payload);
-        localStorage.setItem('user', JSON.stringify(action.payload));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('user', JSON.stringify(action.payload));
+        }
         return { ...state, user: action.payload };
       case 'CLEAR_USER':
-        localStorage.removeItem('user');
-        document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('user');
+          document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+        }
         return { ...state, user: null };
       default:
         return state;
@@ -37,37 +38,28 @@ function reducer(state, action) {
   }
 }
 
-export function ContextProvider({ children }) {
-
-  const [state, dispatch] = useReducer(reducer, initialState);
+export function ContextProvider({ children, initialState }) {
+  const defaultState = initialState || { user: getInitialUser() };
+  const [state, dispatch] = useReducer(reducer, defaultState);
 
   useEffect(() => {
-    document.title = constants.appName
+    document.title = constants.appName;
 
     async function appStart() {
-      if (window.location.pathname.includes("app")) {
+      if (typeof window !== 'undefined' && window.location.pathname.includes("app")) {
         const localUser = localStorage.getItem('user');
-        if (localUser){
+        if (localUser) {
           try {
-            console.log("APP START - Fetching user");
             const data = await getCurrentUser();
-            if (data) {
-              dispatch({ type: 'SET_USER', payload: data });
-            } else {
-              window.location.href = "/signin";
-              console.log("REDIRECT 1")
-            }
+            dispatch({ type: 'SET_USER', payload: data });
           } catch (error) {
-            console.error('Failed to fetch user:', error);
+            // Silent failure - will redirect in protected route
           }
-        } else {
-          // window.location.href = "/signin";
-          console.log("REDIRECT 2")
         }
       } 
     }
     appStart();
-  }, []); // Run once on mount
+  }, []);
 
   return (
     <context.Provider value={{ state, dispatch }}>
