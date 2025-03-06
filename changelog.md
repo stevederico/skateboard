@@ -1,15 +1,14 @@
 ## To-Do
 
-
 - Utility Functions
     - subscriber check
     - credits-system
     - analytics wrapper
-    - appMode
     - date/timestamp conversions
-    - getCurrentUser
-- CRUD SDK
+
+## LATER
 - iOS Support
+    - appMode check
     - Delete Account
     - Trigger IAP
     - Swift Wrapper
@@ -26,9 +25,18 @@
 - Chat Component
 - Recommendations Component
 - SSR
+- CRUD SDK
 
-- display cancelled plan
-- get userDetails on re-launch
+* fixed redirect on stripeView
+* settings handle no user, redirect to sign in
+* set title tag on document
+* improved error handling on SignIn and SignUp
+* removed strict mode
+* check bearer token to requests
+* get userDetails on re-launch
+* getCurrentUser in Utilities
+* only import constants
+* display plan status
 
 ### 0.0.8
 * fixed dark ode colors
