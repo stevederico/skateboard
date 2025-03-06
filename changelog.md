@@ -30,6 +30,7 @@
 - SSR
 - CRUD SDK
 
+* cleaned up context and signin
 * removed theme in app state
 * TabBar UI Tweak
 * fixed redirect on stripeView
