@@ -50,6 +50,7 @@ export default function LoginForm({
       }
     } catch (error) {
       console.error('Signin failed:', error);
+      setErrorMessage('Server Error')
     }
   }
 
@@ -68,11 +69,9 @@ export default function LoginForm({
             <div className="font-semibold ml-2 text-4xl">{constants.appName}</div>
           </div>
           {errorMessage !== '' && (
-
-            <div className="bg-red-200 text-red-500 text-center font-semibold border-2 border-red-500">
+            <div className=" text-red-500 text-center font-semibold  rounded-xl py-2">
               {errorMessage}
             </div>
-
           )}
         </CardHeader>
         <CardContent>
@@ -98,7 +97,7 @@ export default function LoginForm({
                 </Button>
               </div>
             </div>
-            <div className="mt-4 text-center text-sm">
+            <div className="mt-6 text-center text-sm">
               Don&apos;t have an account?{" "}
               <span onClick={signUpClicked} className="underline underline-offset-4 cursor-pointer">
                 Sign Up

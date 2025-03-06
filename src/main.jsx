@@ -36,7 +36,7 @@ function isAuthenticated() {
 }
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
+
     <ContextProvider>
       <Router>
         <Routes>
@@ -60,7 +60,7 @@ createRoot(document.getElementById('root')).render(
         </Routes>
       </Router>
     </ContextProvider>
-  </StrictMode>,
+
 );
 
 
