@@ -22,6 +22,9 @@ export default function SettingsView() {
         const data = await response.json();
         console.log("/create-portal-session response: ", data);
         if (data.url) {
+
+          localStorage.setItem("beforeManageURL", window.location.href);
+
           window.location.href = data.url; // Redirect to Stripe billing portal
         } else {
           console.error("No URL returned from server");
@@ -50,8 +53,8 @@ export default function SettingsView() {
       if (response.ok) {
         const data = await response.json();
         if (data.url) {
-          // Save the checkout URL in localStorage
-          localStorage.setItem("checkoutUrl", data.url);
+          // Save the current URL in localStorage before redirecting
+          localStorage.setItem("beforeCheckoutURL", window.location.href);
           // Redirect to Stripe Checkout
           window.location.href = data.url;
         } else {

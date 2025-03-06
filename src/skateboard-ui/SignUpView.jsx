@@ -84,7 +84,7 @@ export default function LoginForm({
               </div>
               <div className="grid gap-3">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="m@example.com" required value={email}
+                <Input id="email" type="email" placeholder="mcfly@example.com" required value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                     setErrorMessage('');
