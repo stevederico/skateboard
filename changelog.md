@@ -1,8 +1,6 @@
 ## To-Do
 
 - SSR
-- Stripe
-    - Backend Support - webhooks - update database Save customerID to user for manage
 - Sheet Component
 - Chat Component
 - Recommendations Component
@@ -28,7 +26,10 @@
     - Native Loading Indicator
     - Subscriptions Legal Notice
 
+    - get userDetails on re-launch
 
+* reload on user details on successfull purchase
+* Backend Support - webhooks - update database Save customerID to user for manage
 * added customerID based stripe portal
 * added email prefill to stripe checkout
 * added checkoutView button

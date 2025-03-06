@@ -35,14 +35,11 @@ export default function SettingsView() {
   }
 
   async function showCheckout(productIndex = 0, email) {
-
-    let params = { lookup_key: constants.stripeProducts[productIndex].lookup_key }
-    if (email) {
-      params.email = email
-    } else {
-      params.email = state.user?.email
-    }
-
+    const params = {
+      lookup_key: constants.stripeProducts[productIndex].lookup_key,
+      email: email || state.user?.email,
+    };
+  
     try {
       const uri = `${constants.backendURL}/create-checkout-session`;
       const response = await fetch(uri, {
@@ -53,18 +50,21 @@ export default function SettingsView() {
       if (response.ok) {
         const data = await response.json();
         if (data.url) {
+          // Save the checkout URL in localStorage
+          localStorage.setItem("checkoutUrl", data.url);
+          // Redirect to Stripe Checkout
           window.location.href = data.url;
         } else {
           console.error("No URL returned from server");
         }
       } else {
-        console.log("Error with /create-checkout-session");
+        console.error("Error with /create-checkout-session. Status:", response.status);
       }
     } catch (error) {
       console.error("Checkout failed:", error);
     }
   }
-
+  
   return (
     <>
       <div className="flex border-b w-full items-center">
@@ -122,18 +122,18 @@ export default function SettingsView() {
             <div className="flex items-center">
               <div>
                 <div className="mb-2 font-medium">
-                  {state.user?.subscription || "Free"} Plan
+                  Billing
                 </div>
                 <div className="text-sm text-gray-500">
-                  Your current plan details
+                  Your current plan is {state.user?.subStatus || "free"}
                 </div>
               </div>
               <div className="ml-auto">
-              {state.user?.stripeID ? (
-                <div onClick={() => { showManage() }} className="bg-background border-foreground border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer text-center">Manage</div>
-              ) : (
-                <div onClick={() => { showCheckout() }} className="bg-app text-white border-app border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Subscribe</div>
-              )}
+                {state.user?.stripeID ? (
+                  <div onClick={() => { showManage() }} className="bg-background border-foreground border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer text-center">Manage</div>
+                ) : (
+                  <div onClick={() => { showCheckout() }} className="bg-app text-white border-app border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Subscribe</div>
+                )}
               </div>
             </div>
           </div>
