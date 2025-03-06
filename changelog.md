@@ -1,17 +1,9 @@
 ## To-Do
-
-- /isSubscriber
 - /premiumContent
-
-- Utility Functions
-    - subscriber check
-    - credits-system
-    - analytics wrapper
-    - date/timestamp conversions
-
+- credits-system -checkViews , viewRemain, 
+    
 ## LATER
 - iOS Support
-    - appMode check
     - Delete Account
     - Trigger IAP
     - Swift Wrapper
@@ -30,6 +22,12 @@
 - SSR
 - CRUD SDK
 
+* added token to all fetches
+* isSubscriber util fix
+* date/timestamp utils
+* showCheckout and showManage utils
+* analytics wrapper
+* /isSubscriber endpoint and util
 * cleaned up context and signin
 * removed theme in app state
 * TabBar UI Tweak

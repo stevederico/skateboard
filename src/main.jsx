@@ -15,7 +15,6 @@ import NotFound from '@/skateboard-ui/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
 import constants from "./constants.json"
 
-const c = { ...constants };
 const ProtectedRoute = () => {
   if (!isAuthenticated()) {
     return <Navigate to="/signin" replace />;
@@ -52,10 +51,10 @@ createRoot(document.getElementById('root')).render(
           <Route path="/" element={<LandingView />} />
           <Route path="/signin" element={<SignInView />} />
           <Route path="/signup" element={<SignUpView />} />
-          <Route path="/terms" element={<TextView details={c.termsOfService} />} />
-          <Route path="/privacy" element={<TextView details={c.privacyPolicy} />} />
-          <Route path="/eula" element={<TextView details={c.EULA} />} />
-          <Route path="/subs" element={<TextView details={c.subscriptionDetails}/>} />
+          <Route path="/terms" element={<TextView details={constants.termsOfService} />} />
+          <Route path="/privacy" element={<TextView details={constants.privacyPolicy} />} />
+          <Route path="/eula" element={<TextView details={constants.EULA} />} />
+          <Route path="/subs" element={<TextView details={constants.subscriptionDetails}/>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>

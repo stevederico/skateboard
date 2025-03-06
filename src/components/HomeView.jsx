@@ -1,4 +1,17 @@
+import { isSubscriber } from "@/skateboard-ui/Utilities";
+import { useEffect } from "react";
+
 export default function HomeView() {
+
+  useEffect( ()=>{
+    console.log("HOME")
+    async function now(){
+      let s =  await isSubscriber()
+      console.log("S ", s)
+    }
+    now()
+  }, [])
+
   return (
     <>
       <div className="flex border-b w-full">
