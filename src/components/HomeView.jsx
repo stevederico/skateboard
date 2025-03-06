@@ -3,23 +3,19 @@ import { useEffect } from "react";
 
 export default function HomeView() {
 
-  useEffect( ()=>{
-    console.log("HOME")
-    async function now(){
-      let s =  await isSubscriber()
-      console.log("S ", s)
-    }
-    now()
-  }, [])
+  useEffect(() => {
+    isSubscriber().then(s => {
+      // Implement subscriber status handling if necessary
+    });
+  }, []);
 
   return (
     <>
-      <div className="flex border-b w-full">
-        <div className="m-3 p-2 text-xl hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium">
+      <nav className="flex border-b w-full">
+        <h1 className="m-3 p-2 text-xl hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium">
           Home
-        </div>
-      </div>
+        </h1>
+      </nav>
     </>
   )
 }
-
