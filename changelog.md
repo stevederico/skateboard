@@ -1,5 +1,8 @@
 ## To-Do
 
+- /isSubscriber
+- /premiumContent
+
 - Utility Functions
     - subscriber check
     - credits-system
@@ -27,6 +30,8 @@
 - SSR
 - CRUD SDK
 
+* removed theme in app state
+* TabBar UI Tweak
 * fixed redirect on stripeView
 * settings handle no user, redirect to sign in
 * set title tag on document

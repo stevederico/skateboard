@@ -17,7 +17,6 @@ const getInitialUser = () => {
 
 const initialState = {
   user: getInitialUser(),
-  theme: localStorage.getItem('theme') || 'light',
   loading: false,
 };
 
@@ -28,9 +27,6 @@ function reducer(state, action) {
         console.log("SET_USER: ", action.payload);
         localStorage.setItem('user', JSON.stringify(action.payload));
         return { ...state, user: action.payload, loading: false };
-      case 'SET_THEME':
-        localStorage.setItem('theme', action.payload);
-        return { ...state, theme: action.payload };
       case 'CLEAR_USER':
         localStorage.removeItem('user');
         document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
