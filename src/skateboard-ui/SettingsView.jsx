@@ -4,69 +4,15 @@ import { useEffect, useState } from 'react';
 import { DynamicIcon } from "lucide-react/dynamic";
 import constants from "@/constants.json";
 import pkg from '../../package.json';
-
+import { showCheckout } from './Utilities';
 
 export default function SettingsView() {
   const navigate = useNavigate();
   const { state, dispatch } = getState();
 
-  async function showManage() {
-    try {
-      const uri = `${constants.backendURL}/create-portal-session`;
-      const response = await fetch(uri, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerID: state.user?.stripeID }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log("/create-portal-session response: ", data);
-        if (data.url) {
-
-          localStorage.setItem("beforeManageURL", window.location.href);
-
-          window.location.href = data.url; // Redirect to Stripe billing portal
-        } else {
-          console.error("No URL returned from server");
-        }
-      } else {
-        console.error("Error with /create-portal-session. Status:", response.status);
-      }
-    } catch (error) {
-      console.error("Request failed:", error);
-    }
-  }
-
-  async function showCheckout(productIndex = 0, email) {
-    const params = {
-      lookup_key: constants.stripeProducts[productIndex].lookup_key,
-      email: email || state.user?.email,
-    };
-
-    try {
-      const uri = `${constants.backendURL}/create-checkout-session`;
-      const response = await fetch(uri, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.url) {
-          // Save the current URL in localStorage before redirecting
-          localStorage.setItem("beforeCheckoutURL", window.location.href);
-          // Redirect to Stripe Checkout
-          window.location.href = data.url;
-        } else {
-          console.error("No URL returned from server");
-        }
-      } else {
-        console.error("Error with /create-checkout-session. Status:", response.status);
-      }
-    } catch (error) {
-      console.error("Checkout failed:", error);
-    }
+  function signOutClicked(){
+    dispatch({ type: 'CLEAR_USER', payload: null });
+    navigate('/signin');
   }
 
   return (
@@ -94,8 +40,7 @@ export default function SettingsView() {
           </div>
           <div className="ml-auto">
             <button className="bg-sidebar-background text-center border-foreground border ml-2 px-3 py-2 rounded text-sm border cursor-pointer" onClick={() => {
-              dispatch({ type: 'CLEAR_USER', payload: null });
-              navigate('/signin');
+              signOutClicked()
             }}>Sign Out</button>
           </div>
         </div>
@@ -129,14 +74,13 @@ export default function SettingsView() {
                       : `Your plan is ${state.user?.subStatus}`
                   }
                 </div>
-
-
               </div>
               <div className="ml-auto">
                 {state.user?.stripeID ? (
-                  <div onClick={() => { showManage() }} className="bg-sidebar-background border-foreground border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer text-center">Manage</div>
+                  <div onClick={() => { showManage(state.user?.stripeID) }} className="bg-sidebar-background border-foreground border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer text-center">Manage</div>
                 ) : (
-                  <div onClick={() => { showCheckout() }} className="bg-app text-white border-app border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Subscribe</div>
+                  <div onClick={() => { showCheckout(state.user?.email) }} className="bg-app text-white border-app border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Subscribe</div>
+                  
                 )}
               </div>
             </div>
