@@ -10,7 +10,7 @@
 <h3 align="center">skateboard</h3>
 
 <p align="center">
-  a starter/template/boilerplate with react 19+, tailwind, shadcn, vite, and javascript
+  a boilerplate with react, tailwindcss, shadcn/ui, stripe, vite, and javascript
   <br>
   <p align="center">
   <a href="https://opensource.org/licenses/mit">
@@ -19,7 +19,7 @@
 </p>
 
 # skateboard
-skateboard is a starter/template/boilerplate with react, tailwindcss, shadcn/ui, vite, and javascript. It is meant to get you started quickly with everything you need for a basic web app.
+skateboard is meant to get you started quickly with everything you need for a basic web app.
 
 # Getting Started
 ```shell
