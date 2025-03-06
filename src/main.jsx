@@ -9,6 +9,7 @@ import LandingView from '@/skateboard-ui/LandingView.jsx'
 import TextView from '@/skateboard-ui/TextView.jsx'
 import SignUpView from '@/skateboard-ui/SignUpView.jsx'
 import SignInView from '@/skateboard-ui/SignInView.jsx'
+import SuccessView from '@/skateboard-ui/SuccessView.jsx'
 import SettingsView from '@/skateboard-ui/SettingsView.jsx'
 import NotFound from '@/skateboard-ui/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
@@ -45,6 +46,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="home" element={<HomeView />} />
               <Route path="other" element={<OtherView />} />
               <Route path="settings" element={<SettingsView />} />
+              <Route path="success" element={<SuccessView />} />
             </Route>
           </Route>
           <Route path="/" element={<LandingView />} />
