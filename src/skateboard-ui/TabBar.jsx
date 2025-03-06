@@ -17,12 +17,12 @@ export default function TabBar() {
               location.pathname.includes(item.url.toLowerCase())
                 ? (
                   <span className="text-base">
-                    <DynamicIcon name={item.icon} size={32} strokeWidth={1} />
+                    <DynamicIcon name={item.icon} size={32} strokeWidth={1.5} />
                   </span>
                 )
                 : (
                   <span className="text-gray-500">
-                    <DynamicIcon name={item.icon} size={32} strokeWidth={1} />
+                    <DynamicIcon name={item.icon} size={32} strokeWidth={1.5} />
                   </span>
                 )
             }
@@ -36,12 +36,12 @@ export default function TabBar() {
               ? (
 
                 <span className="text-base">
-                  <DynamicIcon name={"settings"} size={32} strokeWidth={1} />
+                  <DynamicIcon name={"settings"} size={32} strokeWidth={1.5} />
                 </span>
               )
               : (
                 <span className="text-gray-500">
-                  <DynamicIcon name={"settings"} size={32} strokeWidth={1} />
+                  <DynamicIcon name={"settings"} size={32} strokeWidth={1.5} />
                 </span>
               )
           }
