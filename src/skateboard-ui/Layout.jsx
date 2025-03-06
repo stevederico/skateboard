@@ -18,7 +18,7 @@ export default function Layout({ children }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-sidebar text-sidebar-foreground">
+    <div className="min-h-screen ">
       <div className="fixed inset-0 flex overflow-hidden">
         <SidebarProvider>
           <AppSidebar />

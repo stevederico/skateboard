@@ -1,16 +1,13 @@
 ## To-Do
 
-- SSR
-- Sheet Component
-- Chat Component
-- Recommendations Component
+
 - Utility Functions
+    - subscriber check
     - credits-system
     - analytics wrapper
     - appMode
-    - subscriber check
     - date/timestamp conversions
-    - getUserDetails
+    - getCurrentUser
 - CRUD SDK
 - iOS Support
     - Delete Account
@@ -25,9 +22,16 @@
     - Event Listener
     - Native Loading Indicator
     - Subscriptions Legal Notice
+- Sheet Component
+- Chat Component
+- Recommendations Component
+- SSR
 
-    - get userDetails on re-launch
+- display cancelled plan
+- get userDetails on re-launch
 
+### 0.0.8
+* fixed dark ode colors
 * reload on user details on successfull purchase
 * Backend Support - webhooks - update database Save customerID to user for manage
 * added customerID based stripe portal
