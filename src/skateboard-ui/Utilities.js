@@ -32,5 +32,6 @@ export async function getCurrentUser() {
         return data;
     } catch (error) {
         console.error('Error fetching user:', error);
+        return null
     }
 }

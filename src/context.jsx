@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { getCurrentUser, getCookie } from '@/skateboard-ui/Utilities.js';
+import { getCurrentUser } from '@/skateboard-ui/Utilities.js';
 import constants from "@/constants.json"
 const context = createContext();
 
@@ -10,14 +10,12 @@ const getInitialUser = () => {
     if (!storedUser || storedUser === "undefined") return null;
     return JSON.parse(storedUser);
   } catch (e) {
-    console.error('Failed to parse user from localStorage:', e);
     return null;
   }
 };
 
 const initialState = {
-  user: getInitialUser(),
-  loading: false,
+  user: getInitialUser()
 };
 
 function reducer(state, action) {
@@ -26,18 +24,15 @@ function reducer(state, action) {
       case 'SET_USER':
         console.log("SET_USER: ", action.payload);
         localStorage.setItem('user', JSON.stringify(action.payload));
-        return { ...state, user: action.payload, loading: false };
+        return { ...state, user: action.payload };
       case 'CLEAR_USER':
         localStorage.removeItem('user');
         document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-        return { ...state, user: null, loading: false };
-      case 'SET_LOADING':
-        return { ...state, loading: action.payload };
+        return { ...state, user: null };
       default:
         return state;
     }
   } catch (e) {
-    console.error('Reducer error:', e);
     return state;
   }
 }
@@ -50,21 +45,25 @@ export function ContextProvider({ children }) {
     document.title = constants.appName
 
     async function appStart() {
- 
       if (window.location.pathname.includes("app")) {
         const localUser = localStorage.getItem('user');
         if (localUser){
           try {
             console.log("APP START - Fetching user");
             const data = await getCurrentUser();
-            dispatch({ type: 'SET_USER', payload: data });
+            if (data) {
+              dispatch({ type: 'SET_USER', payload: data });
+            } else {
+              window.location.href = "/signin";
+              console.log("REDIRECT 1")
+            }
           } catch (error) {
             console.error('Failed to fetch user:', error);
           }
         } else {
-          window.location.href = "/signin";
+          // window.location.href = "/signin";
+          console.log("REDIRECT 2")
         }
-
       } 
     }
     appStart();
