@@ -22,6 +22,7 @@
 - SSR
 - CRUD SDK
 
+* moved hooks
 * added Sheet component
 * added token to all fetches
 * isSubscriber util fix
