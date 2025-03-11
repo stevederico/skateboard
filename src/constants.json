@@ -2,7 +2,7 @@
     "appName": "Test App",
     "appIcon": "command",
     "tagline": "Try Something New",
-    "backendURL": "http://localhost:8000",
+    "backendURL": "http://localhost:3000",
     "pages": [
         {
             "title": "Home",
