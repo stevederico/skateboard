@@ -37,6 +37,7 @@ npx degit stevederico/skateboard my-project-name
 
 ## Features
 - Sign Up and Sign In
+- Stripe Checkout
 - Collapsible Sidebar
 - TabBar for Mobile
 - Settings Page
