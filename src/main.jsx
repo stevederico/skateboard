@@ -10,17 +10,17 @@ import {
 } from 'react-router-dom';
 import { useEffect } from 'react';
 import './assets/styles.css';
-import Layout from '@/skateboard-ui/Layout.jsx';
-import LandingView from '@/skateboard-ui/LandingView.jsx';
-import TextView from '@/skateboard-ui/TextView.jsx';
-import SignUpView from '@/skateboard-ui/SignUpView.jsx';
-import SignInView from '@/skateboard-ui/SignInView.jsx';
-import StripeView from '@/skateboard-ui/StripeView.jsx';
-import SettingsView from '@/skateboard-ui/SettingsView.jsx';
-import NotFound from '@/skateboard-ui/NotFound.jsx';
+import Layout from '@stevederico/skateboard-ui/Layout';
+import LandingView from '@stevederico/skateboard-ui/LandingView';
+import TextView from '@stevederico/skateboard-ui/TextView';
+import SignUpView from '@stevederico/skateboard-ui/SignUpView';
+import SignInView from '@stevederico/skateboard-ui/SignInView';
+import StripeView from '@stevederico/skateboard-ui/StripeView';
+import SettingsView from '@stevederico/skateboard-ui/SettingsView';
+import NotFound from '@stevederico/skateboard-ui/NotFound';
+import { getCurrentUser } from '@stevederico/skateboard-ui/Utilities';
 import { ContextProvider, getState } from './context.jsx';
 import constants from './constants.json';
-import { getCurrentUser } from '@/skateboard-ui/Utilities.js';
 
 import HomeView from './components/HomeView.jsx'
 import OtherView from './components/OtherView.jsx'
