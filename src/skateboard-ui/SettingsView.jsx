@@ -4,13 +4,18 @@ import { useEffect, useState } from 'react';
 import { DynamicIcon } from "lucide-react/dynamic";
 import constants from "@/constants.json";
 import pkg from '../../package.json';
-import { showCheckout } from './Utilities';
+import { showCheckout, isAppMode } from './Utilities';
+import Header from '@/skateboard-ui/Header.jsx';
 
 export default function SettingsView() {
   const navigate = useNavigate();
   const { state, dispatch } = getState();
 
-  function signOutClicked(){
+  useEffect(() => {
+    // let a = isAppMode()
+  }, []);
+
+  function signOutClicked() {
     dispatch({ type: 'CLEAR_USER', payload: null });
     navigate('/signin');
   }
@@ -19,9 +24,11 @@ export default function SettingsView() {
     <div className="h-full min-h-screen flex flex-col">
       {/* Navbar */}
       <div className="flex border-b w-full items-center">
-        <div className="m-3 p-2 hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium text-xl">
-          Settings
-        </div>
+        <Header
+          buttonClass=""
+          title={"Settings"}
+        >
+        </Header>
         <div className="ml-auto mr-5 pt-1">
           <ThemeToggle />
         </div>
@@ -75,14 +82,16 @@ export default function SettingsView() {
                   }
                 </div>
               </div>
+              {isAppMode() === false && 
               <div className="ml-auto">
                 {state.user?.stripeID ? (
                   <div onClick={() => { showManage(state.user?.stripeID) }} className="bg-sidebar-background border-foreground border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer text-center">Manage</div>
                 ) : (
                   <div onClick={() => { showCheckout(state.user?.email) }} className="bg-app text-white border-app border ml-2 px-3 py-2 rounded text-sm whitespace-nowrap cursor-pointer">Subscribe</div>
-                  
+
                 )}
-              </div>
+              </div>}
+
             </div>
           </div>
         </div>
@@ -90,7 +99,7 @@ export default function SettingsView() {
 
       {/* Footer Links */}
       <div className="mt-auto text-center">
-        <div className="m-2 block text-sm text-gray-500">v{pkg.version}</div>
+        <div className="m-2 mb-4 block text-sm text-gray-500 pb-24 md:pb-0">v{pkg.version}</div>
       </div>
     </div>
 
