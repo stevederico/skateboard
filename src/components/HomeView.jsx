@@ -1,6 +1,6 @@
 import { isSubscriber } from "@stevederico/skateboard-ui/Utilities";
 import { useEffect } from "react";
-
+import Header from '@stevederico/skateboard-ui/Header';
 export default function HomeView() {
 
   useEffect(() => {
@@ -11,11 +11,12 @@ export default function HomeView() {
 
   return (
     <>
-      <nav className="flex border-b w-full">
-        <h1 className="m-3 p-2 text-xl hover:bg-accent hover:text-accent-foreground rounded cursor-pointer font-medium">
-          Home
-        </h1>
-      </nav>
+
+      <Header
+          buttonClass=""
+          title={"Home"}
+        ></Header>
+
     </>
   )
 }
