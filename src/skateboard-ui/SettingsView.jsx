@@ -5,7 +5,7 @@ import { DynamicIcon } from "lucide-react/dynamic";
 import constants from "@/constants.json";
 import pkg from '../../package.json';
 import { showCheckout, isAppMode } from './Utilities';
-import Header from '@/skateboard-ui/Header.jsx';
+import Header from './Header.jsx';
 
 export default function SettingsView() {
   const navigate = useNavigate();
