@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@plugin 'tailwindcss-animate';
+@source '../../node_modules/@stevederico/skateboard-ui';
 
 @custom-variant dark (&:is(.dark *));
 

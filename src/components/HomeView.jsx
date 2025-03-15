@@ -1,4 +1,4 @@
-import { isSubscriber } from "@/skateboard-ui/Utilities";
+import { isSubscriber } from "@stevederico/skateboard-ui/Utilities";
 import { useEffect } from "react";
 
 export default function HomeView() {
