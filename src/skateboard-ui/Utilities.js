@@ -7,6 +7,20 @@ export function getCookie(name) {
     return null;
 }
 
+export function getBackendURL() {
+    let result = import.meta.env.DEV ? constants.devBackendURL : constants.backendURL;
+    return result
+}
+
+export function isAppMode() {
+    let a = !!(
+        typeof window !== 'undefined' &&
+        window.webkit &&
+        window.webkit.messageHandlers
+    );
+    return a
+}
+
 export async function getCurrentUser() {
     const token = getCookie('token');
     if (!token) {
@@ -15,7 +29,7 @@ export async function getCurrentUser() {
     }
 
     try {
-        const response = await fetch(`${constants.backendURL}/me`, {
+        const response = await fetch(`${getBackendURL()}/me`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -43,7 +57,7 @@ export async function isSubscriber() {
     }
 
     try {
-        const response = await fetch(`${constants.backendURL}/isSubscriber`, {
+        const response = await fetch(`${getBackendURL()}/isSubscriber`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -77,34 +91,34 @@ export async function showManage(stripeID) {
         return false;
     }
     try {
-      const uri = `${constants.backendURL}/create-portal-session`;
-      const response = await fetch(uri, {
-        method: "POST",
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ customerID: stripeID }),
-      });
+        const uri = `${getBackendURL()}/create-portal-session`;
+        const response = await fetch(uri, {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ customerID: stripeID }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log("/create-portal-session response: ", data);
-        if (data.url) {
+        if (response.ok) {
+            const data = await response.json();
+            console.log("/create-portal-session response: ", data);
+            if (data.url) {
 
-          localStorage.setItem("beforeManageURL", window.location.href);
+                localStorage.setItem("beforeManageURL", window.location.href);
 
-          window.location.href = data.url; // Redirect to Stripe billing portal
+                window.location.href = data.url; // Redirect to Stripe billing portal
+            } else {
+                console.error("No URL returned from server");
+            }
         } else {
-          console.error("No URL returned from server");
+            console.error("Error with /create-portal-session. Status:", response.status);
         }
-      } else {
-        console.error("Error with /create-portal-session. Status:", response.status);
-      }
     } catch (error) {
-      console.error("Request failed:", error);
+        console.error("Request failed:", error);
     }
-  }
+}
 
 export async function showCheckout(email, productIndex = 0) {
     const token = getCookie('token');
@@ -112,25 +126,26 @@ export async function showCheckout(email, productIndex = 0) {
         console.error('No token found in cookie');
         return false;
     }
-    
+
     try {
-        const constants = await import("@/constants.json");
-        
+
+
         const params = {
             lookup_key: constants.default.stripeProducts[productIndex].lookup_key,
             email: email
         };
 
-        const uri = `${constants.default.backendURL}/create-checkout-session`;
+        const uri = `${getBackendURL()}/create-checkout-session`;
         const response = await fetch(uri, {
             method: "POST",
             headers: {
-                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+
             },
             body: JSON.stringify(params),
         });
-        
+
         if (response.ok) {
             const data = await response.json();
             if (data.url) {
@@ -154,17 +169,25 @@ export async function showCheckout(email, productIndex = 0) {
 }
 
 export function timestampToString(input, format = "DOB") {
+
+    let seconds = 0
+
     // Convert Date object to timestamp in seconds
     if (input instanceof Date) {
-        input = input.getTime() / 1000;
+        seconds = input.getTime() / 1000;
     } else if (typeof input === 'number') {
-        input = input;
+        const digits = Math.abs(input).toString().length;
+        if (digits > 11) {
+            seconds = input / 1000
+        } else {
+            seconds = input
+        }
     } else {
-        return input;
+        return "BAD-INPUT";
     }
 
     // Ensure ts is in milliseconds
-    const date = new Date(input * 1000);
+    const date = new Date(seconds * 1000);
 
     switch (format) {
         case "DOB":
@@ -216,15 +239,32 @@ export function timestampToString(input, format = "DOB") {
             return `${days[date.getDay()]}, ${months[date.getMonth()]} ${date.getDate()} ${date.getFullYear()} ${hours}:${minutes} ${ampm}`;
         }
         case "DOBT": {
-            const month = ('0' + (date.getMonth() + 1)).slice(-2);
-            const day = ('0' + date.getDate()).slice(-2);
-            let hours = date.getHours();
-            const ampm = hours >= 12 ? 'PM' : 'AM';
-            hours = hours % 12 || 12;
-            const minutes = ('0' + date.getMinutes()).slice(-2);
-            return `${month}/${day}/${date.getFullYear()} ${hours}:${minutes} ${ampm}`;
+            const today = new Date();
+            const isToday = date.toDateString() === today.toDateString();
+            const yesterday = new Date();
+            yesterday.setDate(today.getDate() - 1);
+            const isYesterday = date.toDateString() === yesterday.toDateString();
+
+            if (isToday) {
+                return date.toLocaleString(undefined, { hour: 'numeric', minute: 'numeric' });
+            } else if (isYesterday) {
+                return `Yesterday, ${date.toLocaleString(undefined, { hour: 'numeric', minute: 'numeric' })}`;
+            } else {
+                const month = date.getMonth() + 1; // no leading zero
+                const day = date.getDate();        // no leading zero
+                let hours = date.getHours();
+                const ampm = hours >= 12 ? 'PM' : 'AM';
+                hours = hours % 12 || 12;
+                // pad minutes to always show two digits
+                const minutes = ('0' + date.getMinutes()).slice(-2);
+                return `${month}/${day}/${date.getFullYear()} ${hours}:${minutes} ${ampm}`;
+            }
         }
+
+
         default:
             return ts;
     }
 }
+
+

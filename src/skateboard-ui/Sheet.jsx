@@ -41,7 +41,7 @@ const Sheet = forwardRef(({ showSheet, sheetClosed, children, customClassName, t
 
       {/* Sliding sheet */}
       <div 
-        className="w-full rounded-t-xl bg-light-back dark:bg-dark-back border-t"
+        className="w-full rounded-t-xl  border-t"
         style={{
           transform: isVisible ? 'translateY(2%)' : 'translateY(100vh)',
           transition: 'transform 0.3s ease-out',
@@ -49,7 +49,7 @@ const Sheet = forwardRef(({ showSheet, sheetClosed, children, customClassName, t
         }}
       >
         {/* Title bar */}
-        <div className="flex py-2 justify-center bg-light-component dark:bg-dark-back">
+        <div className="flex py-2 justify-center">
           <div className="font-semibold">{title}</div>
           {!hideClose && (
             <div className="w-10 cursor-pointer" onClick={handleClose}>

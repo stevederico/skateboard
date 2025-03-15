@@ -18,8 +18,8 @@ export default function Layout({ children }) {
   }, []);
 
   return (
-    <div className="min-h-screen ">
-      <div className="fixed inset-0 flex overflow-hidden">
+    <div className="min-h-screen">
+      <div className="fixed inset-0 flex overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         <SidebarProvider>
           <AppSidebar />
           <main className="flex-1 relative overflow-y-auto scrollbar-hide">
@@ -29,7 +29,7 @@ export default function Layout({ children }) {
       </div>
       <TabBar className="md:hidden" />
     </div>
-  )
+  );
 }
 
 

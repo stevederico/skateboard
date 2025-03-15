@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getState } from '@/context.jsx';
 import constants from "@/constants.json";
+import {  getBackendURL } from '@/skateboard-ui/Utilities.js'
 
 export default function LoginForm({
   className,
@@ -31,10 +32,10 @@ export default function LoginForm({
   async function signInClicked(e) {
     e.preventDefault();
     if (isSubmitting) return;
-    
     setIsSubmitting(true);
     try {
-      const uri = `${constants.backendURL}/signin`;
+      const uri = `${getBackendURL()}/signin`;
+      console.log("URI ", uri)
       const response = await fetch(uri, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

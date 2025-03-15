@@ -1,19 +1,18 @@
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import './assets/styles.css'
 import Layout from '@/skateboard-ui/Layout.jsx';
-import HomeView from './components/HomeView.jsx'
-import OtherView from './components/OtherView.jsx'
 import LandingView from '@/skateboard-ui/LandingView.jsx'
 import TextView from '@/skateboard-ui/TextView.jsx'
 import SignUpView from '@/skateboard-ui/SignUpView.jsx'
 import SignInView from '@/skateboard-ui/SignInView.jsx'
-import SuccessView from '@/skateboard-ui/StripeView.jsx'
+import StripeView from '@/skateboard-ui/StripeView.jsx'
 import SettingsView from '@/skateboard-ui/SettingsView.jsx'
 import NotFound from '@/skateboard-ui/NotFound.jsx'
 import { ContextProvider } from './context.jsx';
 import constants from "./constants.json"
+import HomeView from './components/HomeView.jsx'
+import OtherView from './components/OtherView.jsx'
 
 const ProtectedRoute = () => {
   if (!isAuthenticated()) {
@@ -45,7 +44,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="home" element={<HomeView />} />
               <Route path="other" element={<OtherView />} />
               <Route path="settings" element={<SettingsView />} />
-              <Route path="stripe" element={<SuccessView />} />
+              <Route path="stripe" element={<StripeView />} />
             </Route>
           </Route>
           <Route path="/" element={<LandingView />} />

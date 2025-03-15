@@ -91,7 +91,7 @@ export default function SuccessView() {
     }
 
     try {
-      const response = await fetch(`${constants.backendURL}/me`, {
+      const response = await fetch(`${getBackendURL()}/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,

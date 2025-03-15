@@ -4,12 +4,13 @@
   "version": "0.0.8",
   "type": "module",
   "scripts": {
-    "dev": "vite --force --mode development ",
-    "start": "vite --force --mode development ",
-    "build": "vite build --mode development;",
-    "prod": "vite build --mode production"
+    "dev": "vite --force --mode development",
+    "start": "vite --force --mode development",
+    "build": "vite build --mode development",
+    "prod": "vite build --mode production;"
   },
   "dependencies": {
+    "@stevederico/skateboard-ui": "0.0.6",
     "@hookform/resolvers": "^4.1.2",
     "@radix-ui/react-accordion": "^1.2.3",
     "@radix-ui/react-alert-dialog": "^1.1.6",

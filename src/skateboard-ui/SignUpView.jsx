@@ -25,9 +25,9 @@ export default function LoginForm({
 
   async function signUpClicked() {
     try {
-      console.log(`${constants.backendURL}/signup`);
+      console.log(`${getBackendURL()}/signup`);
       console.log(`name: ${name}`);
-      const response = await fetch(`${constants.backendURL}/signup`, {
+      const response = await fetch(`${getBackendURL()}/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name })
