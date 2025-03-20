@@ -26,13 +26,16 @@ import HomeView from './components/HomeView.jsx'
 import OtherView from './components/OtherView.jsx'
 
 const ProtectedRoute = () => {
-  if (!isAuthenticated()) {
-    return <Navigate to="/signin" replace />;
-  }
-  return <Outlet />;
+  const auth = isAuthenticated();
+  return auth ? <Outlet /> : <Navigate to="/signin" replace />;
 };
 
 function isAuthenticated() {
+  // Check client-side noLogin flag first
+  if (constants.noLogin === true) {
+    return true;
+  }
+  // Otherwise check for valid auth token
   try {
     const token = document.cookie
       .split('; ')
@@ -51,24 +54,20 @@ const App = () => {
 
   useEffect(() => {
     document.title = constants.appName;
-
     const appStart = async () => {
-      if (location.pathname.toLowerCase().includes('app')) {
-        console.log('App Start in /app');
-        const localUser = localStorage.getItem('user');
-        if (localUser) {
-          try {
-            console.log('APP START - Fetching user');
-            const data = await getCurrentUser();
-            if (data) {
-              dispatch({ type: 'SET_USER', payload: data });
-            } else {
-              navigate('/signin');
-            }
-          } catch (error) {
-            console.error('Failed to fetch user:', error);
-          }
-        } else {
+      if (!location.pathname.toLowerCase().includes('app')) {
+        return;
+      }
+
+      // Always try to fetch user data regardless of noLogin // The server will allow the request through if noLogin is enabled on its side
+      try {
+        const data = await getCurrentUser();
+        if (data) {
+          dispatch({ type: 'SET_USER', payload: data });
+        }
+      } catch (error) {
+        console.error('Failed to fetch user:', error);
+        if (!constants.noLogin) {
           navigate('/signin');
         }
       }
