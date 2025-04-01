@@ -13,7 +13,8 @@
     "@stevederico/skateboard-ui": "^0.2.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.3.0"
+    "react-router-dom": "^7.3.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.7",
