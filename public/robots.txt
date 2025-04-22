@@ -1,7 +1,41 @@
-User-agent: *
+User-agent: Googlebot
 Disallow: /app/
 Disallow: /console/
 Disallow: /signin/
 Disallow: /signup/
+
+User-agent: Bingbot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: Applebot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: facebookexternalhit
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: Facebot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: Twitterbot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: *
+Disallow: /
+
 Sitemap: /sitemap.xml
 Sitemap: /blog/sitemap-index.xml
