@@ -1,2 +1,7 @@
 User-agent: *
-Disallow: /
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+Sitemap: /sitemap.xml
+Sitemap: /blog/sitemap-index.xml
