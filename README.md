@@ -26,6 +26,7 @@ npx degit stevederico/skateboard my-project-name
 ## Stack
 - React v19
 - Shadcn/ui
+- [skateboard-ui](https://www.github.com/stevederico/skateboard-ui)
 - Tailwindcss v4
 - Javascript
 - React-Router
@@ -67,6 +68,8 @@ deno run dev
 ```
 4. checkout [starter-backend](https://github.com/stevederico/starter-backend) for a backend auth and sqlite service
 
+
+
 ## Roadmap
 Follow progress and what's next in the [CHANGELOG](https://github.com/stevederico/skateboard/blob/master/changelog.md)
 
@@ -95,6 +98,11 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 - [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
 - [react](https://github.com/facebook/react)
 - [shadcn-ui](https://github.com/shadcn-ui/ui)
+
+## Related Projects
+- [skateboard-ui](https://www.github.com/stevederico/skateboard-ui)
+- [skateboard-blog](https://www.github.com/stevederico/skateboard-blog)
+- [skateboard-backend](https://www.github.com/stevederico/skateboard-backend)
 
 ## Contact
 
