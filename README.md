@@ -1,16 +1,15 @@
 <div align="center">
   <a href="#" />
 <!--     <img alt="" height="200px" src="https://github.com/user-attachments/assets/19ca1353-6e8d-4808-b7a2-cb830b3539e7"> -->
-    <img alt="" height="200px" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
+    <img alt="" height="400px" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
     
   </a>
 </div>
 
 
-<h3 align="center">skateboard</h3>
 
-<p align="center">
-  a boilerplate with react, tailwindcss, shadcn/ui, stripe, vite, and javascript
+<p align="center">  <br>
+  a boilerplate with react, tailwindcss, shadcn/ui, stripe, vite, and javascript. 
   <br>
   <p align="center">
   <a href="https://opensource.org/licenses/mit">
@@ -18,10 +17,8 @@
   </a>
 </p>
 
-# skateboard
-skateboard is meant to get you started quickly with everything you need for a basic web app.
 
-# Getting Started
+## Getting Started
 ```shell
 npx degit stevederico/skateboard my-project-name
 ```
@@ -56,7 +53,6 @@ npx degit stevederico/skateboard my-project-name
     <img alt="silo" height="600px" src="https://github.com/user-attachments/assets/a99f5298-42ae-46a3-b5d2-0a401750612e"> 
   </a>
 </div>
-  
 
 ## Usage
 1. install packages
