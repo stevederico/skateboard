@@ -2,6 +2,8 @@
 - noLogin hide sign out and billing, on sign out it goes to /signin
 - /premiumContent
 - credits-system -checkViews , viewRemain, 
+
+
     
 ## LATER
 - iOS Support
@@ -22,6 +24,9 @@
 - Recommendations Component
 - SSR
 - CRUD SDK
+
+
+- add move the init theme from settingsview to main
 
 0.1.1
 * removed dark mode for pages outside of /app
