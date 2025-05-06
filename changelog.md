@@ -23,6 +23,10 @@
 - SSR
 - CRUD SDK
 
+0.1.1
+* removed dark mode for pages outside of /app
+
+0.1.0
 * moved hooks
 * added Sheet component
 * added token to all fetches
