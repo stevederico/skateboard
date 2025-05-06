@@ -1,16 +1,15 @@
 <div align="center">
   <a href="#" />
 <!--     <img alt="" height="200px" src="https://github.com/user-attachments/assets/19ca1353-6e8d-4808-b7a2-cb830b3539e7"> -->
-    <img alt="" height="200px" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
+    <img alt="" height="400px" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
     
   </a>
 </div>
 
 
-<h3 align="center">skateboard</h3>
 
-<p align="center">
-  a boilerplate with react, tailwindcss, shadcn/ui, stripe, vite, and javascript
+<p align="center">  <br>
+  a boilerplate with react, tailwindcss, shadcn/ui, stripe, vite, and javascript. 
   <br>
   <p align="center">
   <a href="https://opensource.org/licenses/mit">
@@ -18,10 +17,8 @@
   </a>
 </p>
 
-# skateboard
-skateboard is meant to get you started quickly with everything you need for a basic web app.
 
-# Getting Started
+## Getting Started
 ```shell
 npx degit stevederico/skateboard my-project-name
 ```
@@ -29,6 +26,7 @@ npx degit stevederico/skateboard my-project-name
 ## Stack
 - React v19
 - Shadcn/ui
+- [skateboard-ui](https://www.github.com/stevederico/skateboard-ui)
 - Tailwindcss v4
 - Javascript
 - React-Router
@@ -56,7 +54,6 @@ npx degit stevederico/skateboard my-project-name
     <img alt="silo" height="600px" src="https://github.com/user-attachments/assets/a99f5298-42ae-46a3-b5d2-0a401750612e"> 
   </a>
 </div>
-  
 
 ## Usage
 1. install packages
@@ -70,6 +67,8 @@ deno install
 deno run dev
 ```
 4. checkout [starter-backend](https://github.com/stevederico/starter-backend) for a backend auth and sqlite service
+
+
 
 ## Roadmap
 Follow progress and what's next in the [CHANGELOG](https://github.com/stevederico/skateboard/blob/master/changelog.md)
@@ -99,6 +98,11 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 - [tailwindcss](https://github.com/tailwindlabs/tailwindcss)
 - [react](https://github.com/facebook/react)
 - [shadcn-ui](https://github.com/shadcn-ui/ui)
+
+## Related Projects
+- [skateboard-ui](https://www.github.com/stevederico/skateboard-ui)
+- [skateboard-blog](https://www.github.com/stevederico/skateboard-blog)
+- [skateboard-backend](https://www.github.com/stevederico/skateboard-backend)
 
 ## Contact
 
