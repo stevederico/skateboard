@@ -53,6 +53,11 @@ const App = () => {
   const { state, dispatch } = getState();
 
   useEffect(() => {
+    const html = document.documentElement;
+    if (!location.pathname.toLowerCase().includes('app')) {
+      document.body.classList.remove('dark');
+      html.classList.remove('dark');
+    }
     document.title = constants.appName;
     const appStart = async () => {
       if (!location.pathname.toLowerCase().includes('app')) {
@@ -81,11 +86,11 @@ const App = () => {
       <Route element={<Layout />}>
         <Route path="/console" element={<Navigate to="/app" replace />} />
         <Route path="/app" element={<ProtectedRoute />}>
-              <Route index element={<Navigate to="home" replace />} />
-              <Route path="home" element={<HomeView />} />
-              <Route path="other" element={<OtherView />} />
-              <Route path="settings" element={<SettingsView />} />
-              <Route path="stripe" element={<StripeView />} />
+          <Route index element={<Navigate to="home" replace />} />
+          <Route path="home" element={<HomeView />} />
+          <Route path="other" element={<OtherView />} />
+          <Route path="settings" element={<SettingsView />} />
+          <Route path="stripe" element={<StripeView />} />
         </Route>
       </Route>
       <Route path="/" element={<LandingView />} />
