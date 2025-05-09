@@ -17,7 +17,7 @@
         }
     ],
     "stripeProducts": [{
-        "price": "$10.00",
+        "price": "$5.00",
         "title": "Monthly Plan",
         "interval": "monthly",
         "lookup_key": "my_lookup_key"
