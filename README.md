@@ -66,7 +66,7 @@ deno install
 ```shell
 deno run dev
 ```
-4. checkout [starter-backend](https://github.com/stevederico/starter-backend) for a backend auth and sqlite service
+4. checkout [starter-backend](https://github.com/stevederico/starter-backend) for auth, and stripe integration  
 
 
 
