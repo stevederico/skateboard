@@ -28,6 +28,9 @@
 
 - add move the init theme from settingsview to main
 
+0.1.3
+* embedded lucide-react in skateboard-ui
+
 0.1.2
 * started using skateboard-ui 0.4.6, fixed the sourcemap issue for lucide-react
 
