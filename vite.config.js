@@ -12,12 +12,6 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
-  build: {
-    sourcemap: false
-  },
-  css: {
-    devSourcemap: false
-  },
   esbuild: {
     drop: ['console', 'debugger']
   },
@@ -30,5 +24,5 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['react-dom'],
-  },
+},
 })

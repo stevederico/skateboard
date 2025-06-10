@@ -1,7 +1,7 @@
 {
   "name": "skateboard",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "serve": "vite --force --mode development",
@@ -10,16 +10,16 @@
     "prod": "vite build --mode production;"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "*",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^7.3.0",
+    "@stevederico/skateboard-ui": "0.4.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2",
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.7",
     "@vitejs/plugin-react-swc": "^3.8.0",
     "tailwindcss": "4.0.0",
-    "vite": "^6.2.2"
+    "vite": "^6.3.5"
   }
 }

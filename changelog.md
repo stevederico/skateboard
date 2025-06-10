@@ -28,6 +28,9 @@
 
 - add move the init theme from settingsview to main
 
+0.1.2
+* started using skateboard-ui 0.4.6, fixed the sourcemap issue for lucide-react
+
 0.1.1
 * removed dark mode for pages outside of /app
 
