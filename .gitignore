@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 
+deno.lock
+
 # Environment variables
 .env
 .env.local
