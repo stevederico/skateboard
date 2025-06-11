@@ -1,7 +1,8 @@
 ## To-Do
-- sqlite default
-- /premiumContent
-- credits-system -checkViews , viewRemain, 
+- remove deno requirement
+- move init theme from settingsview to main 
+- PRD 
+- system prompts
 - iOS Support
     - Delete Account
     - Trigger IAP
@@ -19,9 +20,13 @@
 - Chat Component
 - Recommendations Component
 - CRUD SDK
-- move init theme from settingsview to main
+- /premiumContent
+- credits-system -checkViews , viewRemain
 
 
+
+0.1.5
+* sqlite default
 
 0.1.4
 * added backend and server

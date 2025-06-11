@@ -1,6 +1,7 @@
 // ==== IMPORTS ====
 import express from "npm:express";
 import { MongoClient } from "npm:mongodb";
+import { Database } from "https://deno.land/x/sqlite3@0.11.1/mod.ts";
 import Stripe from "npm:stripe";
 import { create, verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
@@ -33,33 +34,227 @@ const MONGO_URI = Deno.env.get("MONGO_URI");
 const STRIPE_KEY = Deno.env.get("STRIPE_KEY");
 const JWT_SECRET = Deno.env.get("JWT_SECRET");
 
-if (!MONGO_URI || !STRIPE_KEY || !JWT_SECRET) {
-  console.error("Missing required environment variables");
+if (!STRIPE_KEY || !JWT_SECRET) {
+  console.error("Missing required environment variables: STRIPE_KEY and JWT_SECRET are required");
   Deno.exit(1);
 }
+
+// Determine database type
+const useMongoDb = !!MONGO_URI;
+// console.log(`Using database: ${useMongoDb ? 'MongoDB' : 'SQLite'}`);
+
+// ==== DATABASE ABSTRACTION LAYER ====
+class DatabaseAdapter {
+  constructor() {
+    this.type = useMongoDb ? 'mongodb' : 'sqlite';
+    this.databases = new Map();
+  }
+
+  async initialize() {
+    if (this.type === 'mongodb') {
+      await this.initializeMongoDB();
+    } else {
+      await this.initializeSQLite();
+    }
+  }
+
+  async initializeMongoDB() {
+    const mongoUri = MONGO_URI.trim();
+    if (!mongoUri.startsWith("mongodb://") && !mongoUri.startsWith("mongodb+srv://")) {
+      console.error("Invalid MongoDB URI scheme. URI must start with mongodb:// or mongodb+srv://");
+      Deno.exit(1);
+    }
+
+    this.mongoClient = new MongoClient(mongoUri);
+    try {
+      await this.mongoClient.connect();
+      console.log("Connected to MongoDB");
+      
+      // Initialize indexes for the default database
+      const initialDb = this.mongoClient.db(config[0].db);
+      await this.ensureMongoIndexes(initialDb);
+    } catch (e) {
+      console.error("MongoDB connection failed:", e.message);
+      Deno.exit(1);
+    }
+  }
+
+  async initializeSQLite() {
+    // Create databases directory if it doesn't exist
+    try {
+      await Deno.mkdir('./databases', { recursive: true });
+    } catch (err) {
+      if (!(err instanceof Deno.errors.AlreadyExists)) {
+        console.error("Failed to create databases directory:", err);
+      }
+    }
+    // console.log("SQLite initialized");
+  }
+
+  async ensureMongoIndexes(db) {
+    const usersCollection = db.collection("Users");
+    const authsCollection = db.collection("Auths");
+
+    const userIndexes = await usersCollection.listIndexes().toArray();
+    const authIndexes = await authsCollection.listIndexes().toArray();
+
+    if (!userIndexes.some(index => index.key.email === 1)) {
+      await usersCollection.createIndex({ email: 1 }, { unique: true, name: "users_email_index" });
+    }
+
+    if (!authIndexes.some(index => index.key.email === 1)) {
+      await authsCollection.createIndex({ email: 1 }, { unique: true, name: "auths_email_index" });
+    }
+  }
+
+  async ensureSQLiteSchema(db) {
+    // Create Users table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS Users (
+        _id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        subscription_stripeID TEXT,
+        subscription_expires INTEGER,
+        subscription_status TEXT
+      )
+    `);
+
+    // Create Auths table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS Auths (
+        email TEXT PRIMARY KEY,
+        password TEXT NOT NULL,
+        userID TEXT NOT NULL,
+        FOREIGN KEY (userID) REFERENCES Users(_id)
+      )
+    `);
+
+    // Create indexes
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON Users(email)`);
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_auths_email ON Auths(email)`);
+  }
+
+  getDatabase(dbName) {
+    if (this.type === 'mongodb') {
+      return this.mongoClient.db(dbName);
+    } else {
+      if (!this.databases.has(dbName)) {
+        const dbPath = `./databases/${dbName}.db`;
+        const db = new Database(dbPath);
+        this.ensureSQLiteSchema(db);
+        this.databases.set(dbName, db);
+      }
+      return this.databases.get(dbName);
+    }
+  }
+
+  async findUser(db, query, projection = {}) {
+    if (this.type === 'mongodb') {
+      return await db.collection("Users").findOne(query, { projection });
+    } else {
+      const { _id, email } = query;
+      let sql = "SELECT * FROM Users WHERE ";
+      let params = [];
+      
+      if (_id) {
+        sql += "_id = ?";
+        params.push(_id);
+      } else if (email) {
+        sql += "email = ?";
+        params.push(email);
+      } else {
+        return null;
+      }
+
+      const result = db.prepare(sql).get(...params);
+      if (result && result.subscription_stripeID) {
+        result.subscription = {
+          stripeID: result.subscription_stripeID,
+          expires: result.subscription_expires,
+          status: result.subscription_status
+        };
+        delete result.subscription_stripeID;
+        delete result.subscription_expires;
+        delete result.subscription_status;
+      }
+      return result;
+    }
+  }
+
+  async insertUser(db, userData) {
+    if (this.type === 'mongodb') {
+      return await db.collection("Users").insertOne(userData);
+    } else {
+      const { _id, email, name, created_at } = userData;
+      const sql = "INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)";
+      db.prepare(sql).run(_id, email, name, created_at);
+      return { insertedId: _id };
+    }
+  }
+
+  async updateUser(db, query, update) {
+    if (this.type === 'mongodb') {
+      return await db.collection("Users").updateOne(query, update);
+    } else {
+      const { _id } = query;
+      const updateData = update.$set;
+      
+      if (updateData.subscription) {
+        const { stripeID, expires, status } = updateData.subscription;
+        const sql = `UPDATE Users SET 
+          subscription_stripeID = ?, 
+          subscription_expires = ?, 
+          subscription_status = ? 
+          WHERE _id = ?`;
+        const result = db.prepare(sql).run(stripeID, expires, status, _id);
+        return { modifiedCount: result.changes };
+      } else {
+        // Handle other updates
+        const fields = Object.keys(updateData);
+        if (fields.length === 0) return { modifiedCount: 0 };
+        
+        const setClause = fields.map(field => `${field} = ?`).join(', ');
+        const values = fields.map(field => updateData[field]);
+        values.push(_id);
+        
+        const sql = `UPDATE Users SET ${setClause} WHERE _id = ?`;
+        const result = db.prepare(sql).run(...values);
+        return { modifiedCount: result.changes };
+      }
+    }
+  }
+
+  async findAuth(db, query) {
+    if (this.type === 'mongodb') {
+      return await db.collection("Auths").findOne(query);
+    } else {
+      const { email } = query;
+      const sql = "SELECT * FROM Auths WHERE email = ?";
+      return db.prepare(sql).get(email);
+    }
+  }
+
+  async insertAuth(db, authData) {
+    if (this.type === 'mongodb') {
+      return await db.collection("Auths").insertOne(authData);
+    } else {
+      const { email, password, userID } = authData;
+      const sql = "INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)";
+      db.prepare(sql).run(email, password, userID);
+      return { insertedId: email };
+    }
+  }
+}
+
+// Initialize database adapter
+const dbAdapter = new DatabaseAdapter();
+await dbAdapter.initialize();
 
 // ==== SERVICES SETUP ====
 // Stripe setup
 const stripe = new Stripe(STRIPE_KEY);
-
-// MongoDB setup
-const mongoUri = MONGO_URI.trim();
-if (!mongoUri) {
-  console.error("MongoDB URI is empty or undefined");
-  Deno.exit(1);
-}
-if (!mongoUri.startsWith("mongodb://") && !mongoUri.startsWith("mongodb+srv://")) {
-  console.error("Invalid MongoDB URI scheme. URI must start with mongodb:// or mongodb+srv://");
-  Deno.exit(1);
-}
-
-const client = new MongoClient(mongoUri);
-try {
-  await client.connect();
-} catch (e) {
-  console.error("MongoDB connection failed:", e.message);
-  Deno.exit(1);
-}
 
 // ==== DATABASE HELPERS ====
 // Get database name based on origin
@@ -70,35 +265,10 @@ const getDBName = (origin) => {
   return dbName;
 };
 
-// Initialize db and collections
+// Initialize db and collections/adapters
 let db;
 let users;
 let auths;
-
-// Create indexes on first startup if they don't exist
-const initialDb = client.db(config[0].db);
-const usersCollection = initialDb.collection("Users");
-const authsCollection = initialDb.collection("Auths");
-
-// Check and create indexes if they don't exist
-async function ensureIndexes() {
-  const userIndexes = await usersCollection.listIndexes().toArray();
-  const authIndexes = await authsCollection.listIndexes().toArray();
-
-  if (!userIndexes.some(index => index.key.email === 1)) {
-    await usersCollection.createIndex({ email: 1 }, { unique: true, name: "users_email_index" });
-  }
-
-  if (!authIndexes.some(index => index.key.email === 1)) {
-    await authsCollection.createIndex({ email: 1 }, { unique: true, name: "auths_email_index" });
-  }
-}
-
-try {
-  await ensureIndexes();
-} catch (err) {
-  console.error('Error ensuring indexes:', err);
-}
 
 // ==== EXPRESS SETUP ====
 const app = express();
@@ -118,16 +288,18 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
     return res.status(400).send();
   }
 
-  let myDB = client.db("MyApp");
-  let users = myDB.collection("Users");
+  const webhookDb = dbAdapter.getDatabase("MyApp");
   const { customer: stripeID, current_period_end, status } = event.data.object;
   const customer = await stripe.customers.retrieve(stripeID);
   const customerEmail = customer.email.toLowerCase();
+  
   if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
     console.log(`Webhook: ${event.type} for ${customerEmail}`);
-    const user = await users.findOne({ email: customerEmail });
+    const user = await dbAdapter.findUser(webhookDb, { email: customerEmail });
     if (user) {
-      await users.updateOne({ email: customerEmail }, { $set: { subscription: { stripeID, expires: current_period_end, status } } });
+      await dbAdapter.updateUser(webhookDb, { email: customerEmail }, { 
+        $set: { subscription: { stripeID, expires: current_period_end, status } } 
+      });
     } else {
       console.warn(`Webhook: No user found for email ${customerEmail}`);
     }
@@ -192,10 +364,20 @@ app.use((req, res, next) => {
 // Database switching middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!db || db.databaseName !== getDBName(origin)) {
-    db = client.db(getDBName(origin));
-    users = db.collection("Users");
-    auths = db.collection("Auths");
+  const dbName = getDBName(origin);
+  
+  if (!db || (useMongoDb && db.databaseName !== dbName) || (!useMongoDb && db !== dbAdapter.getDatabase(dbName))) {
+    db = dbAdapter.getDatabase(dbName);
+    
+    // For MongoDB compatibility, set up collection references
+    if (useMongoDb) {
+      users = db.collection("Users");
+      auths = db.collection("Auths");
+    } else {
+      // For SQLite, we'll use the adapter methods directly
+      users = null;
+      auths = null;
+    }
   }
   next();
 });
@@ -213,7 +395,7 @@ function tokenExpireTimestamp(){
 async function generateToken(userID, origin) {
   try {
     const exp = tokenExpireTimestamp(); 
-    const dbName = "A";
+    const dbName = getDBName(origin);
     const header = { alg: "HS256", typ: "JWT" };
     const payload = { userID, exp, dbName };
 
@@ -258,10 +440,18 @@ async function authMiddleware(req, res, next) {
     req.userID = payload.userID;
     req.dbName = payload.dbName;
 
-    if (!db || db.databaseName !== payload.dbName) {
-      db = client.db(payload.dbName);
-      users = db.collection("Users");
-      auths = db.collection("Auths");
+    // Update database connection if needed
+    const targetDbName = payload.dbName;
+    if (!db || (useMongoDb && db.databaseName !== targetDbName) || (!useMongoDb && db !== dbAdapter.getDatabase(targetDbName))) {
+      db = dbAdapter.getDatabase(targetDbName);
+      
+      if (useMongoDb) {
+        users = db.collection("Users");
+        auths = db.collection("Auths");
+      } else {
+        users = null;
+        auths = null;
+      }
     }
 
     next();
@@ -295,9 +485,7 @@ app.post("/signup", async (req, res) => {
   try {
     const origin = req.headers.origin;
     const dbName = getDBName(origin);
-    db = client.db(dbName);
-    users = db.collection("Users");
-    auths = db.collection("Auths");
+    db = dbAdapter.getDatabase(dbName);
 
     var { email, password, name } = req.body;
     email = email?.toLowerCase().trim()
@@ -307,22 +495,32 @@ app.post("/signup", async (req, res) => {
 
     const hash = await bcrypt.hash(password, await bcrypt.genSalt(12));
     let insertID = generateUUID()
-    const result = await users.insertOne({
-      _id: insertID,
-      email: email,
-      name: name.trim(),
-      created_at: Date.now()
-    });
+    
+    try {
+      const result = await dbAdapter.insertUser(db, {
+        _id: insertID,
+        email: email,
+        name: name.trim(),
+        created_at: Date.now()
+      });
 
-    const token = await generateToken(insertID, req.headers.origin);
-    await auths.insertOne({ email: email, password: hash, userID: insertID });
-    res.status(201).json({ id: insertID.toString(), email: email, name: name.trim(), 
-      token: token,
-      tokenExpires: tokenExpireTimestamp() 
-       
-    });
+      const token = await generateToken(insertID, req.headers.origin);
+      await dbAdapter.insertAuth(db, { email: email, password: hash, userID: insertID });
+      
+      res.status(201).json({ 
+        id: insertID.toString(), 
+        email: email, 
+        name: name.trim(), 
+        token: token,
+        tokenExpires: tokenExpireTimestamp() 
+      });
+    } catch (e) {
+      if ((useMongoDb && e.code === 11000) || (!useMongoDb && e.message?.includes('UNIQUE constraint failed'))) {
+        return res.status(409).json({ error: "Email exists" });
+      }
+      throw e;
+    }
   } catch (e) {
-    if (e.code === 11000) return res.status(409).json({ error: "Email exists" });
     console.error("Signup error:", e.message);
     res.status(500).json({ error: "Server error" });
   }
@@ -332,10 +530,7 @@ app.post("/signin", async (req, res) => {
   try {
     const origin = req.headers.origin;
     const dbName = getDBName(origin);
-
-    db = client.db(dbName);
-    users = db.collection("Users");
-    auths = db.collection("Auths");
+    db = dbAdapter.getDatabase(dbName);
 
     if (!req.headers["content-type"]?.includes("application/json")) {
       console.log(`[${new Date().toISOString()}] Invalid content type:`, req.headers["content-type"]);
@@ -352,7 +547,7 @@ app.post("/signin", async (req, res) => {
     console.log(`[${new Date().toISOString()}] Attempting signin for email:`, email);
 
     // Check if auth exists
-    const auth = await auths.findOne({ email: email });
+    const auth = await dbAdapter.findAuth(db, { email: email });
     if (!auth) {
       console.log(`[${new Date().toISOString()}] Auth record not found for:`, email);
       return res.status(401).json({ error: "Invalid credentials" });
@@ -365,7 +560,7 @@ app.post("/signin", async (req, res) => {
     }
 
     // get user
-    const user = await users.findOne({ email: email });
+    const user = await dbAdapter.findUser(db, { email: email });
     if (!user) {
       console.error("User not found for auth record:", auth);
       return res.status(404).json({ error: "User not found" });
@@ -396,7 +591,7 @@ app.post("/signin", async (req, res) => {
 
 // ==== USER DATA ROUTES ====
 app.get("/me", authMiddleware, async (req, res) => {
-  const user = await users.findOne({ _id: req.userID });
+  const user = await dbAdapter.findUser(db, { _id: req.userID });
   console.log("/me checking for user with ID:", req.userID);
   if (!user) return res.status(404).json({ error: "User not found" });
   return res.json(user);
@@ -405,7 +600,7 @@ app.get("/me", authMiddleware, async (req, res) => {
 app.put("/me", authMiddleware, async (req, res) => {
   try {
     // Find user first to verify existence
-    const user = await users.findOne({ _id: req.userID });
+    const user = await dbAdapter.findUser(db, { _id: req.userID });
     if (!user) return res.status(404).json({ error: "User not found" });
 
     // Remove fields that shouldn't be updateable
@@ -416,17 +611,14 @@ app.put("/me", authMiddleware, async (req, res) => {
     delete update.subscription;
 
     // Update user document
-    const result = await users.updateOne(
-      { _id: req.userID },
-      { $set: update }
-    );
+    const result = await dbAdapter.updateUser(db, { _id: req.userID }, { $set: update });
 
     if (result.modifiedCount === 0) {
       return res.status(500).json({ error: "No changes made" });
     }
 
     // Return updated user
-    const updatedUser = await users.findOne({ _id: req.userID });
+    const updatedUser = await dbAdapter.findUser(db, { _id: req.userID });
     return res.json(updatedUser);
   } catch (err) {
     console.error("Update user error:", err);
@@ -435,9 +627,8 @@ app.put("/me", authMiddleware, async (req, res) => {
 });
 
 app.get("/isSubscriber", authMiddleware, async (req, res) => {
-  const user = await users.findOne(
-    { _id: req.userID },
-    { projection: { "subscription.stripeID": 1, "subscription.expires": 1, "subscription.status": 1 } }
+  const user = await dbAdapter.findUser(db, { _id: req.userID }, 
+    useMongoDb ? { projection: { "subscription.stripeID": 1, "subscription.expires": 1, "subscription.status": 1 } } : {}
   );
   if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -458,7 +649,7 @@ app.post("/create-checkout-session", authMiddleware, async (req, res) => {
     if (!email || !lookup_key) return res.status(400).json({ error: "Missing email or lookup_key" });
 
     // Verify the email matches the authenticated user
-    const user = await users.findOne({ _id: req.userID });
+    const user = await dbAdapter.findUser(db, { _id: req.userID });
     if (!user || user.email !== email) return res.status(403).json({ error: "Email mismatch" });
 
     const prices = await stripe.prices.list({ lookup_keys: [lookup_key], expand: ["data.product"] });
@@ -487,7 +678,7 @@ app.post("/create-portal-session", authMiddleware, async (req, res) => {
     if (!customerID) return res.status(400).json({ error: "Missing customerID" });
 
     // Verify the customerID matches the authenticated user's subscription
-    const user = await users.findOne({ _id: req.userID });
+    const user = await dbAdapter.findUser(db, { _id: req.userID });
     if (!user || (user.subscription?.stripeID && user.subscription.stripeID !== customerID)) {
       return res.status(403).json({ error: "Unauthorized customerID" });
     }
@@ -590,6 +781,15 @@ if (typeof process !== 'undefined') {
 // Handle shutdown gracefully
 Deno.addSignalListener("SIGINT", async () => {
   console.log("Shutting down...");
-  await client.close();
+  
+  if (useMongoDb && dbAdapter.mongoClient) {
+    await dbAdapter.mongoClient.close();
+  } else if (!useMongoDb) {
+    // Close all SQLite connections
+    for (const [dbName, db] of dbAdapter.databases) {
+      db.close();
+    }
+  }
+  
   Deno.exit();
 });

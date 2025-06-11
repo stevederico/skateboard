@@ -4,8 +4,8 @@
     "description": "Skateboard application backend",
     "type": "module",
     "scripts": {
-      "start": "deno run --allow-net --allow-read --allow-env --allow-write --allow-sys server.js",
-      "dev": "deno run --allow-net --allow-read --allow-env --allow-write --allow-sys --watch server.js"
+      "start": "deno run --allow-ffi --allow-net --allow-read --allow-env --allow-write --allow-sys server.js",
+      "dev": "deno run --allow-ffi --allow-net --allow-read --allow-env --allow-write --allow-sys --watch server.js"
     },
     "dependencies": {
         "express": "^4.21.2",
