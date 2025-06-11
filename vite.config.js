@@ -7,10 +7,23 @@ import path from 'node:path'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
+const customLoggerPlugin = () => {
+  return {
+    name: 'custom-logger',
+    configureServer(server) {
+      const originalPrint = server.printUrls;
+      server.printUrls = () => {
+        console.log(`🖥️  React is running on http://localhost:${server.config.server.port || 5173}`);
+      };
+    }
+  };
+};
+
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss()
+    tailwindcss(),
+    customLoggerPlugin()
   ],
   esbuild: {
     drop: ['console', 'debugger']
@@ -24,5 +37,10 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['react-dom'],
-},
+  },
+  server: {
+    host: true,
+    open: false,
+  },
+  logLevel: 'error'
 })

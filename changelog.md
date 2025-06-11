@@ -1,11 +1,7 @@
 ## To-Do
-- noLogin hide sign out and billing, on sign out it goes to /signin
+- sqlite default
 - /premiumContent
 - credits-system -checkViews , viewRemain, 
-
-
-    
-## LATER
 - iOS Support
     - Delete Account
     - Trigger IAP
@@ -22,11 +18,13 @@
 - Sheet Component
 - Chat Component
 - Recommendations Component
-- SSR
 - CRUD SDK
+- move init theme from settingsview to main
 
 
-- add move the init theme from settingsview to main
+
+0.1.4
+* added backend and server
 
 0.1.3
 * embedded lucide-react in skateboard-ui

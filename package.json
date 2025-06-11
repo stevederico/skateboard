@@ -1,13 +1,19 @@
 {
   "name": "skateboard",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
+  "workspaces": [
+    "backend"
+  ],
   "scripts": {
     "serve": "vite --force --mode development",
     "start": "vite --force --mode development",
     "build": "vite build --mode development;",
-    "prod": "vite build --mode production;"
+    "prod": "vite build --mode production;",
+    "server": "npm run start --workspace=backend",
+    "dev": "npm run start & npm run server",
+    "install-all": "npm install && npm install --workspace=backend"
   },
   "dependencies": {
     "@stevederico/skateboard-ui": "^0.5.0",
