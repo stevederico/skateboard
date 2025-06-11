@@ -65,7 +65,6 @@ deno install
 ```shell
 deno run dev
 ```
-4. checkout [starter-backend](https://github.com/stevederico/starter-backend) for auth, and stripe integration  
 
 
 
@@ -101,7 +100,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## Related Projects
 - [skateboard-ui](https://www.github.com/stevederico/skateboard-ui)
 - [skateboard-blog](https://www.github.com/stevederico/skateboard-blog)
-- [skateboard-backend](https://www.github.com/stevederico/skateboard-backend)
 
 ## Contact
 
