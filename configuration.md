@@ -1,3 +1,9 @@
+---
+layout: default
+title: Configuration
+description: Configure Skateboard for your specific needs with app and backend settings
+---
+
 # Configuration
 
 Learn how to configure Skateboard for your specific needs.

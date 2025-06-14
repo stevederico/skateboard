@@ -1,3 +1,9 @@
+---
+layout: default
+title: Examples
+description: Real-world examples and code snippets for building with Skateboard
+---
+
 # Examples
 
 Real-world examples and code snippets to help you build with Skateboard.

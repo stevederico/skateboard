@@ -1,3 +1,9 @@
+---
+layout: default
+title: Stripe Integration
+description: Payment processing, subscriptions, and webhook handling with Stripe
+---
+
 # Stripe Integration
 
 Skateboard includes built-in Stripe integration for handling payments, subscriptions, and checkout flows.

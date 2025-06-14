@@ -1,3 +1,9 @@
+---
+layout: default
+title: Authentication
+description: Complete authentication system with JWT, protected routes, and user management
+---
+
 # Authentication
 
 Skateboard includes a complete authentication system with sign-up, sign-in, and protected routes.

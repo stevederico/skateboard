@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title | default: site.github.repository_name }}</title>
+    <meta name="description" content="{{ page.description | default: site.description | default: site.github.project_tagline }}">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg: #ffffff;
+            --bg-secondary: #f8fafc;
+            --text: #334155;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --sidebar-width: 280px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .nav-section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-light);
+            padding: 0 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.5rem 1.5rem;
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-link:hover {
+            background: rgba(37, 99, 235, 0.1);
+            color: var(--primary);
+        }
+
+        .nav-link.active {
+            background: rgba(37, 99, 235, 0.1);
+            color: var(--primary);
+            border-left-color: var(--primary);
+        }
+
+        .content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            padding: 2rem 3rem;
+            max-width: calc(100% - var(--sidebar-width));
+        }
+
+        .content-header {
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .content-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        .content-description {
+            font-size: 1.125rem;
+            color: var(--text-light);
+        }
+
+        .content-body {
+            max-width: 800px;
+        }
+
+        .content-body h1,
+        .content-body h2,
+        .content-body h3,
+        .content-body h4 {
+            color: var(--text);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .content-body h1 {
+            font-size: 2rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+
+        .content-body h2 {
+            font-size: 1.5rem;
+        }
+
+        .content-body h3 {
+            font-size: 1.25rem;
+        }
+
+        .content-body p {
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        .content-body a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .content-body a:hover {
+            text-decoration: underline;
+        }
+
+        .content-body code {
+            background: var(--bg-secondary);
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            color: var(--primary);
+        }
+
+        .content-body pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .content-body pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        .content-body ul,
+        .content-body ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .content-body li {
+            margin-bottom: 0.25rem;
+        }
+
+        .content-body blockquote {
+            border-left: 4px solid var(--primary);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: var(--text-light);
+            font-style: italic;
+        }
+
+        .content-body table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .content-body th,
+        .content-body td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .content-body th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+        }
+
+        .mobile-menu {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 200;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 4rem 1rem 2rem;
+                max-width: 100%;
+            }
+
+            .mobile-menu {
+                display: block;
+            }
+        }
+
+        .nav-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .nav-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            text-decoration: none;
+            color: var(--text);
+            transition: all 0.2s;
+        }
+
+        .nav-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .nav-card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-card-description {
+            color: var(--text-light);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <button class="mobile-menu" onclick="toggleSidebar()">☰</button>
+    
+    <div class="container">
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <a href="/" class="sidebar-title">Skateboard</a>
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Getting Started</div>
+                    <a href="/getting-started" class="nav-link">Installation</a>
+                    <a href="/configuration" class="nav-link">Configuration</a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Components</div>
+                    <a href="/components" class="nav-link">UI Components</a>
+                    <a href="/examples" class="nav-link">Examples</a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Features</div>
+                    <a href="/authentication" class="nav-link">Authentication</a>
+                    <a href="/stripe" class="nav-link">Stripe Integration</a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Deployment</div>
+                    <a href="/deployment" class="nav-link">Production</a>
+                    <a href="/api" class="nav-link">API Reference</a>
+                </div>
+            </div>
+        </nav>
+
+        <main class="content">
+            {% if page.title %}
+            <div class="content-header">
+                <h1 class="content-title">{{ page.title }}</h1>
+                {% if page.description %}
+                <p class="content-description">{{ page.description }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            <div class="content-body">
+                {{ content }}
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+        }
+
+        // Highlight active nav link
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.nav-link');
+            
+            navLinks.forEach(link => {
+                if (link.getAttribute('href') === currentPath || 
+                    (currentPath === '/' && link.getAttribute('href') === '/')) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+        // Close sidebar on mobile when clicking outside
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const mobileMenu = document.querySelector('.mobile-menu');
+            
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(e.target) && 
+                !mobileMenu.contains(e.target)) {
+                sidebar.classList.remove('open');
+            }
+        });
+    </script>
+</body>
+</html>
