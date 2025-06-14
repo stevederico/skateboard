@@ -24,7 +24,8 @@
 - credits-system -checkViews , viewRemain
 
 
-
+0.1.6
+* added @stevederico/skateboard-ui from npm
 0.1.5
 * sqlite default
 
