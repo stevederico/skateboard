@@ -19,7 +19,7 @@
 
 ## Getting Started
 ```shell
-npx degit stevederico/skateboard my-project-name
+npx create-skateboard-app
 ```
 
 ## Stack
