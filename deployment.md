@@ -1,3 +1,9 @@
+---
+layout: default
+title: Deployment
+description: Deploy your Skateboard application to production with comprehensive guides
+---
+
 # Deployment
 
 Deploy your Skateboard application to production with these deployment guides.

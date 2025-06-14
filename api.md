@@ -1,3 +1,9 @@
+---
+layout: default
+title: API Reference
+description: Complete backend API documentation with endpoints, examples, and SDK
+---
+
 # API Reference
 
 Complete API reference for the Skateboard backend server.

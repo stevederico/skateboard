@@ -1,3 +1,9 @@
+---
+layout: default
+title: Components
+description: UI components library with Shadcn/ui and custom Skateboard components
+---
+
 # Components
 
 Skateboard uses a combination of Shadcn/ui components and custom skateboard-ui components for a complete UI system.

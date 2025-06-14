@@ -1,3 +1,9 @@
+---
+layout: default
+title: Getting Started
+description: Install and set up Skateboard to start building your application
+---
+
 # Getting Started
 
 This guide will help you set up Skateboard and start building your application.
