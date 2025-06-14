@@ -1,21 +1,24 @@
 // ==== IMPORTS ====
-import express from "npm:express";
-import { MongoClient } from "npm:mongodb";
-import { Database } from "https://deno.land/x/sqlite3@0.11.1/mod.ts";
-import Stripe from "npm:stripe";
-import { create, verify } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
-import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+import express from "express";
+import { MongoClient } from "mongodb";
+import Stripe from "stripe";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 
-import { dirname, resolve, fromFileUrl } from "https://deno.land/std@0.210.0/path/mod.ts";
-import { cron } from "https://deno.land/x/deno_cron@v1.0.0/cron.ts";
+import { DatabaseSync as Database } from "node:sqlite";
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { promisify } from 'node:util';
 
 // ==== CONFIG & ENV ====
 let config;
 try {
-  const configPath = resolve(dirname(fromFileUrl(import.meta.url)), './config.json');
-  const configData = await Deno.readFile(configPath);
-  config = JSON.parse(new TextDecoder().decode(configData));
-  config = JSON.parse(new TextDecoder().decode(configData));
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const configPath = resolve(__dirname, './config.json');
+  const configData = await promisify(readFile)(configPath);
+  config = JSON.parse(configData.toString());
 } catch (err) {
   console.error('Failed to load config:', err);
   config = [{ db: "SkateboardApp", origin: "http://localhost:5173" }];
@@ -25,18 +28,18 @@ try {
 if (!isProd()) {
   loadLocalENV();
 } else {
-  cron("0 * * * *", async () => {
+  setInterval(async () => {
     console.log(`Hourly Completed at ${new Date().toLocaleTimeString()}`);
-  });
+  }, 60 * 60 * 1000); // Every hour
 }
 
-const MONGO_URI = Deno.env.get("MONGO_URI");
-const STRIPE_KEY = Deno.env.get("STRIPE_KEY");
-const JWT_SECRET = Deno.env.get("JWT_SECRET");
+const MONGO_URI = process.env.MONGO_URI;
+const STRIPE_KEY = process.env.STRIPE_KEY;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!STRIPE_KEY || !JWT_SECRET) {
   console.error("Missing required environment variables: STRIPE_KEY and JWT_SECRET are required");
-  Deno.exit(1);
+  process.exit(1);
 }
 
 // Determine database type
@@ -62,7 +65,7 @@ class DatabaseAdapter {
     const mongoUri = MONGO_URI.trim();
     if (!mongoUri.startsWith("mongodb://") && !mongoUri.startsWith("mongodb+srv://")) {
       console.error("Invalid MongoDB URI scheme. URI must start with mongodb:// or mongodb+srv://");
-      Deno.exit(1);
+      process.exit(1);
     }
 
     this.mongoClient = new MongoClient(mongoUri);
@@ -75,16 +78,16 @@ class DatabaseAdapter {
       await this.ensureMongoIndexes(initialDb);
     } catch (e) {
       console.error("MongoDB connection failed:", e.message);
-      Deno.exit(1);
+      process.exit(1);
     }
   }
 
   async initializeSQLite() {
     // Create databases directory if it doesn't exist
     try {
-      await Deno.mkdir('./databases', { recursive: true });
+      await promisify(mkdir)('./databases', { recursive: true });
     } catch (err) {
-      if (!(err instanceof Deno.errors.AlreadyExists)) {
+      if (err.code !== 'EEXIST') {
         console.error("Failed to create databases directory:", err);
       }
     }
@@ -281,7 +284,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
   let event;
   try {
     // req.body is a Buffer here, as required by Stripe
-    event = await stripe.webhooks.constructEventAsync(req.body, signature, Deno.env.get("STRIPE_ENDPOINT_SECRET"));
+    event = await stripe.webhooks.constructEventAsync(req.body, signature, process.env.STRIPE_ENDPOINT_SECRET);
     console.log("Webhook event:", event);
   } catch (e) {
     console.error("Webhook signature verification failed:", e.message);
@@ -386,32 +389,36 @@ app.use(express.json());
 
 const tokenExpirationDays = 7;
 
+// ==== BCRYPT HELPERS ====
+async function hashPassword(password) {
+  const salt = await bcrypt.genSalt(12);
+  return await bcrypt.hash(password, salt);
+}
+
+async function verifyPassword(password, hash) {
+  return await bcrypt.compare(password, hash);
+}
+
 // ==== JWT HELPERS ====
 function tokenExpireTimestamp(){
   return Math.floor(Date.now() / 1000) + tokenExpirationDays * 24 * 60 * 60; // 1 week from now
 }
 
-// Remove the encoder and importKey since we'll use JWT_SECRET directly with djwt
+// Remove the encoder and importKey since we'll use JWT_SECRET directly with jsonwebtoken
 async function generateToken(userID, origin) {
   try {
     const exp = tokenExpireTimestamp(); 
     const dbName = getDBName(origin);
-    const header = { alg: "HS256", typ: "JWT" };
     const payload = { userID, exp, dbName };
 
-    const jwtSecret = Deno.env.get("JWT_SECRET");
+    const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) throw new Error("JWT_SECRET not set");
 
-    const keyData = new TextEncoder().encode(jwtSecret);
-    const cryptoKey = await crypto.subtle.importKey(
-      "raw",
-      keyData,
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign", "verify"]
-    );
-
-    return await create(header, payload, cryptoKey);
+    // Use jsonwebtoken with exact same config as djwt
+    return jwt.sign(payload, jwtSecret, { 
+      algorithm: 'HS256',
+      header: { alg: "HS256", typ: "JWT" }
+    });
   } catch (error) {
     console.error("Token generation error:", error);
     throw error;
@@ -427,15 +434,9 @@ async function authMiddleware(req, res, next) {
 
   try {
     const token = authHeader.split(" ")[1];
-    const keyData = new TextEncoder().encode(JWT_SECRET);
-    const cryptoKey = await crypto.subtle.importKey(
-      "raw",
-      keyData,
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"]
-    );
-    const payload = await verify(token, cryptoKey, { algorithms: ["HS256"] });
+    
+    // Use jsonwebtoken with exact same config as djwt
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
 
     req.userID = payload.userID;
     req.dbName = payload.dbName;
@@ -466,7 +467,7 @@ app.use("/public", express.static("./public"));
 
 app.get("/", async (req, res) => {
   try {
-    const file = await Deno.readFile("./public/index.html");
+    const file = await promisify(readFile)("./public/index.html");
     res.setHeader("Content-Type", "text/html");
     res.send(new TextDecoder().decode(file));
   } catch {
@@ -493,7 +494,7 @@ app.post("/signup", async (req, res) => {
       return res.status(400).json({ error: "Invalid input" });
     }
 
-    const hash = await bcrypt.hash(password, await bcrypt.genSalt(12));
+    const hash = await hashPassword(password);
     let insertID = generateUUID()
     
     try {
@@ -554,7 +555,7 @@ app.post("/signin", async (req, res) => {
     }
 
     //verify
-    if (!(await bcrypt.compare(password, auth.password))) {
+    if (!(await verifyPassword(password, auth.password))) {
       console.log(`[${new Date().toISOString()}] Password verification failed for:`, email);
       return res.status(401).json({ error: "Invalid credentials" });
     }
@@ -699,9 +700,9 @@ app.post("/create-portal-session", authMiddleware, async (req, res) => {
 
 // ==== UTILITY FUNCTIONS ====
 function isProd() {
-  if (typeof Deno.env.get("ENV") === "undefined") {
+  if (typeof process.env.ENV === "undefined") {
     return false
-  } else if (Deno.env.get("ENV") === "production") {
+  } else if (process.env.ENV === "production") {
     return true
   } else {
     return false
@@ -709,18 +710,19 @@ function isProd() {
 }
 
 function loadLocalENV() {
-  const __dirname = dirname(fromFileUrl(import.meta.url));
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
   const envFilePath = resolve(__dirname, './.env');
   const envExamplePath = resolve(__dirname, './.env.example');
   
   // Check if .env exists, if not create it from .env.example
   try {
-    Deno.statSync(envFilePath);
+    statSync(envFilePath);
   } catch (err) {
     // .env doesn't exist, try to create it from .env.example
     try {
-      const exampleData = Deno.readTextFileSync(envExamplePath);
-      Deno.writeTextFileSync(envFilePath, exampleData);
+      const exampleData = readFileSync(envExamplePath, 'utf8');
+      writeFileSync(envFilePath, exampleData);
     } catch (exampleErr) {
       console.error('Failed to create .env from template:', exampleErr);
       return;
@@ -728,7 +730,7 @@ function loadLocalENV() {
   }
 
   try {
-    const data = Deno.readTextFileSync(envFilePath);
+    const data = readFileSync(envFilePath, 'utf8');
     const lines = data.split(/\r?\n/);
     for (let line of lines) {
       if (!line || line.trim().startsWith('#')) continue;
@@ -742,7 +744,7 @@ function loadLocalENV() {
         value = value.trim();
         // Remove surrounding quotes if present
         value = value.replace(/^["']|["']$/g, '');
-        Deno.env.set(key, value);
+        process.env[key] = value;
       }
     }
   } catch (err) {
@@ -751,7 +753,7 @@ function loadLocalENV() {
 }
 
 // ==== SERVER STARTUP ====
-const port = parseInt(Deno.env.get("PORT") || "8000");
+const port = parseInt(process.env.PORT || "8000");
 
 //'::' is very important you need it to listen on ipv6!
 let server = app.listen(port, '::', () => {
@@ -779,7 +781,7 @@ if (typeof process !== 'undefined') {
 }
 
 // Handle shutdown gracefully
-Deno.addSignalListener("SIGINT", async () => {
+process.on("SIGINT", async () => {
   console.log("Shutting down...");
   
   if (useMongoDb && dbAdapter.mongoClient) {
@@ -791,5 +793,5 @@ Deno.addSignalListener("SIGINT", async () => {
     }
   }
   
-  Deno.exit();
+  process.exit();
 });

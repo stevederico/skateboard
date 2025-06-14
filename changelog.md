@@ -1,5 +1,5 @@
 ## To-Do
-- remove deno requirement
+
 - move init theme from settingsview to main 
 - PRD 
 - system prompts
@@ -24,6 +24,8 @@
 - credits-system -checkViews , viewRemain
 
 
+0.1.7
+* removed deno requirement
 0.1.6
 * added @stevederico/skateboard-ui from npm
 0.1.5

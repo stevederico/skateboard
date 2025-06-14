@@ -57,13 +57,13 @@ npx degit stevederico/skateboard my-project-name
 ## Usage
 1. install packages
 ```shell
-deno install
+npm install
 ```
 2. configure details in constants.json
 
 3. start dev server
 ```shell
-deno run dev
+npm run dev
 ```
 
 

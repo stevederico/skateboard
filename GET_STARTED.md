@@ -1,4 +1,4 @@
-- deno install
+- npm install
 - set app-color in styles.css
 - set "backendURL" in constants.json
 - set "devBackendURL" in constants.json
