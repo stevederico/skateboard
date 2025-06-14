@@ -4,12 +4,13 @@
     "description": "Skateboard application backend",
     "type": "module",
     "scripts": {
-      "start": "deno run --allow-ffi --allow-net --allow-read --allow-env --allow-write --allow-sys server.js",
-      "dev": "deno run --allow-ffi --allow-net --allow-read --allow-env --allow-write --allow-sys --watch server.js"
+        "start": "node --experimental-sqlite server.js"
     },
     "dependencies": {
+        "bcrypt": "^6.0.0",
         "express": "^4.21.2",
-        "mongodb": "^6.14.2",
+        "jsonwebtoken": "^9.0.2",
+        "mongodb": "^6.17.0",
         "stripe": "^17.7.0"
     }
 }
