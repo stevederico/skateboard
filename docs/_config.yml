@@ -1,0 +1,31 @@
+theme: jekyll-theme-minimal
+title: Skateboard Documentation
+description: A modern React boilerplate with authentication, payments, and beautiful UI components
+show_downloads: true
+
+plugins:
+  - jekyll-optional-front-matter
+  - jekyll-readme-index
+  - jekyll-default-layout
+  - jekyll-titles-from-headings
+
+markdown: kramdown
+highlighter: rouge
+
+navigation:
+  - title: "Getting Started"
+    url: "/getting-started"
+  - title: "Configuration" 
+    url: "/configuration"
+  - title: "Components"
+    url: "/components"
+  - title: "Authentication"
+    url: "/authentication"
+  - title: "Stripe Integration"
+    url: "/stripe"
+  - title: "Deployment"
+    url: "/deployment"
+  - title: "API Reference"
+    url: "/api"
+  - title: "Examples"
+    url: "/examples"
