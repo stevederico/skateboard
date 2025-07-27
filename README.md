@@ -61,9 +61,9 @@ npm install
 ```
 2. configure details in constants.json
 
-3. start dev server
+3. start dev server & frontend
 ```shell
-npm run dev
+npm run start
 ```
 
 

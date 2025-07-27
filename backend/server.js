@@ -1,6 +1,5 @@
 // ==== IMPORTS ====
 import express from "express";
-import { MongoClient } from "mongodb";
 import Stripe from "stripe";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
@@ -21,7 +20,7 @@ try {
   config = JSON.parse(configData.toString());
 } catch (err) {
   console.error('Failed to load config:', err);
-  config = [{ db: "SkateboardApp", origin: "http://localhost:5173" }];
+  config = [{ db: "MyApp", origin: "http://localhost:5173" }];
 }
 
 // Environment setup
@@ -33,7 +32,6 @@ if (!isProd()) {
   }, 60 * 60 * 1000); // Every hour
 }
 
-const MONGO_URI = process.env.MONGO_URI;
 const STRIPE_KEY = process.env.STRIPE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -42,44 +40,16 @@ if (!STRIPE_KEY || !JWT_SECRET) {
   process.exit(1);
 }
 
-// Determine database type
-const useMongoDb = !!MONGO_URI;
-// console.log(`Using database: ${useMongoDb ? 'MongoDB' : 'SQLite'}`);
+console.log('Using database: SQLite');
 
 // ==== DATABASE ABSTRACTION LAYER ====
 class DatabaseAdapter {
   constructor() {
-    this.type = useMongoDb ? 'mongodb' : 'sqlite';
     this.databases = new Map();
   }
 
   async initialize() {
-    if (this.type === 'mongodb') {
-      await this.initializeMongoDB();
-    } else {
-      await this.initializeSQLite();
-    }
-  }
-
-  async initializeMongoDB() {
-    const mongoUri = MONGO_URI.trim();
-    if (!mongoUri.startsWith("mongodb://") && !mongoUri.startsWith("mongodb+srv://")) {
-      console.error("Invalid MongoDB URI scheme. URI must start with mongodb:// or mongodb+srv://");
-      process.exit(1);
-    }
-
-    this.mongoClient = new MongoClient(mongoUri);
-    try {
-      await this.mongoClient.connect();
-      console.log("Connected to MongoDB");
-      
-      // Initialize indexes for the default database
-      const initialDb = this.mongoClient.db(config[0].db);
-      await this.ensureMongoIndexes(initialDb);
-    } catch (e) {
-      console.error("MongoDB connection failed:", e.message);
-      process.exit(1);
-    }
+    await this.initializeSQLite();
   }
 
   async initializeSQLite() {
@@ -90,23 +60,6 @@ class DatabaseAdapter {
       if (err.code !== 'EEXIST') {
         console.error("Failed to create databases directory:", err);
       }
-    }
-    // console.log("SQLite initialized");
-  }
-
-  async ensureMongoIndexes(db) {
-    const usersCollection = db.collection("Users");
-    const authsCollection = db.collection("Auths");
-
-    const userIndexes = await usersCollection.listIndexes().toArray();
-    const authIndexes = await authsCollection.listIndexes().toArray();
-
-    if (!userIndexes.some(index => index.key.email === 1)) {
-      await usersCollection.createIndex({ email: 1 }, { unique: true, name: "users_email_index" });
-    }
-
-    if (!authIndexes.some(index => index.key.email === 1)) {
-      await authsCollection.createIndex({ email: 1 }, { unique: true, name: "auths_email_index" });
     }
   }
 
@@ -140,114 +93,90 @@ class DatabaseAdapter {
   }
 
   getDatabase(dbName) {
-    if (this.type === 'mongodb') {
-      return this.mongoClient.db(dbName);
-    } else {
-      if (!this.databases.has(dbName)) {
-        const dbPath = `./databases/${dbName}.db`;
-        const db = new Database(dbPath);
-        this.ensureSQLiteSchema(db);
-        this.databases.set(dbName, db);
-      }
-      return this.databases.get(dbName);
+    if (!this.databases.has(dbName)) {
+      const dbPath = `./databases/${dbName}.db`;
+      const db = new Database(dbPath);
+      this.ensureSQLiteSchema(db);
+      this.databases.set(dbName, db);
     }
+    return this.databases.get(dbName);
   }
 
   async findUser(db, query, projection = {}) {
-    if (this.type === 'mongodb') {
-      return await db.collection("Users").findOne(query, { projection });
+    const { _id, email } = query;
+    let sql = "SELECT * FROM Users WHERE ";
+    let params = [];
+    
+    if (_id) {
+      sql += "_id = ?";
+      params.push(_id);
+    } else if (email) {
+      sql += "email = ?";
+      params.push(email);
     } else {
-      const { _id, email } = query;
-      let sql = "SELECT * FROM Users WHERE ";
-      let params = [];
-      
-      if (_id) {
-        sql += "_id = ?";
-        params.push(_id);
-      } else if (email) {
-        sql += "email = ?";
-        params.push(email);
-      } else {
-        return null;
-      }
-
-      const result = db.prepare(sql).get(...params);
-      if (result && result.subscription_stripeID) {
-        result.subscription = {
-          stripeID: result.subscription_stripeID,
-          expires: result.subscription_expires,
-          status: result.subscription_status
-        };
-        delete result.subscription_stripeID;
-        delete result.subscription_expires;
-        delete result.subscription_status;
-      }
-      return result;
+      return null;
     }
+
+    const result = db.prepare(sql).get(...params);
+    if (result && result.subscription_stripeID) {
+      result.subscription = {
+        stripeID: result.subscription_stripeID,
+        expires: result.subscription_expires,
+        status: result.subscription_status
+      };
+      delete result.subscription_stripeID;
+      delete result.subscription_expires;
+      delete result.subscription_status;
+    }
+    return result;
   }
 
   async insertUser(db, userData) {
-    if (this.type === 'mongodb') {
-      return await db.collection("Users").insertOne(userData);
-    } else {
-      const { _id, email, name, created_at } = userData;
-      const sql = "INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)";
-      db.prepare(sql).run(_id, email, name, created_at);
-      return { insertedId: _id };
-    }
+    const { _id, email, name, created_at } = userData;
+    const sql = "INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)";
+    db.prepare(sql).run(_id, email, name, created_at);
+    return { insertedId: _id };
   }
 
   async updateUser(db, query, update) {
-    if (this.type === 'mongodb') {
-      return await db.collection("Users").updateOne(query, update);
+    const { _id } = query;
+    const updateData = update.$set;
+    
+    if (updateData.subscription) {
+      const { stripeID, expires, status } = updateData.subscription;
+      const sql = `UPDATE Users SET 
+        subscription_stripeID = ?, 
+        subscription_expires = ?, 
+        subscription_status = ? 
+        WHERE _id = ?`;
+      const result = db.prepare(sql).run(stripeID, expires, status, _id);
+      return { modifiedCount: result.changes };
     } else {
-      const { _id } = query;
-      const updateData = update.$set;
+      // Handle other updates
+      const fields = Object.keys(updateData);
+      if (fields.length === 0) return { modifiedCount: 0 };
       
-      if (updateData.subscription) {
-        const { stripeID, expires, status } = updateData.subscription;
-        const sql = `UPDATE Users SET 
-          subscription_stripeID = ?, 
-          subscription_expires = ?, 
-          subscription_status = ? 
-          WHERE _id = ?`;
-        const result = db.prepare(sql).run(stripeID, expires, status, _id);
-        return { modifiedCount: result.changes };
-      } else {
-        // Handle other updates
-        const fields = Object.keys(updateData);
-        if (fields.length === 0) return { modifiedCount: 0 };
-        
-        const setClause = fields.map(field => `${field} = ?`).join(', ');
-        const values = fields.map(field => updateData[field]);
-        values.push(_id);
-        
-        const sql = `UPDATE Users SET ${setClause} WHERE _id = ?`;
-        const result = db.prepare(sql).run(...values);
-        return { modifiedCount: result.changes };
-      }
+      const setClause = fields.map(field => `${field} = ?`).join(', ');
+      const values = fields.map(field => updateData[field]);
+      values.push(_id);
+      
+      const sql = `UPDATE Users SET ${setClause} WHERE _id = ?`;
+      const result = db.prepare(sql).run(...values);
+      return { modifiedCount: result.changes };
     }
   }
 
   async findAuth(db, query) {
-    if (this.type === 'mongodb') {
-      return await db.collection("Auths").findOne(query);
-    } else {
-      const { email } = query;
-      const sql = "SELECT * FROM Auths WHERE email = ?";
-      return db.prepare(sql).get(email);
-    }
+    const { email } = query;
+    const sql = "SELECT * FROM Auths WHERE email = ?";
+    return db.prepare(sql).get(email);
   }
 
   async insertAuth(db, authData) {
-    if (this.type === 'mongodb') {
-      return await db.collection("Auths").insertOne(authData);
-    } else {
-      const { email, password, userID } = authData;
-      const sql = "INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)";
-      db.prepare(sql).run(email, password, userID);
-      return { insertedId: email };
-    }
+    const { email, password, userID } = authData;
+    const sql = "INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)";
+    db.prepare(sql).run(email, password, userID);
+    return { insertedId: email };
   }
 }
 
@@ -268,10 +197,8 @@ const getDBName = (origin) => {
   return dbName;
 };
 
-// Initialize db and collections/adapters
+// Initialize db
 let db;
-let users;
-let auths;
 
 // ==== EXPRESS SETUP ====
 const app = express();
@@ -369,18 +296,8 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   const dbName = getDBName(origin);
   
-  if (!db || (useMongoDb && db.databaseName !== dbName) || (!useMongoDb && db !== dbAdapter.getDatabase(dbName))) {
+  if (!db || db !== dbAdapter.getDatabase(dbName)) {
     db = dbAdapter.getDatabase(dbName);
-    
-    // For MongoDB compatibility, set up collection references
-    if (useMongoDb) {
-      users = db.collection("Users");
-      auths = db.collection("Auths");
-    } else {
-      // For SQLite, we'll use the adapter methods directly
-      users = null;
-      auths = null;
-    }
   }
   next();
 });
@@ -443,16 +360,8 @@ async function authMiddleware(req, res, next) {
 
     // Update database connection if needed
     const targetDbName = payload.dbName;
-    if (!db || (useMongoDb && db.databaseName !== targetDbName) || (!useMongoDb && db !== dbAdapter.getDatabase(targetDbName))) {
+    if (!db || db !== dbAdapter.getDatabase(targetDbName)) {
       db = dbAdapter.getDatabase(targetDbName);
-      
-      if (useMongoDb) {
-        users = db.collection("Users");
-        auths = db.collection("Auths");
-      } else {
-        users = null;
-        auths = null;
-      }
     }
 
     next();
@@ -516,7 +425,7 @@ app.post("/signup", async (req, res) => {
         tokenExpires: tokenExpireTimestamp() 
       });
     } catch (e) {
-      if ((useMongoDb && e.code === 11000) || (!useMongoDb && e.message?.includes('UNIQUE constraint failed'))) {
+      if (e.message?.includes('UNIQUE constraint failed')) {
         return res.status(409).json({ error: "Email exists" });
       }
       throw e;
@@ -628,9 +537,7 @@ app.put("/me", authMiddleware, async (req, res) => {
 });
 
 app.get("/isSubscriber", authMiddleware, async (req, res) => {
-  const user = await dbAdapter.findUser(db, { _id: req.userID }, 
-    useMongoDb ? { projection: { "subscription.stripeID": 1, "subscription.expires": 1, "subscription.status": 1 } } : {}
-  );
+  const user = await dbAdapter.findUser(db, { _id: req.userID });
   if (!user) return res.status(404).json({ error: "User not found" });
 
   const isSubscriber = user.subscription?.stripeID && user.subscription?.status === "active" && (!user.subscription?.expires || user.subscription.expires > Math.floor(Date.now() / 1000));
@@ -784,13 +691,9 @@ if (typeof process !== 'undefined') {
 process.on("SIGINT", async () => {
   console.log("Shutting down...");
   
-  if (useMongoDb && dbAdapter.mongoClient) {
-    await dbAdapter.mongoClient.close();
-  } else if (!useMongoDb) {
-    // Close all SQLite connections
-    for (const [dbName, db] of dbAdapter.databases) {
-      db.close();
-    }
+  // Close all SQLite connections
+  for (const [dbName, db] of dbAdapter.databases) {
+    db.close();
   }
   
   process.exit();
