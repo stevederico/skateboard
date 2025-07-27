@@ -23,6 +23,10 @@
 - /premiumContent
 - credits-system -checkViews , viewRemain
 
+0.1.8
+* npm run start
+* removed mongodb
+* changed database to MyApp
 
 0.1.7
 * removed deno requirement

@@ -1,10 +1,10 @@
 [
   {
-    "db": "SkateboardApp",
+    "db": "MyApp",
     "origin": "http://localhost:5173"
   },
   {
-    "db": "SkateboardApp",
+    "db": "MyApp",
     "origin": "http://localhost:8000"
   }
 ]
