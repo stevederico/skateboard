@@ -1,6 +1,11 @@
 ## CHANGELOG
 
 
+0.2.1
+ opengraph tags with build script
+
+0.2.0
+ apache logging format
 
 0.1.9
  fixed skateboard-ui reference
