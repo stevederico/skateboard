@@ -237,34 +237,17 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
   res.status(200).send();
 });
 
-// Enhanced logging middleware
+// Apache Common Log Format middleware
 app.use((req, res, next) => {
-  // Log incoming request details
-  console.log(`[${new Date().toISOString()}] Request:`, {
-    method: req.method,
-    path: req.originalUrl,
-    origin: req.headers.origin || 'none',
-    headers: {
-      'content-type': req.headers['content-type'],
-      'authorization': req.headers.authorization ? 'present' : 'none'
-    }
-  });
-
   res.on('finish', () => {
-    // Enhanced response logging
-    console.log(`[${new Date().toISOString()}] Response:`, {
-      statusCode: res.statusCode,
-      method: req.method,
-      path: req.originalUrl,
-      headers: res.getHeaders()
-    });
-
-    // Additional status-specific logging
-    if (res.statusCode === 503) {
-      console.error(`[503] ${req.method} ${req.originalUrl} - ${new Date().toISOString()}`);
-    } else {
-      console.log(`[${res.statusCode}] ${req.method} ${req.originalUrl}`);
-    }
+    const timestamp = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+    const method = req.method;
+    const url = req.originalUrl;
+    const httpVersion = `HTTP/${req.httpVersion}`;
+    const status = res.statusCode;
+    const contentLength = res.get('content-length') || '-';
+    
+    console.log(`[${timestamp}] "${method} ${url} ${httpVersion}" ${status} ${contentLength}`);
   });
 
   next();
@@ -272,11 +255,6 @@ app.use((req, res, next) => {
 
 // CORS middleware
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] CORS:`, {
-    origin: req.headers.origin || 'none',
-    method: req.method
-  });
-
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
@@ -285,7 +263,6 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   if (req.method === "OPTIONS") {
-    console.log(`[${new Date().toISOString()}] Handling preflight request`);
     return res.status(204).end();
   }
   next();
