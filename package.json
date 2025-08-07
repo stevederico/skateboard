@@ -1,7 +1,7 @@
 {
   "name": "skateboard",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.2.4",
   "type": "module",  
   "workspaces": [
     "backend"
@@ -16,7 +16,7 @@
     "install-all": "npm install && npm install --workspace=backend"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "^0.6.2",
+    "@stevederico/skateboard-ui": "^0.7.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.2",
@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.7",
-    "@vitejs/plugin-react-swc": "^3.8.0",
+    "@vitejs/plugin-react-swc": "^4.0.0",
     "tailwindcss": "4.1.11",
     "vite": "^7.0.6"
   }

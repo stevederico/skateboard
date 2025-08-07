@@ -49,10 +49,16 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
       '@package': path.resolve(__dirname, 'package.json'),
       '@root': path.resolve(__dirname),
+      'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime.js'),
     }
   },
   optimizeDeps: {
-    include: ['react-dom'],
+    include: ['react-dom', '@radix-ui/react-slot'],
+    esbuildOptions: {
+      define: {
+        global: 'globalThis',
+      },
+    },
   },
   server: {
     host: true,

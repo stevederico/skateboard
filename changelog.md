@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.2.4
+
+  Fix React JSX runtime
+  Add Vite alias config
+  Update optimizeDeps settings
+
 0.2.2
  updated skateboard-ui dep
 

@@ -25,6 +25,7 @@ import constants from './constants.json';
 import HomeView from './components/HomeView.jsx'
 import OtherView from './components/OtherView.jsx'
 
+
 const ProtectedRoute = () => {
   const auth = isAuthenticated();
   return auth ? <Outlet /> : <Navigate to="/signin" replace />;
