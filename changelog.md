@@ -23,6 +23,10 @@
 - /premiumContent
 - credits-system -checkViews , viewRemain
 
+0.1.9
+ fixed skateboard-ui reference
+ automatic backend server restart
+
 0.1.8
 * npm run start
 * removed mongodb

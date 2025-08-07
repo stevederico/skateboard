@@ -20,7 +20,7 @@ try {
   config = JSON.parse(configData.toString());
 } catch (err) {
   console.error('Failed to load config:', err);
-  config = [{ db: "MyApp", origin: "http://localhost:5173" }];
+  config = [{ db: "MyApp", origin: "http://localhost:5173" }]; 
 }
 
 // Environment setup

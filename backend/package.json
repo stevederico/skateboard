@@ -4,7 +4,7 @@
     "description": "Skateboard application backend",
     "type": "module",
     "scripts": {
-        "start": "node --experimental-sqlite server.js"
+        "start": "node --experimental-sqlite --watch server.js"
     },
     "dependencies": {
         "bcrypt": "^6.0.0",
