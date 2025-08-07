@@ -3,6 +3,8 @@
 
 0.2.1
  opengraph tags with build script
+ WAL Mode
+ updated skateboard-ui dep
 
 0.2.0
  apache logging format
