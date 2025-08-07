@@ -96,6 +96,13 @@ class DatabaseAdapter {
     if (!this.databases.has(dbName)) {
       const dbPath = `./databases/${dbName}.db`;
       const db = new Database(dbPath);
+      
+      // Enable WAL mode for better concurrency and performance
+      db.exec('PRAGMA journal_mode = WAL');
+      db.exec('PRAGMA synchronous = NORMAL');
+      db.exec('PRAGMA cache_size = 1000');
+      db.exec('PRAGMA temp_store = memory');
+      
       this.ensureSQLiteSchema(db);
       this.databases.set(dbName, db);
     }
