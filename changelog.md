@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+0.3.4
+
+  Lighten dark mode accent
+
 0.3.3
 
   Fix settings header layout
