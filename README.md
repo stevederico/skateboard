@@ -88,10 +88,9 @@ Everything you need to ship a production-ready app:
 ## 🎬 Demo
 
 <div align="center">
-  
-  ### Dashboard View
-  <img src="https://github.com/user-attachments/assets/a99f5298-42ae-46a3-b5d2-0a401750612e" width="100%" alt="Dashboard View" />
-  
+
+  <img  width="100%"  alt="landing" src="https://github.com/user-attachments/assets/db1d9cb7-e398-4c87-a245-14371f37a38b" />
+
   
 </div>
 
