@@ -72,7 +72,7 @@ Everything you need to ship a production-ready app:
 - **50+ Shadcn/ui components** pre-configured
 - **Dark/Light mode** with system detection
 - **Mobile-ready design** with responsive sidebar and TabBar
-- **Landing page** that converts
+- **Landing page** that converts - fully customizable via constants.json
 - **Settings page** with user management
 - **Legal pages** (Terms, Privacy, EULA)
 
@@ -167,6 +167,46 @@ skateboard/
 
 <br />
 
+## 🏆 Advanced Features
+
+Beyond the basics, Skateboard includes enterprise-grade features often missed:
+
+### 🏗️ **Multi-Tenancy Support**
+- **Origin-based database switching** - One server, multiple apps
+- **Perfect for agencies** managing multiple client projects
+- **Automatic database isolation** per domain
+
+### 🔒 **Enterprise Security**
+- **Bcrypt with 14 salt rounds** - Industry-standard password hashing
+- **JWT with proper expiration** - Secure token management
+- **App-specific auth isolation** - No cross-contamination between projects
+- **Origin validation** and CORS protection
+
+### 🗃️ **Zero External Dependencies**
+- **Native Node.js SQLite** - No Docker, no external databases
+- **Built-in crypto and JWT** - No third-party auth services needed
+- **Deploy anywhere** - Works on any Node.js hosting
+
+### ⚡ **Production Optimizations**
+- **WAL mode SQLite** - Better concurrency and performance
+- **Apache Common Log Format** - Professional monitoring ready
+- **Graceful shutdown handling** - Container-friendly
+- **Health check endpoints** - Load balancer compatible
+
+### 📋 **Legal Compliance Ready**
+- **Pre-written legal templates** - Terms, Privacy Policy, EULA
+- **Dynamic placeholder replacement** - Company info auto-populated
+- **Subscription legal notices** - App Store compliance included
+
+### 🛠️ **Developer Experience++**
+- **Auto-restart backend** with `--watch` flag
+- **Environment auto-creation** from templates
+- **Monorepo workspace architecture** 
+- **Dynamic navigation** from config files
+- **Stripe webhook verification** with customer matching
+
+<br />
+
 ## 📖 Documentation
 
 ### Configuration
@@ -178,15 +218,45 @@ All app configuration is in `src/constants.json`:
   "appName": "Your App Name",
   "appIcon": "command",
   "tagline": "Your Tagline",
+  "cta": "Get Started",
+  "features": {
+    "title": "Everything You Need",
+    "items": [
+      {
+        "icon": "🔐",
+        "title": "Authentication", 
+        "description": "Complete user management with JWT tokens and secure sessions"
+      },
+      {
+        "icon": "💳",
+        "title": "Stripe Payments",
+        "description": "Ready-to-use checkout flows and subscription management"
+      },
+      {
+        "icon": "🎨",
+        "title": "Beautiful UI",
+        "description": "50+ Shadcn components with dark mode support"
+      }
+    ]
+  },
   "backendURL": "http://localhost:8000",
   "stripeProducts": [{
     "price": "$9.99",
     "title": "Pro Plan",
-    "interval": "monthly",
+    "interval": "monthly", 
     "lookup_key": "pro_monthly"
   }]
 }
 ```
+
+### Landing Page Customization
+
+Your entire landing page is configured through `constants.json` - no code changes needed:
+
+- **App name & tagline** - Update branding instantly
+- **CTA button text** - Customize your call-to-action
+- **Features section** - Add/remove features with custom icons, titles, and descriptions
+- **All content** - Everything displays automatically from your config
 
 ### Environment Setup
 

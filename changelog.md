@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.3.1
+
+  Add advanced features section
+  Improve landing page docs
+  Highlight enterprise capabilities
+
 0.3.0
 
   Update app color theme
