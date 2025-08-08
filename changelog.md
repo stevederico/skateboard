@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.3.3
+
+  Fix settings header layout
+  Remove unused header import
+  Adjust accent color lightness
+
 0.3.2
 
   Fix settings header border
