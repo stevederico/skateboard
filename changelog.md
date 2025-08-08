@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.3.2
+
+  Fix settings header border
+  Improve accent color contrast
+  Update sidebar accent colors
+
 0.3.1
 
   Add advanced features section
