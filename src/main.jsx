@@ -36,11 +36,13 @@ function isAuthenticated() {
   if (constants.noLogin === true) {
     return true;
   }
-  // Otherwise check for valid auth token
+  // Otherwise check for valid auth token with app-specific cookie name
   try {
+    const appName = constants.appName || 'skateboard';
+    const cookieName = `${appName.toLowerCase().replace(/\s+/g, '-')}_token`;
     const token = document.cookie
       .split('; ')
-      .find(row => row.startsWith('token='))
+      .find(row => row.startsWith(`${cookieName}=`))
       ?.split('=')[1];
     return Boolean(token);
   } catch (e) {
