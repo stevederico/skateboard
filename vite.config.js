@@ -61,8 +61,16 @@ export default defineConfig({
     },
   },
   server: {
-    host: true,
+    host: 'localhost',
     open: false,
+    port: 5173,
+    strictPort: false,
+    hmr: {
+      port: 5173,
+    },
+    watch: {
+      usePolling: false,
+    },
   },
   logLevel: 'error'
 })
