@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.2.6
+
+  Fix auth isolation
+  Add app-specific cookies
+  Update localStorage keys
+
 0.2.5
 
   Fix Vite HMR config
