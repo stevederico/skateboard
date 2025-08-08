@@ -292,7 +292,7 @@ const tokenExpirationDays = 7;
 
 // ==== BCRYPT HELPERS ====
 async function hashPassword(password) {
-  const salt = await bcrypt.genSalt(12);
+  const salt = await bcrypt.genSalt(14);
   return await bcrypt.hash(password, salt);
 }
 
@@ -371,7 +371,7 @@ app.get("/", async (req, res) => {
 app.get("/health", (req, res) => res.json({ status: "ok", timestamp: Date.now() }));
 
 function generateUUID() {
-  return 'xxxx-xxxx-xxxx-xxxx'.replace(/x/g, () => Math.random().toString(16)[2] || '0');
+  return crypto.randomUUID();
 }
 
 // ==== AUTH ROUTES ====
