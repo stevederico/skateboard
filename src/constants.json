@@ -2,6 +2,27 @@
     "appName": "Test App",
     "appIcon": "command",
     "tagline": "Try Something New",
+    "cta": "Get Started",
+    "features": {
+        "title": "Everything You Need",
+        "items": [
+            {
+                "icon": "🔐",
+                "title": "Authentication",
+                "description": "Complete user management with JWT tokens and secure sessions"
+            },
+            {
+                "icon": "💳",
+                "title": "Stripe Payments",
+                "description": "Ready-to-use checkout flows and subscription management"
+            },
+            {
+                "icon": "🎨",
+                "title": "Beautiful UI",
+                "description": "50+ Shadcn components with dark mode support"
+            }
+        ]
+    },
     "backendURL": "http://localhost:8000",
     "devBackendURL": "http://localhost:8000",
     "pages": [
