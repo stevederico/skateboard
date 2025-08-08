@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+0.2.5
+
+  Fix Vite HMR config
+
 0.2.4
 
   Fix React JSX runtime
