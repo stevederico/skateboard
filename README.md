@@ -92,20 +92,6 @@ Everything you need to ship a production-ready app:
   ### Dashboard View
   <img src="https://github.com/user-attachments/assets/a99f5298-42ae-46a3-b5d2-0a401750612e" width="100%" alt="Dashboard View" />
   
-  <br />
-  
-  ### Dark Mode
-  <img src="https://github.com/user-attachments/assets/dashboard-dark.png" width="100%" alt="Dark Mode" />
-  
-  <br />
-  
-  ### Mobile Responsive
-  <img src="https://github.com/user-attachments/assets/mobile-view.png" width="100%" alt="Mobile View" />
-  
-  <br />
-  
-  ### Stripe Integration
-  <img src="https://github.com/user-attachments/assets/stripe-checkout.png" width="100%" alt="Stripe Checkout" />
   
 </div>
 
@@ -260,10 +246,8 @@ npm run start
 
 ## 📬 Community & Support
 
-- **📧 Email**: support@skateboard.dev
-- **💬 Discord**: [Join our community](https://discord.gg/skateboard)
+- **🐦 X**: [@stevederico](https://x.com/stevederico)
 - **🐛 Issues**: [GitHub Issues](https://github.com/stevederico/skateboard/issues)
-- **🐦 Twitter**: [@skateboardjs](https://twitter.com/skateboardjs)
 
 <br />
 

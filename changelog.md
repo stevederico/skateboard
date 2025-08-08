@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+0.2.8
+
+  Update contact info
+  Simplify support section
+
 0.2.7
 
   Update README design
