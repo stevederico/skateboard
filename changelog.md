@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+0.3.0
+
+  Update app color theme
+  Add features content section
+  Remove overflow hidden
+  Add CTA button text
+
 0.2.9
 
   Add PNG favicon
