@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.2.7
+
+  Update README design
+  Add engaging content
+  Improve documentation
+
 0.2.6
 
   Fix auth isolation
