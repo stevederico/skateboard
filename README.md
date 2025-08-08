@@ -3,14 +3,14 @@
     <img alt="Skateboard - Ship your React app in minutes" width="50%" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
   </a>
   
-  <h1 align="center">🛹 Skateboard</h1>
+  <h1 align="center">🛹 &nbsp; Skateboard</h1>
+  
+  <h3 align="center">
+    <strong>a react starter with auth, stripe, shadcn, and sqlite</strong>
+  </h3>
   
   <p align="center">
-    <strong>Ship your React app in minutes, not months</strong>
-  </p>
-  
-  <p align="center">
-    The fastest way to build and deploy modern web apps with authentication, payments, and a beautiful UI out of the box
+    <img src="public/icons/icon.png" width="60" height="60" alt="Skateboard Logo">
   </p>
   
   <p align="center">
@@ -71,7 +71,7 @@ Everything you need to ship a production-ready app:
 ### 🎨 **Beautiful UI Components**
 - **50+ Shadcn/ui components** pre-configured
 - **Dark/Light mode** with system detection
-- **Responsive sidebar** with mobile TabBar
+- **Mobile-ready design** with responsive sidebar and TabBar
 - **Landing page** that converts
 - **Settings page** with user management
 - **Legal pages** (Terms, Privacy, EULA)

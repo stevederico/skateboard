@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.2.9
+
+  Add PNG favicon
+  Update tagline content
+  Improve mobile messaging
+
 0.2.8
 
   Update contact info
