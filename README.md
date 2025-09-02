@@ -76,7 +76,7 @@ Everything you need to ship a production-ready app:
 ### 🛠️ **Developer Experience**
 - **Hot Module Replacement** with Vite 7.1+
 - **Zero config** - works out of the box
-- **SQLite database** - no external dependencies
+- **Multi-database support** - SQLite (default), MongoDB, PostgreSQL
 - **constants.json** - customize everything in one place
 - **Modern JavaScript** - no TypeScript complexity
 
