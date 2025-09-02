@@ -38,13 +38,11 @@
 
 ## 🚀 Quick Start
 
-Get your app running in less than 10 seconds:
-
 ```bash
 npx create-skateboard-app
 ```
 
-That's it! Your full-stack app is now running at `http://localhost:5173` 🎉
+That's it, your app is now running at `http://localhost:5173` 🎉
 
 <br />
 

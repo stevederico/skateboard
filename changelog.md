@@ -7,6 +7,8 @@
   Add PostgreSQL support
   Remove duplicate examples
   Update README features
+  Restructure configuration sections
+  Add database configuration
 
 0.3.9
 
