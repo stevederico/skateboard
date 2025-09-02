@@ -4,23 +4,49 @@ import Stripe from "stripe";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
-import { DatabaseSync as Database } from "node:sqlite";
+import { databaseFactory } from "./database/factory.js";
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { promisify } from 'node:util';
 
 // ==== CONFIG & ENV ====
+// Environment variable resolution function
+function resolveEnvironmentVariables(str) {
+  if (typeof str !== 'string') return str;
+  
+  return str.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+    const envValue = process.env[varName];
+    if (envValue === undefined) {
+      console.warn(`Environment variable ${varName} is not defined, using placeholder: ${match}`);
+      return match; // Return the placeholder if env var is not found
+    }
+    return envValue;
+  });
+}
+
+// Load and process configuration
 let config;
 try {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
   const configPath = resolve(__dirname, './config.json');
   const configData = await promisify(readFile)(configPath);
-  config = JSON.parse(configData.toString());
+  const rawConfig = JSON.parse(configData.toString());
+  
+  // Resolve environment variables in configuration
+  config = rawConfig.map(entry => ({
+    ...entry,
+    connectionString: resolveEnvironmentVariables(entry.connectionString)
+  }));
 } catch (err) {
   console.error('Failed to load config:', err);
-  config = [{ db: "MyApp", origin: "http://localhost:5173" }]; 
+  config = [{ 
+    db: "MyApp", 
+    origin: "http://localhost:5173",
+    dbType: "sqlite",
+    connectionString: "./databases/MyApp.db"
+  }]; 
 }
 
 // Environment setup
@@ -35,177 +61,59 @@ if (!isProd()) {
 const STRIPE_KEY = process.env.STRIPE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-if (!STRIPE_KEY || !JWT_SECRET) {
-  console.error("Missing required environment variables: STRIPE_KEY and JWT_SECRET are required");
-  process.exit(1);
-}
-
-console.log('Using database: SQLite');
-
-// ==== DATABASE ABSTRACTION LAYER ====
-class DatabaseAdapter {
-  constructor() {
-    this.databases = new Map();
-  }
-
-  async initialize() {
-    await this.initializeSQLite();
-  }
-
-  async initializeSQLite() {
-    // Create databases directory if it doesn't exist
-    try {
-      await promisify(mkdir)('./databases', { recursive: true });
-    } catch (err) {
-      if (err.code !== 'EEXIST') {
-        console.error("Failed to create databases directory:", err);
+// Validate required environment variables
+function validateEnvironmentVariables() {
+  const missing = [];
+  
+  if (!STRIPE_KEY) missing.push('STRIPE_KEY');
+  if (!JWT_SECRET) missing.push('JWT_SECRET');
+  
+  // Check for database environment variables that are referenced but not defined
+  const referencedEnvVars = new Set();
+  config.forEach(entry => {
+    if (typeof entry.connectionString === 'string') {
+      const matches = entry.connectionString.match(/\$\{([^}]+)\}/g);
+      if (matches) {
+        matches.forEach(match => {
+          const varName = match.slice(2, -1); // Remove ${ and }
+          referencedEnvVars.add(varName);
+          if (!process.env[varName]) {
+            missing.push(`${varName} (referenced in database config for ${entry.origin})`);
+          }
+        });
       }
     }
-  }
-
-  async ensureSQLiteSchema(db) {
-    // Create Users table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS Users (
-        _id TEXT PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        subscription_stripeID TEXT,
-        subscription_expires INTEGER,
-        subscription_status TEXT
-      )
-    `);
-
-    // Create Auths table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS Auths (
-        email TEXT PRIMARY KEY,
-        password TEXT NOT NULL,
-        userID TEXT NOT NULL,
-        FOREIGN KEY (userID) REFERENCES Users(_id)
-      )
-    `);
-
-    // Create indexes
-    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON Users(email)`);
-    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_auths_email ON Auths(email)`);
-  }
-
-  getDatabase(dbName) {
-    if (!this.databases.has(dbName)) {
-      const dbPath = `./databases/${dbName}.db`;
-      const db = new Database(dbPath);
-      
-      // Enable WAL mode for better concurrency and performance
-      db.exec('PRAGMA journal_mode = WAL');
-      db.exec('PRAGMA synchronous = NORMAL');
-      db.exec('PRAGMA cache_size = 1000');
-      db.exec('PRAGMA temp_store = memory');
-      
-      this.ensureSQLiteSchema(db);
-      this.databases.set(dbName, db);
-    }
-    return this.databases.get(dbName);
-  }
-
-  async findUser(db, query, projection = {}) {
-    const { _id, email } = query;
-    let sql = "SELECT * FROM Users WHERE ";
-    let params = [];
-    
-    if (_id) {
-      sql += "_id = ?";
-      params.push(_id);
-    } else if (email) {
-      sql += "email = ?";
-      params.push(email);
-    } else {
-      return null;
-    }
-
-    const result = db.prepare(sql).get(...params);
-    if (result && result.subscription_stripeID) {
-      result.subscription = {
-        stripeID: result.subscription_stripeID,
-        expires: result.subscription_expires,
-        status: result.subscription_status
-      };
-      delete result.subscription_stripeID;
-      delete result.subscription_expires;
-      delete result.subscription_status;
-    }
-    return result;
-  }
-
-  async insertUser(db, userData) {
-    const { _id, email, name, created_at } = userData;
-    const sql = "INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)";
-    db.prepare(sql).run(_id, email, name, created_at);
-    return { insertedId: _id };
-  }
-
-  async updateUser(db, query, update) {
-    const { _id } = query;
-    const updateData = update.$set;
-    
-    if (updateData.subscription) {
-      const { stripeID, expires, status } = updateData.subscription;
-      const sql = `UPDATE Users SET 
-        subscription_stripeID = ?, 
-        subscription_expires = ?, 
-        subscription_status = ? 
-        WHERE _id = ?`;
-      const result = db.prepare(sql).run(stripeID, expires, status, _id);
-      return { modifiedCount: result.changes };
-    } else {
-      // Handle other updates
-      const fields = Object.keys(updateData);
-      if (fields.length === 0) return { modifiedCount: 0 };
-      
-      const setClause = fields.map(field => `${field} = ?`).join(', ');
-      const values = fields.map(field => updateData[field]);
-      values.push(_id);
-      
-      const sql = `UPDATE Users SET ${setClause} WHERE _id = ?`;
-      const result = db.prepare(sql).run(...values);
-      return { modifiedCount: result.changes };
-    }
-  }
-
-  async findAuth(db, query) {
-    const { email } = query;
-    const sql = "SELECT * FROM Auths WHERE email = ?";
-    return db.prepare(sql).get(email);
-  }
-
-  async insertAuth(db, authData) {
-    const { email, password, userID } = authData;
-    const sql = "INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)";
-    db.prepare(sql).run(email, password, userID);
-    return { insertedId: email };
+  });
+  
+  if (missing.length > 0) {
+    console.error("Missing required environment variables:");
+    missing.forEach(varName => console.error(`  - ${varName}`));
+    console.error("\nCommon database environment variables:");
+    console.error("  - DATABASE_URL (general database connection)");
+    console.error("  - MONGODB_URL (MongoDB connection)");
+    console.error("  - POSTGRES_URL (PostgreSQL connection)");
+    process.exit(1);
   }
 }
 
-// Initialize database adapter
-const dbAdapter = new DatabaseAdapter();
-await dbAdapter.initialize();
+validateEnvironmentVariables();
+
+console.log('Multi-database support enabled');
+
+// ==== DATABASE HELPERS ====
+// Get database configuration based on origin
+const getDBConfig = (origin) => {
+  const configEntry = config.find(entry => entry.origin === origin) || config[0];
+  console.log(`Using database: ${configEntry.db} (${configEntry.dbType}) for origin: ${origin}`);
+  return configEntry;
+};
 
 // ==== SERVICES SETUP ====
 // Stripe setup
 const stripe = new Stripe(STRIPE_KEY);
 
-// ==== DATABASE HELPERS ====
-// Get database name based on origin
-const getDBName = (origin) => {
-  const configEntry = config.find(entry => entry.origin === origin) || config[0];
-  const dbName = configEntry.db;
-  console.log(`Using database: ${dbName} for origin: ${origin}`);
-  return dbName;
-};
-
-// Initialize db
-let db;
+// Current database config cache
+let currentDbConfig = null;
 
 // ==== EXPRESS SETUP ====
 const app = express();
@@ -225,16 +133,17 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
     return res.status(400).send();
   }
 
-  const webhookDb = dbAdapter.getDatabase("MyApp");
+  // Use default config for webhooks (first config entry)
+  const webhookConfig = config[0];
   const { customer: stripeID, current_period_end, status } = event.data.object;
   const customer = await stripe.customers.retrieve(stripeID);
   const customerEmail = customer.email.toLowerCase();
   
   if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
     console.log(`Webhook: ${event.type} for ${customerEmail}`);
-    const user = await dbAdapter.findUser(webhookDb, { email: customerEmail });
+    const user = await databaseFactory.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
     if (user) {
-      await dbAdapter.updateUser(webhookDb, { email: customerEmail }, { 
+      await databaseFactory.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, { 
         $set: { subscription: { stripeID, expires: current_period_end, status } } 
       });
     } else {
@@ -275,14 +184,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Database switching middleware
+// Database config middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const dbName = getDBName(origin);
-  
-  if (!db || db !== dbAdapter.getDatabase(dbName)) {
-    db = dbAdapter.getDatabase(dbName);
-  }
+  currentDbConfig = getDBConfig(origin);
   next();
 });
 
@@ -309,8 +214,8 @@ function tokenExpireTimestamp(){
 async function generateToken(userID, origin) {
   try {
     const exp = tokenExpireTimestamp(); 
-    const dbName = getDBName(origin);
-    const payload = { userID, exp, dbName };
+    const dbConfig = getDBConfig(origin);
+    const payload = { userID, exp, dbConfig: { db: dbConfig.db, dbType: dbConfig.dbType, connectionString: dbConfig.connectionString } };
 
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) throw new Error("JWT_SECRET not set");
@@ -340,13 +245,10 @@ async function authMiddleware(req, res, next) {
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
 
     req.userID = payload.userID;
-    req.dbName = payload.dbName;
+    req.dbConfig = payload.dbConfig;
 
-    // Update database connection if needed
-    const targetDbName = payload.dbName;
-    if (!db || db !== dbAdapter.getDatabase(targetDbName)) {
-      db = dbAdapter.getDatabase(targetDbName);
-    }
+    // Override current db config with token's db config
+    currentDbConfig = payload.dbConfig;
 
     next();
   } catch (error) {
@@ -378,8 +280,7 @@ function generateUUID() {
 app.post("/signup", async (req, res) => {
   try {
     const origin = req.headers.origin;
-    const dbName = getDBName(origin);
-    db = dbAdapter.getDatabase(dbName);
+    const dbConfig = getDBConfig(origin);
 
     var { email, password, name } = req.body;
     email = email?.toLowerCase().trim()
@@ -391,7 +292,7 @@ app.post("/signup", async (req, res) => {
     let insertID = generateUUID()
     
     try {
-      const result = await dbAdapter.insertUser(db, {
+      const result = await databaseFactory.insertUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, {
         _id: insertID,
         email: email,
         name: name.trim(),
@@ -399,7 +300,7 @@ app.post("/signup", async (req, res) => {
       });
 
       const token = await generateToken(insertID, req.headers.origin);
-      await dbAdapter.insertAuth(db, { email: email, password: hash, userID: insertID });
+      await databaseFactory.insertAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email, password: hash, userID: insertID });
       
       res.status(201).json({ 
         id: insertID.toString(), 
@@ -409,7 +310,7 @@ app.post("/signup", async (req, res) => {
         tokenExpires: tokenExpireTimestamp() 
       });
     } catch (e) {
-      if (e.message?.includes('UNIQUE constraint failed')) {
+      if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('duplicate key') || e.code === 11000) {
         return res.status(409).json({ error: "Email exists" });
       }
       throw e;
@@ -423,8 +324,7 @@ app.post("/signup", async (req, res) => {
 app.post("/signin", async (req, res) => {
   try {
     const origin = req.headers.origin;
-    const dbName = getDBName(origin);
-    db = dbAdapter.getDatabase(dbName);
+    const dbConfig = getDBConfig(origin);
 
     if (!req.headers["content-type"]?.includes("application/json")) {
       console.log(`[${new Date().toISOString()}] Invalid content type:`, req.headers["content-type"]);
@@ -441,7 +341,7 @@ app.post("/signin", async (req, res) => {
     console.log(`[${new Date().toISOString()}] Attempting signin for email:`, email);
 
     // Check if auth exists
-    const auth = await dbAdapter.findAuth(db, { email: email });
+    const auth = await databaseFactory.findAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email });
     if (!auth) {
       console.log(`[${new Date().toISOString()}] Auth record not found for:`, email);
       return res.status(401).json({ error: "Invalid credentials" });
@@ -454,7 +354,7 @@ app.post("/signin", async (req, res) => {
     }
 
     // get user
-    const user = await dbAdapter.findUser(db, { email: email });
+    const user = await databaseFactory.findUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email });
     if (!user) {
       console.error("User not found for auth record:", auth);
       return res.status(404).json({ error: "User not found" });
@@ -485,7 +385,7 @@ app.post("/signin", async (req, res) => {
 
 // ==== USER DATA ROUTES ====
 app.get("/me", authMiddleware, async (req, res) => {
-  const user = await dbAdapter.findUser(db, { _id: req.userID });
+  const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
   console.log("/me checking for user with ID:", req.userID);
   if (!user) return res.status(404).json({ error: "User not found" });
   return res.json(user);
@@ -494,7 +394,7 @@ app.get("/me", authMiddleware, async (req, res) => {
 app.put("/me", authMiddleware, async (req, res) => {
   try {
     // Find user first to verify existence
-    const user = await dbAdapter.findUser(db, { _id: req.userID });
+    const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     if (!user) return res.status(404).json({ error: "User not found" });
 
     // Remove fields that shouldn't be updateable
@@ -505,14 +405,14 @@ app.put("/me", authMiddleware, async (req, res) => {
     delete update.subscription;
 
     // Update user document
-    const result = await dbAdapter.updateUser(db, { _id: req.userID }, { $set: update });
+    const result = await databaseFactory.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID }, { $set: update });
 
     if (result.modifiedCount === 0) {
       return res.status(500).json({ error: "No changes made" });
     }
 
     // Return updated user
-    const updatedUser = await dbAdapter.findUser(db, { _id: req.userID });
+    const updatedUser = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     return res.json(updatedUser);
   } catch (err) {
     console.error("Update user error:", err);
@@ -521,7 +421,7 @@ app.put("/me", authMiddleware, async (req, res) => {
 });
 
 app.get("/isSubscriber", authMiddleware, async (req, res) => {
-  const user = await dbAdapter.findUser(db, { _id: req.userID });
+  const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
   if (!user) return res.status(404).json({ error: "User not found" });
 
   const isSubscriber = user.subscription?.stripeID && user.subscription?.status === "active" && (!user.subscription?.expires || user.subscription.expires > Math.floor(Date.now() / 1000));
@@ -541,7 +441,7 @@ app.post("/create-checkout-session", authMiddleware, async (req, res) => {
     if (!email || !lookup_key) return res.status(400).json({ error: "Missing email or lookup_key" });
 
     // Verify the email matches the authenticated user
-    const user = await dbAdapter.findUser(db, { _id: req.userID });
+    const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     if (!user || user.email !== email) return res.status(403).json({ error: "Email mismatch" });
 
     const prices = await stripe.prices.list({ lookup_keys: [lookup_key], expand: ["data.product"] });
@@ -570,7 +470,7 @@ app.post("/create-portal-session", authMiddleware, async (req, res) => {
     if (!customerID) return res.status(400).json({ error: "Missing customerID" });
 
     // Verify the customerID matches the authenticated user's subscription
-    const user = await dbAdapter.findUser(db, { _id: req.userID });
+    const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     if (!user || (user.subscription?.stripeID && user.subscription.stripeID !== customerID)) {
       return res.status(403).json({ error: "Unauthorized customerID" });
     }
@@ -675,10 +575,8 @@ if (typeof process !== 'undefined') {
 process.on("SIGINT", async () => {
   console.log("Shutting down...");
   
-  // Close all SQLite connections
-  for (const [dbName, db] of dbAdapter.databases) {
-    db.close();
-  }
+  // Close all database connections
+  await databaseFactory.closeAll();
   
   process.exit();
 });

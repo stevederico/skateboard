@@ -3,7 +3,7 @@
     <img alt="Skateboard - Ship your React app in minutes" width="50%" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
   </a>
   
-  <h1 align="center">🛹 &nbsp; Skateboard</h1>
+  <h1 align="center">🛹 &nbsp;Skateboard</h1>
   
   <h3 align="center">
     <strong>a react starter with auth, stripe, shadcn, and sqlite</strong>
@@ -107,8 +107,8 @@ Built with the latest and greatest:
 | **Tailwind CSS** | v4 | Styling |
 | **Shadcn/ui** | Latest | Component Library |
 | **React Router** | v7.2+ | Routing |
-| **Express** | v4 | Backend Server |
-| **SQLite** | v3 | Database |
+| **Express** | v5 | Backend Server |
+| **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
 | **Stripe** | Latest | Payments |
 | **JWT** | Latest | Authentication |
 
@@ -149,8 +149,9 @@ skateboard/
 │   └── constants.json   # All your app config
 ├── backend/
 │   ├── server.js        # Express server
-│   ├── databases/       # SQLite databases
-│   └── config.json      # Backend config
+│   ├── database/        # Database providers (SQLite, PostgreSQL, MongoDB)
+│   ├── databases/       # SQLite database files
+│   └── config.json      # Backend config with database settings
 ├── package.json         # Dependencies
 └── vite.config.js       # Vite configuration
 ```
@@ -182,9 +183,11 @@ Beyond the basics, Skateboard includes enterprise-grade features often missed:
 - **App-specific auth isolation** - No cross-contamination between projects
 - **Origin validation** and CORS protection
 
-### 🗃️ **Zero External Dependencies**
-- **Native Node.js SQLite** - No Docker, no external databases
-- **Built-in crypto and JWT** - No third-party auth services needed
+### 🗃️ **Flexible Database Support**
+- **Multiple database types** - SQLite (default), PostgreSQL, MongoDB
+- **Unified database interface** - Same API across all database types
+- **Custom query support** - Execute raw SQL or MongoDB operations
+- **Zero external dependencies by default** - SQLite works out of the box
 - **Deploy anywhere** - Works on any Node.js hosting
 
 ### ⚡ **Production Optimizations**
@@ -209,7 +212,97 @@ Beyond the basics, Skateboard includes enterprise-grade features often missed:
 
 ## 📖 Documentation
 
-### Configuration
+### Database Configuration
+
+Configure your database in `backend/config.json`:
+
+```json
+[
+  {
+    "db": "MyApp",
+    "origin": "http://localhost:5173",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
+  }
+]
+```
+
+**Supported Database Types:**
+
+**SQLite (Default):**
+```json
+{
+  "dbType": "sqlite",
+  "connectionString": "./databases/MyApp.db"
+}
+```
+
+**PostgreSQL:**
+```json
+{
+  "dbType": "postgresql", 
+  "connectionString": "postgresql://user:password@localhost:5432/myapp"
+}
+```
+
+**MongoDB:**
+```json
+{
+  "dbType": "mongodb",
+  "connectionString": "${MONGODB_URL}"
+}
+```
+
+**Environment Variable Support:**
+
+For production deployments, use environment variables instead of hardcoding connection strings:
+
+```json
+{
+  "dbType": "mongodb",
+  "connectionString": "${MONGODB_URL}"
+}
+```
+
+**Standard Environment Variables:**
+- `DATABASE_URL` - General database connection string
+- `MONGODB_URL` - MongoDB connection string  
+- `POSTGRES_URL` - PostgreSQL connection string
+
+### Custom Database Queries
+
+Execute raw database queries using the unified interface:
+
+**SQLite/PostgreSQL:**
+```javascript
+import { databaseFactory } from './backend/database/factory.js';
+
+const result = await databaseFactory.executeQuery('sqlite', 'MyApp', './databases/MyApp.db', {
+  query: "SELECT * FROM users WHERE created_at > ?",
+  params: [startDate]
+});
+```
+
+**MongoDB:**
+```javascript
+const result = await databaseFactory.executeQuery('mongodb', 'MyApp', 'mongodb://localhost:27017', {
+  collection: 'users',
+  operation: 'find',
+  query: { status: 'active' }
+});
+
+// Aggregation example
+const aggResult = await databaseFactory.executeQuery('mongodb', 'MyApp', 'mongodb://localhost:27017', {
+  collection: 'users',
+  operation: 'aggregate', 
+  pipeline: [
+    { $match: { status: 'active' } },
+    { $group: { _id: '$department', count: { $sum: 1 } } }
+  ]
+});
+```
+
+### App Configuration
 
 All app configuration is in `src/constants.json`:
 
@@ -271,6 +364,14 @@ Your entire landing page is configured through `constants.json` - no code change
    ```bash
    # Add to backend/.env
    JWT_SECRET=your-secret-key
+   ```
+
+3. **Database Connection (Production)**
+   ```bash
+   # Add to backend/.env for remote databases
+   MONGODB_URL=mongodb+srv://username:password@cluster.mongodb.net/myapp
+   POSTGRES_URL=postgresql://username:password@hostname:5432/myapp
+   DATABASE_URL=your-database-connection-string
    ```
 
 ### Deployment
@@ -337,6 +438,37 @@ Built on the shoulders of giants:
 - [skateboard-ui](https://github.com/stevederico/skateboard-ui) - Component library
 - [skateboard-blog](https://github.com/stevederico/skateboard-blog) - Blog template
 - [create-skateboard-app](https://github.com/stevederico/create-skateboard-app) - CLI tool
+
+<br />
+
+## 🛠️ Manual Setup
+
+If you're working with an existing Skateboard project:
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Configure App Styling**
+   Set your app color in `src/styles.css`
+
+3. **Update Backend URLs**
+   In `src/constants.json`:
+   ```json
+   {
+     "backendURL": "http://your-backend-url",
+     "devBackendURL": "http://localhost:8000"
+   }
+   ```
+
+4. **Update Package Info**
+   Change package name and version in `package.json`
+
+5. **Initialize Git**
+   ```bash
+   git init
+   ```
 
 <br />
 

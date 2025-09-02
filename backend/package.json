@@ -10,6 +10,8 @@
         "bcrypt": "^6.0.0",
         "express": "^5.1.0",
         "jsonwebtoken": "^9.0.2",
-        "stripe": "^18.4.0"
+        "stripe": "^18.4.0",
+        "pg": "^8.14.1",
+        "mongodb": "^6.13.0"
     }
 }

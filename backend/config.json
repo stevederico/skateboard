@@ -1,10 +1,14 @@
 [
   {
     "db": "MyApp",
-    "origin": "http://localhost:5173"
+    "origin": "http://localhost:5173",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
   },
   {
     "db": "MyApp",
-    "origin": "http://localhost:8000"
+    "origin": "http://localhost:8000",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
   }
 ]
