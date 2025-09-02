@@ -85,7 +85,7 @@ export default app;
    - Click "Deploy"
    - Your app will be available at: `https://yourproject.vercel.app`
 
-## Step 3: Update Frontend Configuration
+## Step 3: Update Configuration
 
 ### Update constants.json
 
@@ -97,7 +97,27 @@ Edit `src/constants.json` and change the `backendURL`:
 }
 ```
 
-This allows the frontend to use the same domain for API calls since both are deployed together.
+### Update backend/config.json
+
+Add your Vercel frontend URL to the allowed clients:
+
+```json
+{
+  "clients": [
+    "https://yourproject.vercel.app"
+  ],
+  "databases": [
+    {
+      "db": "MyApp",
+      "origin": "https://yourproject.vercel.app",
+      "dbType": "sqlite",
+      "connectionString": "./databases/MyApp.db"
+    }
+  ]
+}
+```
+
+This configures CORS and database access for your deployed app.
 
 ## Step 4: Configure Stripe Webhooks
 

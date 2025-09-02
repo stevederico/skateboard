@@ -69,7 +69,7 @@ This guide walks you through deploying your Skateboard app using Netlify for the
 
 ## Step 3: Deploy Frontend to Netlify
 
-### Update Frontend Configuration
+### Update Configuration
 
 1. **Update constants.json**
    - Edit `src/constants.json`
@@ -77,6 +77,24 @@ This guide walks you through deploying your Skateboard app using Netlify for the
    ```json
    {
      "backendURL": "https://yourapp.up.railway.app"
+   }
+   ```
+
+2. **Update backend/config.json**
+   - Add your Netlify frontend URL to allowed clients:
+   ```json
+   {
+     "clients": [
+       "https://random-name.netlify.app"
+     ],
+     "databases": [
+       {
+         "db": "MyApp",
+         "origin": "https://random-name.netlify.app",
+         "dbType": "sqlite",
+         "connectionString": "./databases/MyApp.db"
+       }
+     ]
    }
    ```
 

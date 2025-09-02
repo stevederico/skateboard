@@ -71,7 +71,7 @@ This guide walks you through deploying your Skateboard app to Render with separa
 
 ## Step 3: Deploy Frontend to Render
 
-### Update Frontend Configuration
+### Update Configuration
 
 1. **Update constants.json**
    - Edit `src/constants.json`
@@ -79,6 +79,24 @@ This guide walks you through deploying your Skateboard app to Render with separa
    ```json
    {
      "backendURL": "https://skateboard-backend.onrender.com"
+   }
+   ```
+
+2. **Update backend/config.json**
+   - Add your frontend URL to allowed clients:
+   ```json
+   {
+     "clients": [
+       "https://skateboard-frontend.onrender.com"
+     ],
+     "databases": [
+       {
+         "db": "MyApp",
+         "origin": "https://skateboard-frontend.onrender.com",
+         "dbType": "sqlite",
+         "connectionString": "./databases/MyApp.db"
+       }
+     ]
    }
    ```
 
