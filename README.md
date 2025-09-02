@@ -187,6 +187,18 @@ Built with the latest and greatest:
 
 <br />
 
+## 🚀 Deployment
+
+Choose your preferred deployment platform:
+
+- **[Vercel](docs/vercel.md)** - Deploy both frontend and backend together (recommended)
+- **[Render](docs/render.md)** - Separate frontend and backend services  
+- **[Netlify + Railway](docs/netlify.md)** - Netlify frontend with Railway backend
+
+Each guide includes complete step-by-step instructions, environment setup, and Stripe configuration.
+
+<br />
+
 ## 🤝 Contributing
 
 We love contributions!

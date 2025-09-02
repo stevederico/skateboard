@@ -1,11 +1,12 @@
 ## CHANGELOG
 
-0.5.3
+0.5.4
 
-  Add Stripe price validation
-  Improve Stripe documentation
-  Add webhook setup instructions
-  Add security key permissions
+  Create deployment guides
+  Add Vercel documentation
+  Add Render guide
+  Add Netlify guide
+  Update README deployment
 
 0.5.1
 
