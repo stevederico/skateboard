@@ -1,8 +1,11 @@
 ## CHANGELOG
 
-0.5.2
+0.5.3
 
-  Fixed config on server
+  Add Stripe price validation
+  Improve Stripe documentation
+  Add webhook setup instructions
+  Add security key permissions
 
 0.5.1
 
