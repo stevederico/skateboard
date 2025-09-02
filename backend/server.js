@@ -35,18 +35,24 @@ try {
   const rawConfig = JSON.parse(configData.toString());
   
   // Resolve environment variables in configuration
-  config = rawConfig.map(entry => ({
-    ...entry,
-    connectionString: resolveEnvironmentVariables(entry.connectionString)
-  }));
+  config = {
+    clients: rawConfig.clients,
+    databases: rawConfig.databases.map(entry => ({
+      ...entry,
+      connectionString: resolveEnvironmentVariables(entry.connectionString)
+    }))
+  };
 } catch (err) {
   console.error('Failed to load config:', err);
-  config = [{ 
-    db: "MyApp", 
-    origin: "http://localhost:5173",
-    dbType: "sqlite",
-    connectionString: "./databases/MyApp.db"
-  }]; 
+  config = {
+    clients: ["http://localhost:5173"],
+    databases: [{ 
+      db: "MyApp", 
+      origin: "http://localhost:5173",
+      dbType: "sqlite",
+      connectionString: "./databases/MyApp.db"
+    }]
+  }; 
 }
 
 // Environment setup
