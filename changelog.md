@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+0.3.6
+
+  Add symlink configuration
+
 0.3.5
 
   Add environment variable support
