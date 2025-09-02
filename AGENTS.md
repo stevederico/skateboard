@@ -29,6 +29,24 @@ npm run --workspace=backend start    # Backend with --watch and experimental SQL
 - **Root**: React frontend with Vite 7.1+ build system
 - **Backend Workspace**: Express server with multi-database support
 
+### Project Structure
+```
+skateboard/
+├── src/
+│   ├── components/       # Your custom components
+│   ├── assets/          # Images, styles
+│   ├── context.jsx      # Global state management
+│   ├── main.jsx         # App entry point
+│   └── constants.json   # All your app config
+├── backend/
+│   ├── server.js        # Express server
+│   ├── adapters/        # Database adapters (SQLite, PostgreSQL, MongoDB)
+│   ├── databases/       # SQLite database files
+│   └── config.json      # Backend config with database settings
+├── package.json         # Dependencies
+└── vite.config.js       # Vite configuration
+```
+
 ### Multi-Database Architecture
 The application uses a database factory pattern supporting three database types:
 

@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+0.4.0
+
+  Restructure configuration sections
+  Add database configuration
+  Remove roadmap section
+  Create ready section
+
 0.3.9
 
   Improve README spacing

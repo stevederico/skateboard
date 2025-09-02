@@ -11,16 +11,7 @@
   <h3 align="center" style="margin-top: 0; font-weight: normal;">
     a react starter with auth, stripe, shadcn, and sqlite
   </h3>
-
-## 🎬 Demo
-
-<div align="left">
-  <img width="100%" alt="landing" src="https://github.com/user-attachments/assets/db1d9cb7-e398-4c87-a245-14371f37a38b" />
-</div>
-
-  <br />
- 
-  <p align="center">
+    <p align="center">
     <a href="https://opensource.org/licenses/mit">
       <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License">
     </a>
@@ -32,26 +23,25 @@
     </a>
   </p>
 
-  <p align="center">
-    <a href="#-quick-start">Quick Start</a> •
-    <a href="#-whats-included">Features</a> •
-    <a href="#-demo">Demo</a> •
-    <a href="#-tech-stack">Tech Stack</a> •
-    <a href="#-why-skateboard">Why Skateboard?</a>
-  </p>
+## 🎬 Demo
+
+<div align="center">
+  <img width="75%" alt="landing" src="https://github.com/user-attachments/assets/db1d9cb7-e398-4c87-a245-14371f37a38b" />
+</div>
+
+  <br />
+ 
+
 </div>
 
 <br />
 
 ## 🚀 Quick Start
 
-Get your app running in less than 60 seconds:
+Get your app running in less than 10 seconds:
 
 ```bash
-npx create-skateboard-app my-app
-cd my-app
-npm install
-npm run start
+npx create-skateboard-app
 ```
 
 That's it! Your full-stack app is now running at `http://localhost:5173` 🎉
@@ -115,7 +105,7 @@ Built with the latest and greatest:
 
 ## 📖 Configuration
 
-### App Settings
+### Frontend Configuration
 
 Update `src/constants.json` to customize your app:
 
@@ -127,39 +117,41 @@ Update `src/constants.json` to customize your app:
 }
 ```
 
-### Environment Variables
+### Backend Configuration
 
-Add to `backend/.env`:
+**Environment Variables** - Add to `backend/.env`:
 
 ```bash
 JWT_SECRET=your-secret-key
 STRIPE_SECRET_KEY=sk_test_...
 
 # Database (production)
-DATABASE_URL=your-database-connection-string
 MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/myapp
 POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
 ```
 
+**Database Configuration** - Update `backend/config.json`:
+
+```json
+[{
+  "db": "MyApp",
+  "origin": "http://localhost:5173",
+  "dbType": "sqlite",
+  "connectionString": "./databases/MyApp.db"
+}]
+```
+
+**Supported Database Types:**
+- **SQLite** (default): `"dbType": "sqlite"`
+- **PostgreSQL**: `"dbType": "postgresql"` with `"connectionString": "${POSTGRES_URL}"`
+- **MongoDB**: `"dbType": "mongodb"` with `"connectionString": "${MONGODB_URL}"`
+
 <br />
 
-## 🗺️ Roadmap
-
-Check out what's coming next in our [CHANGELOG](https://github.com/stevederico/skateboard/blob/master/changelog.md)
-
-**Coming Soon:**
-- 📱 iOS/Android app wrapper
-- 💬 Real-time chat component
-- 📊 Analytics dashboard
-- 🔍 Full-text search
-- 🌍 i18n support
-- 🎯 A/B testing tools
-
-<br />
 
 ## 🤝 Contributing
 
-We love contributions! See our [Contributing Guide](CONTRIBUTING.md) for details.
+We love contributions!
 
 ```bash
 # Fork the repo, then:
@@ -199,6 +191,14 @@ Built on the shoulders of giants:
 <br />
 
 
+## 🚀 Ready to Ship?
+
+```bash
+npx create-skateboard-app
+```
+
+<br />
+
 ## 📄 License
 
 MIT License - use it however you want! See [LICENSE](LICENSE) for details.
@@ -208,14 +208,6 @@ MIT License - use it however you want! See [LICENSE](LICENSE) for details.
 ---
 
 <div align="center">
-  <p>
-    <strong>Ready to ship?</strong>
-  </p>
-  
-  ```bash
-  npx create-skateboard-app
-  ```
-  
   <p>
     Built with ❤️ by <a href="https://github.com/stevederico">Steve Derico</a> and contributors
   </p>
