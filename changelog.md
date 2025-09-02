@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+0.3.5
+
+  Add environment variable support
+  Implement database configuration security
+  Create multi-database documentation
+  Add connection string validation
+  Update configuration examples
+
 0.3.4
 
   Lighten dark mode accent

@@ -1,0 +1,35 @@
+[
+  {
+    "db": "MyApp",
+    "origin": "http://localhost:5173",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
+  },
+  {
+    "db": "MyApp",
+    "origin": "http://localhost:8000",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
+  },
+  {
+    "_comment": "Examples using environment variables:",
+    "db": "MyApp",
+    "origin": "https://myapp.com",
+    "dbType": "mongodb",
+    "connectionString": "${MONGODB_URL}"
+  },
+  {
+    "_comment": "PostgreSQL example:",
+    "db": "MyApp",
+    "origin": "https://staging.myapp.com",
+    "dbType": "postgresql",
+    "connectionString": "${POSTGRES_URL}"
+  },
+  {
+    "_comment": "Generic database URL example:",
+    "db": "MyApp",
+    "origin": "https://production.myapp.com",
+    "dbType": "mongodb",
+    "connectionString": "${DATABASE_URL}"
+  }
+]
