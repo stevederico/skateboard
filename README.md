@@ -55,7 +55,7 @@ Everything you need to ship a production-ready app:
 - **Protected routes** with automatic redirects
 - **User context** management across your app
 - **Session persistence** with secure cookies
-- **App-specific auth isolation** (v0.2.6+)
+- **App-specific auth isolation** 
 
 ### 💳 **Stripe Integration**
 - **Checkout flows** ready to go
@@ -73,7 +73,7 @@ Everything you need to ship a production-ready app:
 
 ### 🛠️ **Developer Experience**
 - **Hot Module Replacement** with Vite 7.1+
-- **Zero config** - works out of the box
+- **Zero config** - just works out of the box
 - **Multi-database support** - SQLite (default), MongoDB, PostgreSQL
 - **constants.json** - customize everything in one place
 - **Modern JavaScript** - no TypeScript complexity
@@ -82,28 +82,9 @@ Everything you need to ship a production-ready app:
 
 
 
-## 🏗️ Tech Stack
-
-Built with the latest and greatest:
-
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **React** | v19 | UI Framework |
-| **Vite** | v7.1+ | Build Tool & Dev Server |
-| **Tailwind CSS** | v4.1+ | Styling |
-| **Shadcn/ui** | Latest | Component Library |
-| **React Router** | v7.8+ | Routing |
-| **Express** | v5 | Backend Server |
-| **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
-| **Stripe** | Latest | Payments |
-| **JWT** | Latest | Authentication |
-
-<br />
 
 
-## 📖 Configuration
-
-### Frontend Configuration
+## 📖 Frontend Configuration
 
 Update `src/constants.json` to customize your app:
 
@@ -115,7 +96,7 @@ Update `src/constants.json` to customize your app:
 }
 ```
 
-### Backend Configuration
+## 📖 Backend Configuration
 
 **Environment Variables** - Add to `backend/.env`:
 
@@ -153,6 +134,58 @@ POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
 
 <br />
 
+## 💳 Stripe Setup
+
+To enable payments, configure your Stripe products:
+
+1. **Create Product in Stripe Dashboard**
+   - Go to **Product Catalog** → **Create Product**
+   - Add **Name** and **Amount**
+   - Click **More Pricing Options**
+   - Scroll to **Lookup Key** at bottom
+   - Enter: `my_lookup_key`
+   - *This allows future pricing changes on stripe.com without updating your code*
+
+2. **Update Environment Variables**
+   ```bash
+   STRIPE_KEY=sk_live_your_secret_key
+   ```
+   
+   **Security Note:** Use your secret key OR create a restricted key with these permissions:
+   - **Read/Write:** Checkout Sessions
+   - **Read:** Customers, Prices, Products
+
+3. **Setup Webhook**
+   - Go to **stripe.com** → **Developers** (lower left) → **Webhooks**
+   - Click **Add Endpoint**
+   - Add your endpoint URL: `https://yourdomain.com/webhook`
+   - Select these events:
+     - `customer.subscription.created` - Customer signed up for new plan
+     - `customer.subscription.deleted` - Customer's subscription ends  
+     - `customer.subscription.updated` - Subscription changes (plan switch, trial to active, etc.)
+   - Copy the **Signing Secret** to your environment:
+   ```bash
+   STRIPE_ENDPOINT_SECRET=whsec_your_webhook_secret
+   ```
+
+
+## 🏗️ Tech Stack
+
+Built with the latest and greatest:
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| **React** | v19 | UI Framework |
+| **Vite** | v7.1+ | Build Tool & Dev Server |
+| **Tailwind CSS** | v4.1+ | Styling |
+| **Shadcn/ui** | Latest | Component Library |
+| **React Router** | v7.8+ | Routing |
+| **Express** | v5 | Backend Server |
+| **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
+| **Stripe** | Latest | Payments |
+| **JWT** | Latest | Authentication |
+
+<br />
 
 ## 🤝 Contributing
 

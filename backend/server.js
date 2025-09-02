@@ -451,6 +451,11 @@ app.post("/create-checkout-session", authMiddleware, async (req, res) => {
     if (!user || user.email !== email) return res.status(403).json({ error: "Email mismatch" });
 
     const prices = await stripe.prices.list({ lookup_keys: [lookup_key], expand: ["data.product"] });
+    
+    if (!prices.data || prices.data.length === 0) {
+      return res.status(400).json({ error: `No price found for lookup_key: ${lookup_key}` });
+    }
+    
     const origin = req.headers.origin || config.databases[0].origin;
 
     const session = await stripe.checkout.sessions.create({
