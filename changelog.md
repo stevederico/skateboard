@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+0.5.5
+
+  Improve backend configuration
+  Add database examples
+  Update environment setup
+  Clarify JWT setup
+
 0.5.4
 
   Create deployment guides
