@@ -131,12 +131,19 @@ POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
 **Database Configuration** - Update `backend/config.json`:
 
 ```json
-[{
-  "db": "MyApp",
-  "origin": "http://localhost:5173",
-  "dbType": "sqlite",
-  "connectionString": "./databases/MyApp.db"
-}]
+{
+  "clients": [
+    "http://localhost:5173"
+  ],
+  "databases": [
+    {
+      "db": "MyApp",
+      "origin": "http://localhost:8000",
+      "dbType": "sqlite",
+      "connectionString": "./databases/MyApp.db"
+    }
+  ]
+}
 ```
 
 **Supported Database Types:**

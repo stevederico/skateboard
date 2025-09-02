@@ -70,7 +70,7 @@ function validateEnvironmentVariables() {
   
   // Check for database environment variables that are referenced but not defined
   const referencedEnvVars = new Set();
-  config.forEach(entry => {
+  config.databases.forEach(entry => {
     if (typeof entry.connectionString === 'string') {
       const matches = entry.connectionString.match(/\$\{([^}]+)\}/g);
       if (matches) {
@@ -103,7 +103,7 @@ console.log('Multi-database support enabled');
 // ==== DATABASE HELPERS ====
 // Get database configuration based on origin
 const getDBConfig = (origin) => {
-  const configEntry = config.find(entry => entry.origin === origin) || config[0];
+  const configEntry = config.databases.find(entry => entry.origin === origin) || config.databases[0];
   console.log(`Using database: ${configEntry.db} (${configEntry.dbType}) for origin: ${origin}`);
   return configEntry;
 };
@@ -117,7 +117,7 @@ let currentDbConfig = null;
 
 // ==== EXPRESS SETUP ====
 const app = express();
-const allowedOrigins = config.map(entry => entry.origin);
+const allowedOrigins = config.clients;
 
 app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   console.log("Webhook received");
@@ -134,7 +134,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
   }
 
   // Use default config for webhooks (first config entry)
-  const webhookConfig = config[0];
+  const webhookConfig = config.databases[0];
   const { customer: stripeID, current_period_end, status } = event.data.object;
   const customer = await stripe.customers.retrieve(stripeID);
   const customerEmail = customer.email.toLowerCase();
@@ -445,7 +445,7 @@ app.post("/create-checkout-session", authMiddleware, async (req, res) => {
     if (!user || user.email !== email) return res.status(403).json({ error: "Email mismatch" });
 
     const prices = await stripe.prices.list({ lookup_keys: [lookup_key], expand: ["data.product"] });
-    const origin = req.headers.origin || config[0].origin;
+    const origin = req.headers.origin || config.databases[0].origin;
 
     const session = await stripe.checkout.sessions.create({
       customer_email: email,
@@ -475,7 +475,7 @@ app.post("/create-portal-session", authMiddleware, async (req, res) => {
       return res.status(403).json({ error: "Unauthorized customerID" });
     }
 
-    const origin = req.headers.origin || config[0].origin;
+    const origin = req.headers.origin || config.databases[0].origin;
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerID,
       return_url: `${origin}/app/stripe?portal=return`,
