@@ -1,11 +1,12 @@
 ## CHANGELOG
 
-0.4.0
+0.4.1
 
-  Restructure configuration sections
-  Add database configuration
-  Remove roadmap section
-  Create ready section
+  Update environment comments
+  Fix database configuration
+  Add PostgreSQL support
+  Remove duplicate examples
+  Update README features
 
 0.3.9
 
