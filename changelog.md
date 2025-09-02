@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.3.9
+
+  Improve README spacing
+  Remove unnecessary sections
+  Fix header styling
+
 0.3.8
 
   Rename database folder

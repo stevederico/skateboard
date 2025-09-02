@@ -1,18 +1,25 @@
 <div align="center">
   <a href="#" />
-    <img alt="Skateboard - Ship your React app in minutes" width="50%" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
+    <img alt="Skateboard - Ship your React app in minutes" width="40%" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
   </a>
-  
-  <h1 align="center">🛹 &nbsp;Skateboard</h1>
-  
-  <h3 align="center">
-    <strong>a react starter with auth, stripe, shadcn, and sqlite</strong>
-  </h3>
-  
-  <p align="center">
+  </div>
+
+  <p align="center" style="margin-top: 40px; margin-bottom: 5px;">
     <img src="public/icons/icon.png" width="60" height="60" alt="Skateboard Logo">
   </p>
-  
+  <h1 align="center" style="border-bottom: none; margin-bottom: 0;">Skateboard</h1>
+  <h3 align="center" style="margin-top: 0; font-weight: normal;">
+    a react starter with auth, stripe, shadcn, and sqlite
+  </h3>
+
+## 🎬 Demo
+
+<div align="left">
+  <img width="100%" alt="landing" src="https://github.com/user-attachments/assets/db1d9cb7-e398-4c87-a245-14371f37a38b" />
+</div>
+
+  <br />
+ 
   <p align="center">
     <a href="https://opensource.org/licenses/mit">
       <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License">
@@ -85,16 +92,7 @@ Everything you need to ship a production-ready app:
 
 <br />
 
-## 🎬 Demo
 
-<div align="center">
-
-  <img  width="100%"  alt="landing" src="https://github.com/user-attachments/assets/db1d9cb7-e398-4c87-a245-14371f37a38b" />
-
-  
-</div>
-
-<br />
 
 ## 🏗️ Tech Stack
 
@@ -114,275 +112,34 @@ Built with the latest and greatest:
 
 <br />
 
-## 🤔 Why Skateboard?
 
-### The Problem
-Starting a new React project means:
-- 🔧 Setting up authentication (2-3 days)
-- 💰 Integrating payments (1-2 weeks)
-- 🎨 Building UI components (2-4 weeks)
-- 🗄️ Setting up a database (1 week)
-- 🚢 Configuring deployment (1-2 days)
+## 📖 Configuration
 
-**Total: 1-2 months before you write your first feature**
+### App Settings
 
-### The Solution
-Skateboard gives you all of this in **60 seconds**:
-
-```bash
-npx create-skateboard-app
-```
-
-Now you can focus on what makes your app unique, not boilerplate.
-
-<br />
-
-## 📁 Project Structure
-
-```
-skateboard/
-├── src/
-│   ├── components/       # Your custom components
-│   ├── assets/          # Images, styles
-│   ├── context.jsx      # Global state management
-│   ├── main.jsx         # App entry point
-│   └── constants.json   # All your app config
-├── backend/
-│   ├── server.js        # Express server
-│   ├── database/        # Database providers (SQLite, PostgreSQL, MongoDB)
-│   ├── databases/       # SQLite database files
-│   └── config.json      # Backend config with database settings
-├── package.json         # Dependencies
-└── vite.config.js       # Vite configuration
-```
-
-<br />
-
-## 🎯 Perfect For
-
-- **🚀 Startups** - Launch your MVP in days, not months
-- **🎨 Side Projects** - Stop rebuilding auth for every project
-- **🏢 Agencies** - Deliver client projects faster
-- **📚 Learning** - See how production apps are built
-- **💡 Prototyping** - Test ideas quickly
-
-<br />
-
-## 🏆 Advanced Features
-
-Beyond the basics, Skateboard includes enterprise-grade features often missed:
-
-### 🏗️ **Multi-Tenancy Support**
-- **Origin-based database switching** - One server, multiple apps
-- **Perfect for agencies** managing multiple client projects
-- **Automatic database isolation** per domain
-
-### 🔒 **Enterprise Security**
-- **Bcrypt with 14 salt rounds** - Industry-standard password hashing
-- **JWT with proper expiration** - Secure token management
-- **App-specific auth isolation** - No cross-contamination between projects
-- **Origin validation** and CORS protection
-
-### 🗃️ **Flexible Database Support**
-- **Multiple database types** - SQLite (default), PostgreSQL, MongoDB
-- **Unified database interface** - Same API across all database types
-- **Custom query support** - Execute raw SQL or MongoDB operations
-- **Zero external dependencies by default** - SQLite works out of the box
-- **Deploy anywhere** - Works on any Node.js hosting
-
-### ⚡ **Production Optimizations**
-- **WAL mode SQLite** - Better concurrency and performance
-- **Apache Common Log Format** - Professional monitoring ready
-- **Graceful shutdown handling** - Container-friendly
-- **Health check endpoints** - Load balancer compatible
-
-### 📋 **Legal Compliance Ready**
-- **Pre-written legal templates** - Terms, Privacy Policy, EULA
-- **Dynamic placeholder replacement** - Company info auto-populated
-- **Subscription legal notices** - App Store compliance included
-
-### 🛠️ **Developer Experience++**
-- **Auto-restart backend** with `--watch` flag
-- **Environment auto-creation** from templates
-- **Monorepo workspace architecture** 
-- **Dynamic navigation** from config files
-- **Stripe webhook verification** with customer matching
-
-<br />
-
-## 📖 Documentation
-
-### Database Configuration
-
-Configure your database in `backend/config.json`:
-
-```json
-[
-  {
-    "db": "MyApp",
-    "origin": "http://localhost:5173",
-    "dbType": "sqlite",
-    "connectionString": "./databases/MyApp.db"
-  }
-]
-```
-
-**Supported Database Types:**
-
-**SQLite (Default):**
-```json
-{
-  "dbType": "sqlite",
-  "connectionString": "./databases/MyApp.db"
-}
-```
-
-**PostgreSQL:**
-```json
-{
-  "dbType": "postgresql", 
-  "connectionString": "${POSTGRES_URL}"
-}
-```
-
-**MongoDB:**
-```json
-{
-  "dbType": "mongodb",
-  "connectionString": "${MONGODB_URL}"
-}
-```
-
-**Environment Variable Support:**
-
-For production deployments, use environment variables instead of hardcoding connection strings:
-
-```json
-{
-  "dbType": "mongodb",
-  "connectionString": "${MONGODB_URL}"
-}
-```
-
-**Standard Environment Variables:**
-- `DATABASE_URL` - General database connection string
-- `MONGODB_URL` - MongoDB connection string  
-- `POSTGRES_URL` - PostgreSQL connection string
-
-### Custom Database Queries
-
-Execute raw database queries using the unified interface:
-
-**SQLite/PostgreSQL:**
-```javascript
-import { databaseFactory } from './backend/database/factory.js';
-
-const result = await databaseFactory.executeQuery('sqlite', 'MyApp', './databases/MyApp.db', {
-  query: "SELECT * FROM users WHERE created_at > ?",
-  params: [startDate]
-});
-```
-
-**MongoDB:**
-```javascript
-const result = await databaseFactory.executeQuery('mongodb', 'MyApp', 'mongodb://localhost:27017', {
-  collection: 'users',
-  operation: 'find',
-  query: { status: 'active' }
-});
-
-// Aggregation example
-const aggResult = await databaseFactory.executeQuery('mongodb', 'MyApp', 'mongodb://localhost:27017', {
-  collection: 'users',
-  operation: 'aggregate', 
-  pipeline: [
-    { $match: { status: 'active' } },
-    { $group: { _id: '$department', count: { $sum: 1 } } }
-  ]
-});
-```
-
-### App Configuration
-
-All app configuration is in `src/constants.json`:
+Update `src/constants.json` to customize your app:
 
 ```json
 {
   "appName": "Your App Name",
-  "appIcon": "command",
-  "tagline": "Your Tagline",
-  "cta": "Get Started",
-  "features": {
-    "title": "Everything You Need",
-    "items": [
-      {
-        "icon": "🔐",
-        "title": "Authentication", 
-        "description": "Complete user management with JWT tokens and secure sessions"
-      },
-      {
-        "icon": "💳",
-        "title": "Stripe Payments",
-        "description": "Ready-to-use checkout flows and subscription management"
-      },
-      {
-        "icon": "🎨",
-        "title": "Beautiful UI",
-        "description": "50+ Shadcn components with dark mode support"
-      }
-    ]
-  },
-  "backendURL": "http://localhost:8000",
-  "stripeProducts": [{
-    "price": "$9.99",
-    "title": "Pro Plan",
-    "interval": "monthly", 
-    "lookup_key": "pro_monthly"
-  }]
+  "tagline": "Your Tagline", 
+  "cta": "Get Started"
 }
 ```
 
-### Landing Page Customization
+### Environment Variables
 
-Your entire landing page is configured through `constants.json` - no code changes needed:
+Add to `backend/.env`:
 
-- **App name & tagline** - Update branding instantly
-- **CTA button text** - Customize your call-to-action
-- **Features section** - Add/remove features with custom icons, titles, and descriptions
-- **All content** - Everything displays automatically from your config
+```bash
+JWT_SECRET=your-secret-key
+STRIPE_SECRET_KEY=sk_test_...
 
-### Environment Setup
-
-1. **Stripe Setup** (Optional)
-   ```bash
-   # Add to backend/.env
-   STRIPE_SECRET_KEY=sk_test_...
-   STRIPE_WEBHOOK_SECRET=whsec_...
-   ```
-
-2. **JWT Secret**
-   ```bash
-   # Add to backend/.env
-   JWT_SECRET=your-secret-key
-   ```
-
-3. **Database Connection (Production)**
-   ```bash
-   # Add to backend/.env for remote databases
-   MONGODB_URL=mongodb+srv://username:password@cluster.mongodb.net/myapp
-   POSTGRES_URL=postgresql://username:password@hostname:5432/myapp
-   DATABASE_URL=your-database-connection-string
-   ```
-
-### Deployment
-
-Deploy to any platform that supports Node.js:
-
-- **Vercel** - Zero config deployment
-- **Netlify** - Great for static sites
-- **Railway** - Full stack hosting
-- **Render** - Free tier available
-- **AWS/GCP/Azure** - For scale
+# Database (production)
+DATABASE_URL=your-database-connection-string
+MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/myapp
+POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
+```
 
 <br />
 
@@ -441,36 +198,6 @@ Built on the shoulders of giants:
 
 <br />
 
-## 🛠️ Manual Setup
-
-If you're working with an existing Skateboard project:
-
-1. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Configure App Styling**
-   Set your app color in `src/styles.css`
-
-3. **Update Backend URLs**
-   In `src/constants.json`:
-   ```json
-   {
-     "backendURL": "http://your-backend-url",
-     "devBackendURL": "http://localhost:8000"
-   }
-   ```
-
-4. **Update Package Info**
-   Change package name and version in `package.json`
-
-5. **Initialize Git**
-   ```bash
-   git init
-   ```
-
-<br />
 
 ## 📄 License
 
