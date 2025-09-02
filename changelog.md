@@ -1,5 +1,15 @@
 ## CHANGELOG
 
+0.5.2
+
+  Fixed config on server
+
+0.5.1
+
+  Fix config parsing error
+  Correct database structure
+  Enable server startup
+
 0.5.0
 
   Restructure config structure
