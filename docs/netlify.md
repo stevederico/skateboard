@@ -98,7 +98,7 @@ This guide walks you through deploying your Skateboard app using Netlify for the
    }
    ```
 
-### Create Netlify Site
+### Create Netlify Site 
 
 1. **Create Netlify Account**
    - Go to [netlify.com](https://netlify.com)
