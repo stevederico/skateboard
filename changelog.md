@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+0.3.7
+
+  Update documentation accuracy
+  Fix security examples
+
 0.3.6
 
   Add symlink configuration
