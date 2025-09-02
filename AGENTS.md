@@ -58,23 +58,39 @@ The application uses a database factory pattern supporting three database types:
 
 **Configuration** (`backend/config.json`):
 ```json
-[{
-  "db": "MyApp",
-  "origin": "http://localhost:5173", 
-  "dbType": "sqlite|postgresql|mongodb",
-  "connectionString": "./databases/MyApp.db"
-}]
-```
-
-**Environment Variable Support:**
-Connection strings support `${VAR_NAME}` syntax for production deployments:
-```json
 {
-  "dbType": "mongodb",
-  "connectionString": "${MONGODB_URL}"
+  "clients": [
+    "http://localhost:5173"
+  ],
+  "databases": [
+    {
+      "db": "MyApp",
+      "origin": "http://localhost:8000",
+      "dbType": "sqlite",
+      "connectionString": "./databases/MyApp.db"
+    },
+    {
+      "db": "MyApp",
+      "origin": "https://myapp.com",
+      "dbType": "mongodb",
+      "connectionString": "${MONGODB_URL}"
+    },
+    {
+      "db": "MyApp",
+      "origin": "https://staging.myapp.com",
+      "dbType": "postgresql",
+      "connectionString": "${POSTGRES_URL}"
+    }
+  ]
 }
 ```
 
+**Configuration Structure:**
+- **`clients`** - Frontend origins allowed for CORS requests
+- **`databases`** - Backend server database configurations by origin
+
+**Environment Variable Support:**
+Connection strings support `${VAR_NAME}` syntax for production deployments.
 Standard variables: `DATABASE_URL`, `MONGODB_URL`, `POSTGRES_URL`
 
 **Database Operations:**

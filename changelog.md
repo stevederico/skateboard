@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+0.5.0
+
+  Restructure config structure
+  Separate clients databases
+  Update server logic
+  Fix CORS handling
+
 0.4.1
 
   Update environment comments
