@@ -98,17 +98,6 @@ Update `src/constants.json` to customize your app:
 
 ## 📖 Backend Configuration
 
-**Environment Variables** - Add to `backend/.env`:
-
-```bash
-JWT_SECRET=your-secret-key
-STRIPE_SECRET_KEY=sk_test_...
-
-# Database (production)
-MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/myapp
-POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
-```
-
 **Database Configuration** - Update `backend/config.json`:
 
 ```json
@@ -125,6 +114,21 @@ POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
     }
   ]
 }
+```
+
+Update to `backend/.env`:
+
+```bash
+# Sqlite remove below
+MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/myapp
+POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
+```
+
+**Auth Variables** - Update to `backend/.env`:
+enter a unique random string below
+
+```bash
+JWT_SECRET=your-secret-key
 ```
 
 **Supported Database Types:**
