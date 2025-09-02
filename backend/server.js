@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
-import { databaseFactory } from "./database/factory.js";
+import { databaseManager } from "./adapters/manager.js";
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync } from 'node:fs';
@@ -141,9 +141,9 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
   
   if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
     console.log(`Webhook: ${event.type} for ${customerEmail}`);
-    const user = await databaseFactory.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
+    const user = await databaseManager.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
     if (user) {
-      await databaseFactory.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, { 
+      await databaseManager.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, { 
         $set: { subscription: { stripeID, expires: current_period_end, status } } 
       });
     } else {
@@ -292,7 +292,7 @@ app.post("/signup", async (req, res) => {
     let insertID = generateUUID()
     
     try {
-      const result = await databaseFactory.insertUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, {
+      const result = await databaseManager.insertUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, {
         _id: insertID,
         email: email,
         name: name.trim(),
@@ -300,7 +300,7 @@ app.post("/signup", async (req, res) => {
       });
 
       const token = await generateToken(insertID, req.headers.origin);
-      await databaseFactory.insertAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email, password: hash, userID: insertID });
+      await databaseManager.insertAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email, password: hash, userID: insertID });
       
       res.status(201).json({ 
         id: insertID.toString(), 
@@ -341,7 +341,7 @@ app.post("/signin", async (req, res) => {
     console.log(`[${new Date().toISOString()}] Attempting signin for email:`, email);
 
     // Check if auth exists
-    const auth = await databaseFactory.findAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email });
+    const auth = await databaseManager.findAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email });
     if (!auth) {
       console.log(`[${new Date().toISOString()}] Auth record not found for:`, email);
       return res.status(401).json({ error: "Invalid credentials" });
@@ -354,7 +354,7 @@ app.post("/signin", async (req, res) => {
     }
 
     // get user
-    const user = await databaseFactory.findUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email });
+    const user = await databaseManager.findUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email });
     if (!user) {
       console.error("User not found for auth record:", auth);
       return res.status(404).json({ error: "User not found" });
@@ -385,7 +385,7 @@ app.post("/signin", async (req, res) => {
 
 // ==== USER DATA ROUTES ====
 app.get("/me", authMiddleware, async (req, res) => {
-  const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
+  const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
   console.log("/me checking for user with ID:", req.userID);
   if (!user) return res.status(404).json({ error: "User not found" });
   return res.json(user);
@@ -394,7 +394,7 @@ app.get("/me", authMiddleware, async (req, res) => {
 app.put("/me", authMiddleware, async (req, res) => {
   try {
     // Find user first to verify existence
-    const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     if (!user) return res.status(404).json({ error: "User not found" });
 
     // Remove fields that shouldn't be updateable
@@ -405,14 +405,14 @@ app.put("/me", authMiddleware, async (req, res) => {
     delete update.subscription;
 
     // Update user document
-    const result = await databaseFactory.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID }, { $set: update });
+    const result = await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID }, { $set: update });
 
     if (result.modifiedCount === 0) {
       return res.status(500).json({ error: "No changes made" });
     }
 
     // Return updated user
-    const updatedUser = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
+    const updatedUser = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     return res.json(updatedUser);
   } catch (err) {
     console.error("Update user error:", err);
@@ -421,7 +421,7 @@ app.put("/me", authMiddleware, async (req, res) => {
 });
 
 app.get("/isSubscriber", authMiddleware, async (req, res) => {
-  const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
+  const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
   if (!user) return res.status(404).json({ error: "User not found" });
 
   const isSubscriber = user.subscription?.stripeID && user.subscription?.status === "active" && (!user.subscription?.expires || user.subscription.expires > Math.floor(Date.now() / 1000));
@@ -441,7 +441,7 @@ app.post("/create-checkout-session", authMiddleware, async (req, res) => {
     if (!email || !lookup_key) return res.status(400).json({ error: "Missing email or lookup_key" });
 
     // Verify the email matches the authenticated user
-    const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     if (!user || user.email !== email) return res.status(403).json({ error: "Email mismatch" });
 
     const prices = await stripe.prices.list({ lookup_keys: [lookup_key], expand: ["data.product"] });
@@ -470,7 +470,7 @@ app.post("/create-portal-session", authMiddleware, async (req, res) => {
     if (!customerID) return res.status(400).json({ error: "Missing customerID" });
 
     // Verify the customerID matches the authenticated user's subscription
-    const user = await databaseFactory.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     if (!user || (user.subscription?.stripeID && user.subscription.stripeID !== customerID)) {
       return res.status(403).json({ error: "Unauthorized customerID" });
     }
@@ -576,7 +576,7 @@ process.on("SIGINT", async () => {
   console.log("Shutting down...");
   
   // Close all database connections
-  await databaseFactory.closeAll();
+  await databaseManager.closeAll();
   
   process.exit();
 });

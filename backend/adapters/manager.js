@@ -2,7 +2,7 @@ import { SQLiteProvider } from './sqlite.js';
 import { PostgreSQLProvider } from './postgres.js';
 import { MongoDBProvider } from './mongodb.js';
 
-class DatabaseFactory {
+class DatabaseManager {
   constructor() {
     this.providers = new Map();
     this.activeConnections = new Map();
@@ -88,4 +88,4 @@ class DatabaseFactory {
 }
 
 // Export singleton instance
-export const databaseFactory = new DatabaseFactory();
+export const databaseManager = new DatabaseManager();

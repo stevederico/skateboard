@@ -24,12 +24,5 @@
     "origin": "https://staging.myapp.com",
     "dbType": "postgresql",
     "connectionString": "${POSTGRES_URL}"
-  },
-  {
-    "_comment": "Generic database URL example:",
-    "db": "MyApp",
-    "origin": "https://production.myapp.com",
-    "dbType": "mongodb",
-    "connectionString": "${DATABASE_URL}"
   }
 ]

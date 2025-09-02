@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.3.8
+
+  Rename database folder
+  Update factory pattern
+  Change to manager pattern
+
 0.3.7
 
   Update documentation accuracy

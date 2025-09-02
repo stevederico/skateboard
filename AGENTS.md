@@ -32,11 +32,11 @@ npm run --workspace=backend start    # Backend with --watch and experimental SQL
 ### Multi-Database Architecture
 The application uses a database factory pattern supporting three database types:
 
-**Database Providers** (`backend/database/`):
+**Database Adapters** (`backend/adapters/`):
 - `sqlite.js` - Default SQLite provider using Node.js built-in DatabaseSync
 - `postgres.js` - PostgreSQL provider with connection pooling 
 - `mongodb.js` - MongoDB provider with native driver
-- `factory.js` - Unified interface and provider selection
+- `manager.js` - Unified interface and provider selection
 
 **Configuration** (`backend/config.json`):
 ```json
@@ -61,7 +61,7 @@ Standard variables: `DATABASE_URL`, `MONGODB_URL`, `POSTGRES_URL`
 
 **Database Operations:**
 - Standard CRUD: `findUser()`, `insertUser()`, `updateUser()`, `findAuth()`, `insertAuth()`
-- Generic queries: `databaseFactory.executeQuery(dbType, dbName, connectionString, queryObject)`
+- Generic queries: `databaseManager.executeQuery(dbType, dbName, connectionString, queryObject)`
 
 ### Frontend Configuration System
 **Constants-Driven UI** (`src/constants.json`):
@@ -98,13 +98,13 @@ Standard variables: `DATABASE_URL`, `MONGODB_URL`, `POSTGRES_URL`
 ### Database Query Examples
 ```javascript
 // SQL databases
-await databaseFactory.executeQuery('sqlite', 'MyApp', './db.db', {
+await databaseManager.executeQuery('sqlite', 'MyApp', './db.db', {
   query: "SELECT * FROM users WHERE created_at > ?",
   params: [startDate]
 });
 
 // MongoDB
-await databaseFactory.executeQuery('mongodb', 'MyApp', 'mongodb://localhost:27017', {
+await databaseManager.executeQuery('mongodb', 'MyApp', 'mongodb://localhost:27017', {
   collection: 'users',
   operation: 'aggregate',
   pipeline: [{ $match: { status: 'active' } }]
