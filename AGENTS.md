@@ -26,7 +26,7 @@ npm run --workspace=backend start    # Backend with --watch and experimental SQL
 ## Architecture Overview
 
 ### Monorepo Structure
-- **Root**: React frontend with Vite 7 build system
+- **Root**: React frontend with Vite 7.1+ build system
 - **Backend Workspace**: Express server with multi-database support
 
 ### Multi-Database Architecture

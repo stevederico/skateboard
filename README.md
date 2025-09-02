@@ -77,7 +77,7 @@ Everything you need to ship a production-ready app:
 - **Legal pages** (Terms, Privacy, EULA)
 
 ### 🛠️ **Developer Experience**
-- **Hot Module Replacement** with Vite 7
+- **Hot Module Replacement** with Vite 7.1+
 - **Zero config** - works out of the box
 - **SQLite database** - no external dependencies
 - **constants.json** - customize everything in one place
@@ -103,10 +103,10 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **Vite** | v7 | Build Tool & Dev Server |
-| **Tailwind CSS** | v4 | Styling |
+| **Vite** | v7.1+ | Build Tool & Dev Server |
+| **Tailwind CSS** | v4.1+ | Styling |
 | **Shadcn/ui** | Latest | Component Library |
-| **React Router** | v7.2+ | Routing |
+| **React Router** | v7.8+ | Routing |
 | **Express** | v5 | Backend Server |
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
 | **Stripe** | Latest | Payments |
@@ -241,7 +241,7 @@ Configure your database in `backend/config.json`:
 ```json
 {
   "dbType": "postgresql", 
-  "connectionString": "postgresql://user:password@localhost:5432/myapp"
+  "connectionString": "${POSTGRES_URL}"
 }
 ```
 
