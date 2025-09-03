@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+0.5.6
+
+  Add Node.js engine requirement
+
 0.5.5
 
   Improve backend configuration

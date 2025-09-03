@@ -4,6 +4,9 @@
     "version": "0.3.7",
     "description": "Skateboard application backend",
     "type": "module",
+    "engines": {
+        "node": ">=22.5.0"
+    },
     "scripts": {
         "start": "node --experimental-sqlite --watch server.js"
     },
