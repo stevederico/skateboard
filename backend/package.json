@@ -1,7 +1,6 @@
 {
     "name": "skateboard-backend",
     "private": true,
-    "version": "0.3.7",
     "description": "Skateboard application backend",
     "type": "module",
     "engines": {

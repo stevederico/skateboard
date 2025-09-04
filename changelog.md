@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+0.5.7
+
+  Add UpgradeSheet component
+  Implement freemium usage tracking
+  Add usage limit enforcement
+  Create superscript price styling
+
 0.5.6
 
   Add Node.js engine requirement

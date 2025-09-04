@@ -32,14 +32,14 @@
             "icon": "house"
         },
         {
-            "title": "Other",
-            "url": "other",
+            "title": "Messages",
+            "url": "messages",
             "icon": "inbox"
         }
     ],
     "stripeProducts": [{
         "price": "$5.00",
-        "title": "Monthly Plan",
+        "title": "Unlimited",
         "interval": "monthly",
         "lookup_key": "my_lookup_key"
     }],
