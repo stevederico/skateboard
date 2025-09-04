@@ -15,6 +15,26 @@ const getCookieName = () => {
   return `${appName.toLowerCase().replace(/\s+/g, '-')}_token`;
 };
 
+// Properly clear cookie with all possible attributes
+const clearCookie = (cookieName) => {
+  const hostname = window.location.hostname;
+  const domain = hostname.includes('.') ? hostname.split('.').slice(-2).join('.') : hostname;
+  
+  // Clear with various combinations of attributes to ensure it's deleted
+  const clearVariations = [
+    `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;`,
+    `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=${hostname};`,
+    `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=.${domain};`,
+    `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; Secure; SameSite=Strict;`,
+    `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=${hostname}; Secure; SameSite=Strict;`,
+    `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=.${domain}; Secure; SameSite=Strict;`
+  ];
+  
+  clearVariations.forEach(cookieStr => {
+    document.cookie = cookieStr;
+  });
+};
+
 // Safely parse user from localStorage, fallback to null on error
 const getInitialUser = () => {
   try {
@@ -41,7 +61,9 @@ function reducer(state, action) {
         return { ...state, user: action.payload };
       case 'CLEAR_USER':
         localStorage.removeItem(storageKey);
-        document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;`;
+        clearCookie(cookieName);
+        
+        
         return { ...state, user: null };
       default:
         return state;

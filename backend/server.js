@@ -389,6 +389,7 @@ app.post("/signin", async (req, res) => {
   }
 });
 
+
 // ==== USER DATA ROUTES ====
 app.get("/me", authMiddleware, async (req, res) => {
   const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
