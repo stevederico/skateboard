@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+0.5.9
+
+  Add BlankView component
+
 0.5.8
 
   Fix subscription status checks
