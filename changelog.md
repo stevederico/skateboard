@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.5.8
+
+  Fix subscription status checks
+  Update upgrade flow logic  
+  Add product features display
+
 0.5.7
 
   Add UpgradeSheet component

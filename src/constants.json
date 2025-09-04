@@ -41,7 +41,14 @@
         "price": "$5.00",
         "title": "Unlimited",
         "interval": "monthly",
-        "lookup_key": "my_lookup_key"
+        "lookup_key": "my_lookup_key",
+        "features": [
+            "Unlimited Todos",
+            "Unlimited Messages", 
+            "All Premium Features",
+            "Priority Customer Support",
+            "Cancel Anytime"
+        ]
     }],
     "companyName": "Company Inc",
     "companyWebsite": "www.company.com",
