@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.6.0
+
+  Rename MessagesView ChatView
+  Update showUpgradeSheet utility
+  Fix upgrade sheet
+
 0.5.9
 
   Add BlankView component

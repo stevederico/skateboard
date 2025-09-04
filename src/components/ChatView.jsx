@@ -1,11 +1,11 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import { useState, useEffect, useRef } from "react";
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, MessageCircle } from 'lucide-react';
 import { getRemainingUsage, trackUsage, showCheckout, isSubscriber, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '../context.jsx';
 
-export default function MessagesView() {
+export default function ChatView() {
   const { state } = getState();
   const [messages, setMessages] = useState([
     { id: 1, text: "Hey there! 👋", time: "2:30 PM", isMe: false },
@@ -35,7 +35,7 @@ export default function MessagesView() {
       // Check usage limit
       const usage = await getRemainingUsage('messages');
       if (!usage.unlimited && usage.remaining <= 0) {
-        showUpgradeSheet();
+        showUpgradeSheet(upgradeSheetRef);
         return;
       }
 
@@ -70,10 +70,10 @@ export default function MessagesView() {
   return (
     <div className="flex flex-col h-screen">
       <Header 
-        title="Messages" 
+        title="Chat" 
         buttonTitle={!isUserSubscriber && !usageInfo.unlimited ? `${usageInfo.remaining}` : undefined}
         buttonClass={!isUserSubscriber && !usageInfo.unlimited ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
-        onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet() : undefined}
+        onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet(upgradeSheetRef) : undefined}
       />
       
       <div className="flex-1 overflow-y-auto p-6 space-y-6">

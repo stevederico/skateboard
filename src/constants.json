@@ -32,9 +32,9 @@
             "icon": "house"
         },
         {
-            "title": "Messages",
+            "title": "Chat",
             "url": "messages",
-            "icon": "inbox"
+            "icon": "message-circle-more"
         }
     ],
     "stripeProducts": [{
