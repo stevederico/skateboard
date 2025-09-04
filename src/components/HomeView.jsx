@@ -1,13 +1,14 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import { useEffect, useState, useRef } from "react";
-import { getBackendURL, getCookie, timestampToString, isSubscriber, showCheckout, getRemainingUsage, trackUsage } from '@stevederico/skateboard-ui/Utilities';
+import { getBackendURL, getCookie, timestampToString, isSubscriber, showCheckout, getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { Trash2, Check } from 'lucide-react';
 import { getState } from '../context.jsx';
 
 export default function HomeView() {
   const { state } = getState();
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
+  const [isUserSubscriber, setIsUserSubscriber] = useState(true);
   const [todos, setTodos] = useState(() => {
     const savedTodos = localStorage.getItem('todos_v2');
     return savedTodos ? JSON.parse(savedTodos) : [
@@ -30,6 +31,8 @@ export default function HomeView() {
     const updateUsage = async () => {
       const usage = await getRemainingUsage('todos');
       setUsageInfo(usage);
+      const subscriber = await isSubscriber();
+      setIsUserSubscriber(subscriber);
     };
     updateUsage();
   }, [todos]);
@@ -39,7 +42,7 @@ export default function HomeView() {
       // Check usage limit
       const usage = await getRemainingUsage('todos');
       if (!usage.unlimited && usage.remaining <= 0) {
-        upgradeSheetRef.current?.show();
+        showUpgradeSheet();
         return;
       }
 
@@ -124,11 +127,11 @@ export default function HomeView() {
     <>
       <Header
         title="Home"
-        buttonTitle={!usageInfo.unlimited ? `${usageInfo.remaining}` : "Get Unlimited"}
-        buttonClass={!usageInfo.unlimited ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
-        onButtonTitleClick={() => {
-          showCheckout(state.user?.email);
-        }}
+        buttonTitle={!isUserSubscriber ? (!usageInfo.unlimited ? `${usageInfo.remaining}` : "Get Unlimited") : undefined}
+        buttonClass={!isUserSubscriber && !usageInfo.unlimited ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
+        onButtonTitleClick={!isUserSubscriber ? () => {
+          showUpgradeSheet();
+        } : undefined}
       />
 
       <div className="flex flex-col h-screen bg-background">

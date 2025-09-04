@@ -2,7 +2,7 @@ import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import { useState, useEffect, useRef } from "react";
 import { ArrowUp } from 'lucide-react';
-import { getRemainingUsage, trackUsage, showCheckout } from '@stevederico/skateboard-ui/Utilities';
+import { getRemainingUsage, trackUsage, showCheckout, isSubscriber, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '../context.jsx';
 
 export default function MessagesView() {
@@ -17,12 +17,15 @@ export default function MessagesView() {
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
+  const [isUserSubscriber, setIsUserSubscriber] = useState(true);
   const upgradeSheetRef = useRef();
 
   useEffect(() => {
     const updateUsage = async () => {
       const usage = await getRemainingUsage('messages');
       setUsageInfo(usage);
+      const subscriber = await isSubscriber();
+      setIsUserSubscriber(subscriber);
     };
     updateUsage();
   }, [messages]);
@@ -32,7 +35,7 @@ export default function MessagesView() {
       // Check usage limit
       const usage = await getRemainingUsage('messages');
       if (!usage.unlimited && usage.remaining <= 0) {
-        upgradeSheetRef.current?.show();
+        showUpgradeSheet();
         return;
       }
 
@@ -68,9 +71,9 @@ export default function MessagesView() {
     <div className="flex flex-col h-screen">
       <Header 
         title="Messages" 
-        buttonTitle={!usageInfo.unlimited ? `${usageInfo.remaining}` : undefined}
-        buttonClass="rounded-full w-10 h-10 flex items-center justify-center text-lg"
-        onButtonTitleClick={() => showCheckout(state.user?.email)}
+        buttonTitle={!isUserSubscriber && !usageInfo.unlimited ? `${usageInfo.remaining}` : undefined}
+        buttonClass={!isUserSubscriber && !usageInfo.unlimited ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
+        onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet() : undefined}
       />
       
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
