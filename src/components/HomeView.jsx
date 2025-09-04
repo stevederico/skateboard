@@ -42,7 +42,7 @@ export default function HomeView() {
       // Check usage limit
       const usage = await getRemainingUsage('todos');
       if (!usage.unlimited && usage.remaining <= 0) {
-        showUpgradeSheet();
+        showUpgradeSheet(upgradeSheetRef);
         return;
       }
 
@@ -130,7 +130,7 @@ export default function HomeView() {
         buttonTitle={!isUserSubscriber ? (!usageInfo.unlimited ? `${usageInfo.remaining}` : "Get Unlimited") : undefined}
         buttonClass={!isUserSubscriber && !usageInfo.unlimited ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
         onButtonTitleClick={!isUserSubscriber ? () => {
-          showUpgradeSheet();
+          showUpgradeSheet(upgradeSheetRef);
         } : undefined}
       />
 

@@ -23,7 +23,7 @@ import { ContextProvider, getState } from './context.jsx';
 import constants from './constants.json';
 
 import HomeView from './components/HomeView.jsx'
-import MessagesView from './components/MessagesView.jsx'
+import ChatView from './components/ChatView.jsx'
 
 
 
@@ -92,7 +92,7 @@ const App = () => {
         <Route path="/app" element={<ProtectedRoute />}>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<HomeView />} />
-          <Route path="messages" element={<MessagesView />} />
+          <Route path="messages" element={<ChatView />} />
           <Route path="settings" element={<SettingsView />} />
           <Route path="stripe" element={<StripeView />} />
         </Route>
