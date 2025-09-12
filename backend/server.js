@@ -3,6 +3,7 @@ import express from "express";
 import Stripe from "stripe";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 
 import { databaseManager } from "./adapters/manager.js";
 import { dirname, resolve } from 'node:path';
@@ -33,26 +34,25 @@ try {
   const configPath = resolve(__dirname, './config.json');
   const configData = await promisify(readFile)(configPath);
   const rawConfig = JSON.parse(configData.toString());
-  
+
   // Resolve environment variables in configuration
   config = {
-    clients: rawConfig.clients,
-    databases: rawConfig.databases.map(entry => ({
-      ...entry,
-      connectionString: resolveEnvironmentVariables(entry.connectionString)
-    }))
+    client: rawConfig.client,
+    database: {
+      ...rawConfig.database,
+      connectionString: resolveEnvironmentVariables(rawConfig.database.connectionString)
+    }
   };
 } catch (err) {
   console.error('Failed to load config:', err);
   config = {
-    clients: ["http://localhost:5173"],
-    databases: [{ 
-      db: "MyApp", 
-      origin: "http://localhost:5173",
+    client: "http://localhost:5173",
+    database: {
+      db: "MyApp",
       dbType: "sqlite",
       connectionString: "./databases/MyApp.db"
-    }]
-  }; 
+    }
+  };
 }
 
 // Environment setup
@@ -70,27 +70,23 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // Validate required environment variables
 function validateEnvironmentVariables() {
   const missing = [];
-  
+
   if (!STRIPE_KEY) missing.push('STRIPE_KEY');
   if (!JWT_SECRET) missing.push('JWT_SECRET');
-  
+
   // Check for database environment variables that are referenced but not defined
-  const referencedEnvVars = new Set();
-  config.databases.forEach(entry => {
-    if (typeof entry.connectionString === 'string') {
-      const matches = entry.connectionString.match(/\$\{([^}]+)\}/g);
-      if (matches) {
-        matches.forEach(match => {
-          const varName = match.slice(2, -1); // Remove ${ and }
-          referencedEnvVars.add(varName);
-          if (!process.env[varName]) {
-            missing.push(`${varName} (referenced in database config for ${entry.origin})`);
-          }
-        });
-      }
+  if (typeof config.database.connectionString === 'string') {
+    const matches = config.database.connectionString.match(/\$\{([^}]+)\}/g);
+    if (matches) {
+      matches.forEach(match => {
+        const varName = match.slice(2, -1); // Remove ${ and }
+        if (!process.env[varName]) {
+          missing.push(`${varName} (referenced in database config)`);
+        }
+      });
     }
-  });
-  
+  }
+
   if (missing.length > 0) {
     console.error("Missing required environment variables:");
     missing.forEach(varName => console.error(`  - ${varName}`));
@@ -104,26 +100,22 @@ function validateEnvironmentVariables() {
 
 validateEnvironmentVariables();
 
-console.log('Multi-database support enabled');
+console.log('Single-client backend initialized');
 
-// ==== DATABASE HELPERS ====
-// Get database configuration based on origin
-const getDBConfig = (origin) => {
-  const configEntry = config.databases.find(entry => entry.origin === origin) || config.databases[0];
-  console.log(`Using database: ${configEntry.db} (${configEntry.dbType}) for origin: ${origin}`);
-  return configEntry;
-};
+// ==== DATABASE CONFIG ====
+// Single database configuration - no origin-based routing needed
+const dbConfig = config.database;
 
 // ==== SERVICES SETUP ====
 // Stripe setup
 const stripe = new Stripe(STRIPE_KEY);
 
-// Current database config cache
-let currentDbConfig = null;
+// Single database config - always use the same one
+const currentDbConfig = dbConfig;
 
 // ==== EXPRESS SETUP ====
 const app = express();
-const allowedOrigins = config.clients;
+const allowedOrigin = config.client;
 
 app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   console.log("Webhook received");
@@ -139,8 +131,8 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
     return res.status(400).send();
   }
 
-  // Use default config for webhooks (first config entry)
-  const webhookConfig = config.databases[0];
+  // Use the single database config for webhooks
+  const webhookConfig = dbConfig;
   const { customer: stripeID, current_period_end, status } = event.data.object;
   const customer = await stripe.customers.retrieve(stripeID);
   const customerEmail = customer.email.toLowerCase();
@@ -178,8 +170,8 @@ app.use((req, res, next) => {
 // CORS middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
+  if (origin === allowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
   }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -187,13 +179,6 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
-  next();
-});
-
-// Database config middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  currentDbConfig = getDBConfig(origin);
   next();
 });
 
@@ -217,17 +202,16 @@ function tokenExpireTimestamp(){
 }
 
 // Remove the encoder and importKey since we'll use JWT_SECRET directly with jsonwebtoken
-async function generateToken(userID, origin) {
+async function generateToken(userID) {
   try {
-    const exp = tokenExpireTimestamp(); 
-    const dbConfig = getDBConfig(origin);
+    const exp = tokenExpireTimestamp();
     const payload = { userID, exp, dbConfig: { db: dbConfig.db, dbType: dbConfig.dbType, connectionString: dbConfig.connectionString } };
 
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) throw new Error("JWT_SECRET not set");
 
     // Use jsonwebtoken with exact same config as djwt
-    return jwt.sign(payload, jwtSecret, { 
+    return jwt.sign(payload, jwtSecret, {
       algorithm: 'HS256',
       header: { alg: "HS256", typ: "JWT" }
     });
@@ -246,15 +230,15 @@ async function authMiddleware(req, res, next) {
 
   try {
     const token = authHeader.split(" ")[1];
-    
+
     // Use jsonwebtoken with exact same config as djwt
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
 
     req.userID = payload.userID;
     req.dbConfig = payload.dbConfig;
 
-    // Override current db config with token's db config
-    currentDbConfig = payload.dbConfig;
+    // No need to override - we always use the same database config
+    // currentDbConfig = payload.dbConfig;
 
     next();
   } catch (error) {
@@ -286,7 +270,8 @@ function generateUUID() {
 app.post("/signup", async (req, res) => {
   try {
     const origin = req.headers.origin;
-    const dbConfig = getDBConfig(origin);
+    // No need to get database config - we always use the same one
+    // const dbConfig = getDBConfig(origin);
 
     var { email, password, name } = req.body;
     email = email?.toLowerCase().trim()
@@ -296,7 +281,7 @@ app.post("/signup", async (req, res) => {
 
     const hash = await hashPassword(password);
     let insertID = generateUUID()
-    
+
     try {
       const result = await databaseManager.insertUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, {
         _id: insertID,
@@ -305,15 +290,15 @@ app.post("/signup", async (req, res) => {
         created_at: Date.now()
       });
 
-      const token = await generateToken(insertID, req.headers.origin);
+      const token = await generateToken(insertID);
       await databaseManager.insertAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email, password: hash, userID: insertID });
-      
-      res.status(201).json({ 
-        id: insertID.toString(), 
-        email: email, 
-        name: name.trim(), 
+
+      res.status(201).json({
+        id: insertID.toString(),
+        email: email,
+        name: name.trim(),
         token: token,
-        tokenExpires: tokenExpireTimestamp() 
+        tokenExpires: tokenExpireTimestamp()
       });
     } catch (e) {
       if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('duplicate key') || e.code === 11000) {
@@ -330,7 +315,8 @@ app.post("/signup", async (req, res) => {
 app.post("/signin", async (req, res) => {
   try {
     const origin = req.headers.origin;
-    const dbConfig = getDBConfig(origin);
+    // No need to get database config - we always use the same one
+    // const dbConfig = getDBConfig(origin);
 
     if (!req.headers["content-type"]?.includes("application/json")) {
       console.log(`[${new Date().toISOString()}] Invalid content type:`, req.headers["content-type"]);
@@ -367,7 +353,7 @@ app.post("/signin", async (req, res) => {
     }
 
     // generate token
-    const token = await generateToken(user._id.toString(), origin);
+    const token = await generateToken(user._id.toString());
 
     res.json({
       id: user._id.toString(),
@@ -457,7 +443,7 @@ app.post("/create-checkout-session", authMiddleware, async (req, res) => {
       return res.status(400).json({ error: `No price found for lookup_key: ${lookup_key}` });
     }
     
-    const origin = req.headers.origin || config.databases[0].origin;
+    const origin = req.headers.origin || config.client;
 
     const session = await stripe.checkout.sessions.create({
       customer_email: email,
@@ -487,7 +473,7 @@ app.post("/create-portal-session", authMiddleware, async (req, res) => {
       return res.status(403).json({ error: "Unauthorized customerID" });
     }
 
-    const origin = req.headers.origin || config.databases[0].origin;
+    const origin = req.headers.origin || config.client;
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerID,
       return_url: `${origin}/app/stripe?portal=return`,

@@ -1,13 +1,8 @@
 {
-  "clients": [
-    "http://localhost:5173"
-  ],
-  "databases": [
-    {
-      "db": "MyApp",
-      "origin": "http://localhost:8000",
-      "dbType": "sqlite",
-      "connectionString": "./databases/MyApp.db"
-    }
-  ]
+  "client": "http://localhost:5173",
+  "database": {
+    "db": "MyApp",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
+  }
 }
