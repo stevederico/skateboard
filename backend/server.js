@@ -197,8 +197,7 @@ const logger = {
 
 // Log server initialization
 logger.info('Server initialization started', { 
-  environment: isDevelopment ? 'development' : 'production',
-  database: currentDbConfig.dbType 
+  environment: isDevelopment ? 'development' : 'production'
 });
 
 // ==== DATABASE CONFIG ====
@@ -740,8 +739,7 @@ const port = parseInt(process.env.PORT || "8000");
 let server = app.listen(port, '::', () => {
   logger.info('Server started successfully', { 
     port, 
-    environment: isDevelopment ? 'development' : 'production',
-    database: currentDbConfig.dbType 
+    environment: isDevelopment ? 'development' : 'production'
   });
 });
 

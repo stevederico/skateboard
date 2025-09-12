@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+0.6.4
+
+  Fix logging initialization
+
 0.6.3
 
   Add rate limiting
