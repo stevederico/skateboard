@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.6.2
+
+  Simplify backend architecture
+  Remove multi-client routing
+  Add noLogin configuration
+
 0.6.1
 
   Update chat navigation route
