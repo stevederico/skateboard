@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+0.6.3
+
+  Add rate limiting
+  Implement security headers
+  Add structured logging
+  Remove JWT database config
+
 0.6.2
 
   Simplify backend architecture

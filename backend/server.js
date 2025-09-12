@@ -11,6 +11,41 @@ import { fileURLToPath } from 'node:url';
 import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { promisify } from 'node:util';
 
+// ==== RATE LIMITING ====
+const rateLimitStore = new Map();
+
+const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
+  return (req, res, next) => {
+    const key = req.ip;
+    const now = Date.now();
+    const windowStart = now - windowMs;
+    
+    if (!rateLimitStore.has(key)) {
+      rateLimitStore.set(key, []);
+    }
+    
+    const requests = rateLimitStore.get(key);
+    // Remove old requests outside the window
+    const validRequests = requests.filter(time => time > windowStart);
+    
+    if (validRequests.length >= maxRequests) {
+      console.error(`RATE LIMIT EXCEEDED: IP ${key} blocked on ${routeName} (${validRequests.length}/${maxRequests} requests in ${windowMs/1000}s window)`);
+      return res.status(429).json({ 
+        error: 'Too many requests, please try again later.',
+        retryAfter: Math.ceil((windowStart + windowMs - now) / 1000)
+      });
+    }
+    
+    validRequests.push(now);
+    rateLimitStore.set(key, validRequests);
+    next();
+  };
+};
+
+// Define limiters
+const authLimiter = rateLimiter(5, 15 * 60 * 1000, 'auth routes'); // 5 requests per 15 minutes
+const globalLimiter = rateLimiter(100, 60 * 60 * 1000, 'global'); // 100 requests per hour
+
 // ==== CONFIG & ENV ====
 // Environment variable resolution function
 function resolveEnvironmentVariables(str) {
@@ -88,27 +123,96 @@ function validateEnvironmentVariables() {
   }
 
   if (missing.length > 0) {
-    console.error("Missing required environment variables:");
-    missing.forEach(varName => console.error(`  - ${varName}`));
-    console.error("\nCommon database environment variables:");
-    console.error("  - DATABASE_URL (general database connection)");
-    console.error("  - MONGODB_URL (MongoDB connection)");
-    console.error("  - POSTGRES_URL (PostgreSQL connection)");
-    process.exit(1);
+    console.warn("⚠️  Missing environment variables (server will continue with limited functionality):");
+    missing.forEach(varName => console.warn(`   - ${varName}`));
+    console.warn("\n💡 For full functionality, set these environment variables:");
+    console.warn("   - DATABASE_URL (general database connection)");
+    console.warn("   - MONGODB_URL (MongoDB connection)");
+    console.warn("   - POSTGRES_URL (PostgreSQL connection)");
+    console.warn("   - STRIPE_KEY (Stripe payments)");
+    console.warn("   - JWT_SECRET (authentication)");
+    console.warn("\n🔄 Server continuing with fallback/default values...\n");
+
+    // Don't exit - let the server continue with warnings
+    return false;
   }
+
+  return true;
 }
 
-validateEnvironmentVariables();
+const envValidationPassed = validateEnvironmentVariables();
+
+if (envValidationPassed) {
+  console.log('✅ Environment variables validated successfully');
+}
 
 console.log('Single-client backend initialized');
+
+// Development mode check
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+// Structured logging system (no external dependencies)
+const logger = {
+  error: (message, meta = {}) => {
+    const logEntry = {
+      level: 'ERROR',
+      timestamp: new Date().toISOString(),
+      message,
+      ...meta
+    };
+    console.error(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
+  },
+  
+  warn: (message, meta = {}) => {
+    const logEntry = {
+      level: 'WARN', 
+      timestamp: new Date().toISOString(),
+      message,
+      ...meta
+    };
+    console.warn(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
+  },
+  
+  info: (message, meta = {}) => {
+    const logEntry = {
+      level: 'INFO',
+      timestamp: new Date().toISOString(), 
+      message,
+      ...meta
+    };
+    console.log(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
+  },
+  
+  debug: (message, meta = {}) => {
+    if (!isDevelopment) return;
+    const logEntry = {
+      level: 'DEBUG',
+      timestamp: new Date().toISOString(),
+      message,
+      ...meta
+    };
+    console.log(JSON.stringify(logEntry, null, 2));
+  }
+};
+
+// Log server initialization
+logger.info('Server initialization started', { 
+  environment: isDevelopment ? 'development' : 'production',
+  database: currentDbConfig.dbType 
+});
 
 // ==== DATABASE CONFIG ====
 // Single database configuration - no origin-based routing needed
 const dbConfig = config.database;
 
 // ==== SERVICES SETUP ====
-// Stripe setup
-const stripe = new Stripe(STRIPE_KEY);
+// Stripe setup (only if key is available)
+let stripe = null;
+if (STRIPE_KEY) {
+  stripe = new Stripe(STRIPE_KEY);
+} else {
+  console.warn('⚠️  STRIPE_KEY not set - Stripe functionality will be disabled');
+}
 
 // Single database config - always use the same one
 const currentDbConfig = dbConfig;
@@ -132,7 +236,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), async (req, res)
   }
 
   // Use the single database config for webhooks
-  const webhookConfig = dbConfig;
+  const webhookConfig = currentDbConfig;
   const { customer: stripeID, current_period_end, status } = event.data.object;
   const customer = await stripe.customers.retrieve(stripeID);
   const customerEmail = customer.email.toLowerCase();
@@ -182,7 +286,74 @@ app.use((req, res, next) => {
   next();
 });
 
+// Security headers middleware (no external dependencies)
+app.use((req, res, next) => {
+  const requestId = Math.random().toString(36).substr(2, 9);
+  
+  logger.debug('Applying security headers', { 
+    path: req.path, 
+    method: req.method,
+    requestId 
+  });
+  
+  // Content Security Policy
+  res.setHeader('Content-Security-Policy', 
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; " +
+    "font-src 'self' data:; " +
+    "connect-src 'self'; " +
+    "frame-ancestors 'none';"
+  );
+  
+  // HTTP Strict Transport Security (only in production)
+  if (!isDevelopment) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    logger.debug('HSTS header applied (production only)', { requestId });
+  }
+  
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Referrer Policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  // Permissions Policy
+  res.setHeader('Permissions-Policy', 
+    'camera=(), microphone=(), geolocation=(), payment=()'
+  );
+  
+  logger.debug('Security headers applied successfully', { requestId });
+  next();
+});
+
+// Apply rate limiting
+app.use('/auth/', authLimiter);
+app.use(globalLimiter);
+
 app.use(express.json());
+
+// Request logging middleware (dev only)
+app.use((req, res, next) => {
+  const start = Date.now();
+  const requestId = Math.random().toString(36).substr(2, 9);
+  
+  if (isDevelopment) {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - ID: ${requestId}`);
+  }
+  
+  res.on('finish', () => {
+    if (isDevelopment) {
+      console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - ${res.statusCode} (${Date.now() - start}ms) - ID: ${requestId}`);
+    }
+  });
+  
+  next();
+});
 
 const tokenExpirationDays = 7;
 
@@ -204,14 +375,17 @@ function tokenExpireTimestamp(){
 // Remove the encoder and importKey since we'll use JWT_SECRET directly with jsonwebtoken
 async function generateToken(userID) {
   try {
-    const exp = tokenExpireTimestamp();
-    const payload = { userID, exp, dbConfig: { db: dbConfig.db, dbType: dbConfig.dbType, connectionString: dbConfig.connectionString } };
+    if (!JWT_SECRET) {
+      throw new Error("JWT_SECRET not configured - authentication disabled");
+    }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) throw new Error("JWT_SECRET not set");
+    const exp = tokenExpireTimestamp();
+    // SECURITY FIX: Remove database config from JWT payload
+    // We don't need it since we always use the same database now
+    const payload = { userID, exp }; // Clean, minimal payload
 
     // Use jsonwebtoken with exact same config as djwt
-    return jwt.sign(payload, jwtSecret, {
+    return jwt.sign(payload, JWT_SECRET, {
       algorithm: 'HS256',
       header: { alg: "HS256", typ: "JWT" }
     });
@@ -222,6 +396,9 @@ async function generateToken(userID) {
 }
 
 async function authMiddleware(req, res, next) {
+  if (!JWT_SECRET) {
+    return res.status(503).json({ error: "Authentication service unavailable" });
+  }
 
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -235,10 +412,9 @@ async function authMiddleware(req, res, next) {
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
 
     req.userID = payload.userID;
-    req.dbConfig = payload.dbConfig;
-
-    // No need to override - we always use the same database config
-    // currentDbConfig = payload.dbConfig;
+    // SECURITY FIX: No longer storing dbConfig in token
+    // We always use the same database config now
+    // req.dbConfig = payload.dbConfig;
 
     next();
   } catch (error) {
@@ -283,7 +459,7 @@ app.post("/signup", async (req, res) => {
     let insertID = generateUUID()
 
     try {
-      const result = await databaseManager.insertUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, {
+      const result = await databaseManager.insertUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, {
         _id: insertID,
         email: email,
         name: name.trim(),
@@ -291,7 +467,7 @@ app.post("/signup", async (req, res) => {
       });
 
       const token = await generateToken(insertID);
-      await databaseManager.insertAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email, password: hash, userID: insertID });
+      await databaseManager.insertAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email, password: hash, userID: insertID });
 
       res.status(201).json({
         id: insertID.toString(),
@@ -333,7 +509,7 @@ app.post("/signin", async (req, res) => {
     console.log(`[${new Date().toISOString()}] Attempting signin for email:`, email);
 
     // Check if auth exists
-    const auth = await databaseManager.findAuth(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email });
+    const auth = await databaseManager.findAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
     if (!auth) {
       console.log(`[${new Date().toISOString()}] Auth record not found for:`, email);
       return res.status(401).json({ error: "Invalid credentials" });
@@ -346,7 +522,7 @@ app.post("/signin", async (req, res) => {
     }
 
     // get user
-    const user = await databaseManager.findUser(dbConfig.dbType, dbConfig.db, dbConfig.connectionString, { email: email });
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
     if (!user) {
       console.error("User not found for auth record:", auth);
       return res.status(404).json({ error: "User not found" });
@@ -485,7 +661,23 @@ app.post("/create-portal-session", authMiddleware, async (req, res) => {
   }
 });
 
-
+// Enhanced error handling
+app.use((err, req, res, next) => {
+  const requestId = Math.random().toString(36).substr(2, 9);
+  
+  logger.error('Unhandled error occurred', {
+    message: err.message,
+    stack: isDevelopment ? err.stack : undefined,
+    path: req.path,
+    method: req.method,
+    requestId
+  });
+  
+  res.status(500).json({
+    error: isDevelopment ? err.message : 'Internal server error',
+    ...(isDevelopment && { stack: err.stack })
+  });
+});
 
 // ==== UTILITY FUNCTIONS ====
 function isProd() {
@@ -546,7 +738,11 @@ const port = parseInt(process.env.PORT || "8000");
 
 //'::' is very important you need it to listen on ipv6!
 let server = app.listen(port, '::', () => {
-  console.log(`🚀 Server is running on http://localhost:${port}`);
+  logger.info('Server started successfully', { 
+    port, 
+    environment: isDevelopment ? 'development' : 'production',
+    database: currentDbConfig.dbType 
+  });
 });
 
 // Handle graceful shutdown on SIGTERM NEED THIS FOR PROXY, it will not work without it
