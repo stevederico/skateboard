@@ -33,7 +33,7 @@
         },
         {
             "title": "Chat",
-            "url": "messages",
+            "url": "chat",
             "icon": "message-circle-more"
         }
     ],

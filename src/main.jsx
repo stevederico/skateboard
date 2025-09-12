@@ -92,7 +92,7 @@ const App = () => {
         <Route path="/app" element={<ProtectedRoute />}>
           <Route index element={<Navigate to="home" replace />} />
           <Route path="home" element={<HomeView />} />
-          <Route path="messages" element={<ChatView />} />
+          <Route path="chat" element={<ChatView />} />
           <Route path="settings" element={<SettingsView />} />
           <Route path="stripe" element={<StripeView />} />
         </Route>

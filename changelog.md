@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+0.6.1
+
+  Update chat navigation route
+
 0.6.0
 
   Rename MessagesView ChatView
