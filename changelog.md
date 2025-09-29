@@ -1,5 +1,8 @@
 ## CHANGELOG
 
+0.6.5
+  mongodb improvements
+
 0.6.4
 
   Fix logging initialization

@@ -120,7 +120,7 @@ Update to `backend/.env`:
 
 ```bash
 # Sqlite remove below
-MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/myapp
+MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/
 POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
 ```
 
@@ -134,7 +134,7 @@ JWT_SECRET=your-secret-key
 **Supported Database Types:**
 - **SQLite** (default): `"dbType": "sqlite"`
 - **PostgreSQL**: `"dbType": "postgresql"` with `"connectionString": "${POSTGRES_URL}"`
-- **MongoDB**: `"dbType": "mongodb"` with `"connectionString": "${MONGODB_URL}"`
+- **MongoDB**: `"dbType": "mongodb"` with `"connectionString": "${MONGODB_URL}"` with `"db": "SkateboardApp"`
 
 <br />
 

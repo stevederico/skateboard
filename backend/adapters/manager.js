@@ -38,9 +38,9 @@ class DatabaseManager {
   async getDatabase(dbType, dbName, connectionString = null) {
     const provider = await this.getProvider(dbType);
     const connectionKey = `${dbType}_${dbName}_${connectionString || 'default'}`;
-    
+
     if (!this.activeConnections.has(connectionKey)) {
-      const database = provider.getDatabase(dbName, connectionString);
+      const database = await provider.getDatabase(dbName, connectionString);
       this.activeConnections.set(connectionKey, { provider, database });
     }
 

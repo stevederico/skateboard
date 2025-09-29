@@ -47,10 +47,19 @@ const authLimiter = rateLimiter(5, 15 * 60 * 1000, 'auth routes'); // 5 requests
 const globalLimiter = rateLimiter(100, 60 * 60 * 1000, 'global'); // 100 requests per hour
 
 // ==== CONFIG & ENV ====
+// Environment setup - MUST happen before config loading
+if (!isProd()) {
+  loadLocalENV();
+} else {
+  setInterval(async () => {
+    console.log(`Hourly Completed at ${new Date().toLocaleTimeString()}`);
+  }, 60 * 60 * 1000); // Every hour
+}
+
 // Environment variable resolution function
 function resolveEnvironmentVariables(str) {
   if (typeof str !== 'string') return str;
-  
+
   return str.replace(/\$\{([^}]+)\}/g, (match, varName) => {
     const envValue = process.env[varName];
     if (envValue === undefined) {
@@ -88,15 +97,6 @@ try {
       connectionString: "./databases/MyApp.db"
     }
   };
-}
-
-// Environment setup
-if (!isProd()) {
-  loadLocalENV();
-} else {
-  setInterval(async () => {
-    console.log(`Hourly Completed at ${new Date().toLocaleTimeString()}`);
-  }, 60 * 60 * 1000); // Every hour
 }
 
 const STRIPE_KEY = process.env.STRIPE_KEY;

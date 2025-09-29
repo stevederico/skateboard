@@ -40,24 +40,24 @@ export class MongoDBProvider {
     // Create collections if they don't exist
     const collections = await db.listCollections().toArray();
     const collectionNames = collections.map(c => c.name);
-    
-    if (!collectionNames.includes('users')) {
-      await db.createCollection('users');
+
+    if (!collectionNames.includes('Users')) {
+      await db.createCollection('Users');
       // Create unique index on email
-      await db.collection('users').createIndex({ email: 1 }, { unique: true });
+      await db.collection('Users').createIndex({ email: 1 }, { unique: true });
     }
-    
-    if (!collectionNames.includes('auths')) {
-      await db.createCollection('auths');
+
+    if (!collectionNames.includes('Auths')) {
+      await db.createCollection('Auths');
       // Create unique index on email
-      await db.collection('auths').createIndex({ email: 1 }, { unique: true });
+      await db.collection('Auths').createIndex({ email: 1 }, { unique: true });
     }
   }
 
   async findUser(db, query, projection = {}) {
     const { _id, email } = query;
     let mongoQuery = {};
-    
+
     if (_id) {
       mongoQuery._id = _id;
     } else if (email) {
@@ -66,29 +66,29 @@ export class MongoDBProvider {
       return null;
     }
 
-    const user = await db.collection('users').findOne(mongoQuery, { projection });
+    const user = await db.collection('Users').findOne(mongoQuery, { projection });
     return user;
   }
 
   async insertUser(db, userData) {
-    const result = await db.collection('users').insertOne(userData);
+    const result = await db.collection('Users').insertOne(userData);
     return { insertedId: result.insertedId };
   }
 
   async updateUser(db, query, update) {
     const { _id } = query;
-    const result = await db.collection('users').updateOne({ _id }, update);
+    const result = await db.collection('Users').updateOne({ _id }, update);
     return { modifiedCount: result.modifiedCount };
   }
 
   async findAuth(db, query) {
     const { email } = query;
-    const auth = await db.collection('auths').findOne({ email });
+    const auth = await db.collection('Auths').findOne({ email });
     return auth;
   }
 
   async insertAuth(db, authData) {
-    const result = await db.collection('auths').insertOne(authData);
+    const result = await db.collection('Auths').insertOne(authData);
     return { insertedId: result.insertedId };
   }
 
