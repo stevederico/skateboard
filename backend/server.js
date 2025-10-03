@@ -14,6 +14,29 @@ import { promisify } from 'node:util';
 // ==== RATE LIMITING ====
 const rateLimitStore = new Map();
 
+// ==== CSRF PROTECTION ====
+const csrfTokenStore = new Map(); // userID -> csrfToken
+
+function generateCSRFToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function csrfProtection(req, res, next) {
+  // Skip CSRF for GET requests and auth routes (signup/signin set the token)
+  if (req.method === 'GET' || req.path === '/signup' || req.path === '/signin') {
+    return next();
+  }
+
+  const csrfToken = req.headers['x-csrf-token'];
+  const userID = req.userID; // Set by authMiddleware
+
+  if (!csrfToken || !userID || csrfTokenStore.get(userID) !== csrfToken) {
+    return res.status(403).json({ error: 'Invalid CSRF token' });
+  }
+
+  next();
+}
+
 const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
   return (req, res, next) => {
     const key = req.ip;
@@ -335,6 +358,10 @@ app.use('/auth/', authLimiter);
 app.use(globalLimiter);
 
 app.use(express.json());
+app.use(express.cookieParser());
+
+// Apply CSRF protection to all routes after auth middleware
+app.use(csrfProtection);
 
 // Request logging middleware (dev only)
 app.use((req, res, next) => {
@@ -399,21 +426,17 @@ async function authMiddleware(req, res, next) {
     return res.status(503).json({ error: "Authentication service unavailable" });
   }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  // Read token from HttpOnly cookie
+  const token = req.cookies.token;
+  if (!token) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const token = authHeader.split(" ")[1];
-
     // Use jsonwebtoken with exact same config as djwt
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
 
     req.userID = payload.userID;
-    // SECURITY FIX: No longer storing dbConfig in token
-    // We always use the same database config now
-    // req.dbConfig = payload.dbConfig;
 
     next();
   } catch (error) {
@@ -468,12 +491,24 @@ app.post("/signup", async (req, res) => {
       const token = await generateToken(insertID);
       await databaseManager.insertAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email, password: hash, userID: insertID });
 
+      // Generate CSRF token
+      const csrfToken = generateCSRFToken();
+      csrfTokenStore.set(insertID.toString(), csrfToken);
+
+      // Set HttpOnly cookie
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: !isDevelopment,
+        sameSite: 'strict',
+        maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
+      });
+
       res.status(201).json({
         id: insertID.toString(),
         email: email,
         name: name.trim(),
-        token: token,
-        tokenExpires: tokenExpireTimestamp()
+        tokenExpires: tokenExpireTimestamp(),
+        csrfToken: csrfToken
       });
     } catch (e) {
       if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('duplicate key') || e.code === 11000) {
@@ -530,6 +565,18 @@ app.post("/signin", async (req, res) => {
     // generate token
     const token = await generateToken(user._id.toString());
 
+    // Generate CSRF token
+    const csrfToken = generateCSRFToken();
+    csrfTokenStore.set(user._id.toString(), csrfToken);
+
+    // Set HttpOnly cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: !isDevelopment,
+      sameSite: 'strict',
+      maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
+    });
+
     res.json({
       id: user._id.toString(),
       email: user.email,
@@ -541,8 +588,8 @@ app.post("/signin", async (req, res) => {
           status: user.subscription.status,
         },
       }),
-      token: token,
-      tokenExpires: tokenExpireTimestamp()
+      tokenExpires: tokenExpireTimestamp(),
+      csrfToken: csrfToken
     });
   } catch (e) {
     console.error("Signin error:", e);
@@ -561,22 +608,30 @@ app.get("/me", authMiddleware, async (req, res) => {
 
 app.put("/me", authMiddleware, async (req, res) => {
   try {
+    // Whitelist of fields users are allowed to update
+    const UPDATEABLE_USER_FIELDS = ['name'];
+
     // Find user first to verify existence
     const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Remove fields that shouldn't be updateable
-    const update = { ...req.body };
-    delete update._id;
-    delete update.email;
-    delete update.created_at;
-    delete update.subscription;
+    // Whitelist approach - only allow specific fields
+    const update = {};
+    for (const [key, value] of Object.entries(req.body)) {
+      if (UPDATEABLE_USER_FIELDS.includes(key)) {
+        update[key] = value;
+      }
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ error: "No valid fields to update" });
+    }
 
     // Update user document
     const result = await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID }, { $set: update });
 
     if (result.modifiedCount === 0) {
-      return res.status(500).json({ error: "No changes made" });
+      return res.status(400).json({ error: "No changes made" });
     }
 
     // Return updated user
@@ -743,32 +798,29 @@ let server = app.listen(port, '::', () => {
   });
 });
 
-// Handle graceful shutdown on SIGTERM NEED THIS FOR PROXY, it will not work without it
+// Handle graceful shutdown on SIGTERM and SIGINT - NEED THIS FOR PROXY
 if (typeof process !== 'undefined') {
-  process.on('SIGTERM', () => {
-    console.log('SIGTERM received. Closing server gracefully...');
-    server.close(() => {
-      console.log('Server closed');
-      process.exit(0);
-    });
-  });
+  const gracefulShutdown = async (signal) => {
+    console.log(`${signal} received. Shutting down gracefully...`);
 
-  // Optional: Handle SIGINT for Ctrl+C NEED THIS FOR PROXY, it will not work without it
-  process.on('SIGINT', () => {
-    console.log('SIGINT received. Shutting down gracefully...');
-    server.close(() => {
+    // Close HTTP server first
+    server.close(async () => {
       console.log('Server closed');
+
+      // Close all database connections
+      await databaseManager.closeAll();
+      console.log('Database connections closed');
+
       process.exit(0);
     });
-  });
+
+    // Force exit after 10 seconds if graceful shutdown hangs
+    setTimeout(() => {
+      console.error('Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
-
-// Handle shutdown gracefully
-process.on("SIGINT", async () => {
-  console.log("Shutting down...");
-  
-  // Close all database connections
-  await databaseManager.closeAll();
-  
-  process.exit();
-});

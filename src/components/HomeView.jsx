@@ -4,13 +4,21 @@ import { useEffect, useState, useRef } from "react";
 import { getBackendURL, getCookie, timestampToString, isSubscriber, showCheckout, getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { Trash2, Check } from 'lucide-react';
 import { getState } from '../context.jsx';
+import constants from '../constants.json';
 
 export default function HomeView() {
   const { state } = getState();
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
   const [isUserSubscriber, setIsUserSubscriber] = useState(true);
+
+  // Get app-specific localStorage key
+  const getTodosKey = () => {
+    const appName = constants.appName || 'skateboard';
+    return `${appName.toLowerCase().replace(/\s+/g, '-')}_todos_v2`;
+  };
+
   const [todos, setTodos] = useState(() => {
-    const savedTodos = localStorage.getItem('todos_v2');
+    const savedTodos = localStorage.getItem(getTodosKey());
     return savedTodos ? JSON.parse(savedTodos) : [
       { id: 1, text: 'Complete the weekly report', completed: false, createdAt: new Date() },
       { id: 2, text: 'Call the client about the project update', completed: false, createdAt: new Date() },
@@ -24,7 +32,7 @@ export default function HomeView() {
 
   // Save todos to localStorage whenever todos change
   useEffect(() => {
-    localStorage.setItem('todos_v2', JSON.stringify(todos));
+    localStorage.setItem(getTodosKey(), JSON.stringify(todos));
   }, [todos]);
 
   useEffect(() => {

@@ -53,7 +53,9 @@ function reducer(state, action) {
   try {
     const storageKey = getStorageKey();
     const cookieName = getCookieName();
-    
+    const appName = constants.appName || 'skateboard';
+    const csrfKey = `${appName.toLowerCase().replace(/\s+/g, '-')}_csrf`;
+
     switch (action.type) {
       case 'SET_USER':
         console.log("SET_USER: ", action.payload);
@@ -61,9 +63,10 @@ function reducer(state, action) {
         return { ...state, user: action.payload };
       case 'CLEAR_USER':
         localStorage.removeItem(storageKey);
+        localStorage.removeItem(csrfKey); // Clear CSRF token
         clearCookie(cookieName);
-        
-        
+
+
         return { ...state, user: null };
       default:
         return state;

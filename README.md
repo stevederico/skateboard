@@ -120,8 +120,8 @@ Update to `backend/.env`:
 
 ```bash
 # Sqlite remove below
-MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/
-POSTGRES_URL=postgresql://user:pass@hostname:5432/myapp
+MONGODB_URL=mongodb+srv://user:pass@example-cluster.example.net/
+POSTGRES_URL=postgresql://user:pass@example-hostname:5432/myapp
 ```
 
 **Auth Variables** - Update to `backend/.env`:

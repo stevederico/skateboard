@@ -1,5 +1,14 @@
 ## CHANGELOG
 
+0.7.0
+
+  Add HttpOnly cookie authentication
+  Implement CSRF token protection
+  Add SQL injection prevention
+  Fix duplicate shutdown handlers
+  Update dependencies latest versions
+  Add localStorage app namespacing
+
 0.6.5
   mongodb improvements
 

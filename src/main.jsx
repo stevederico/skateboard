@@ -37,18 +37,12 @@ function isAuthenticated() {
   if (constants.noLogin === true) {
     return true;
   }
-  // Otherwise check for valid auth token with app-specific cookie name
-  try {
-    const appName = constants.appName || 'skateboard';
-    const cookieName = `${appName.toLowerCase().replace(/\s+/g, '-')}_token`;
-    const token = document.cookie
-      .split('; ')
-      .find(row => row.startsWith(`${cookieName}=`))
-      ?.split('=')[1];
-    return Boolean(token);
-  } catch (e) {
-    return false;
-  }
+  // HttpOnly cookies can't be read by JavaScript
+  // Server validates auth via cookie, so assume authenticated if CSRF token exists
+  const appName = constants.appName || 'skateboard';
+  const csrfKey = `${appName.toLowerCase().replace(/\s+/g, '-')}_csrf`;
+  const csrfToken = localStorage.getItem(csrfKey);
+  return Boolean(csrfToken);
 }
 
 const App = () => {
