@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+0.7.7
+
+  Add package-lock.json gitignore
+
 0.7.6
 
   Fix cookie authentication
