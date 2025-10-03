@@ -36,3 +36,4 @@ deno.lock
 *.db
 *.db-shm
 *.db-wal
+ISSUES.md
