@@ -794,20 +794,6 @@ app.put("/me", authMiddleware, csrfProtection, validateUserUpdate, async (req, r
   }
 });
 
-app.get("/isSubscriber", authMiddleware, async (req, res) => {
-  const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
-  if (!user) return res.status(404).json({ error: "User not found" });
-
-  const isSubscriber = user.subscription?.stripeID && user.subscription?.status === "active" && (!user.subscription?.expires || user.subscription.expires > Math.floor(Date.now() / 1000));
-  res.json({
-    isSubscriber,
-    subscription: {
-      status: user.subscription?.status || null,
-      expiresAt: user.subscription?.expires ? new Date(user.subscription.expires * 1000).toISOString() : null
-    }
-  });
-});
-
 // ==== STRIPE ROUTES ====
 app.post("/create-checkout-session", authMiddleware, csrfProtection, async (req, res) => {
   try {

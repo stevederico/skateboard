@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.8.1
+
+  Update getRemainingUsage localStorage check
+  Update showUpgradeSheet localStorage check
+  Remove isSubscriber API calls
+
 0.8.0
 
   Remove hardcoded subscriber status
