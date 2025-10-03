@@ -32,7 +32,9 @@ export class SQLiteProvider {
         created_at INTEGER NOT NULL,
         subscription_stripeID TEXT,
         subscription_expires INTEGER,
-        subscription_status TEXT
+        subscription_status TEXT,
+        usage_count INTEGER DEFAULT 0,
+        usage_reset_at INTEGER
       )
     `);
 
@@ -84,15 +86,27 @@ export class SQLiteProvider {
     }
 
     const result = db.prepare(sql).get(...params);
-    if (result && result.subscription_stripeID) {
-      result.subscription = {
-        stripeID: result.subscription_stripeID,
-        expires: result.subscription_expires,
-        status: result.subscription_status
-      };
-      delete result.subscription_stripeID;
-      delete result.subscription_expires;
-      delete result.subscription_status;
+    if (result) {
+      // Transform subscription fields
+      if (result.subscription_stripeID) {
+        result.subscription = {
+          stripeID: result.subscription_stripeID,
+          expires: result.subscription_expires,
+          status: result.subscription_status
+        };
+        delete result.subscription_stripeID;
+        delete result.subscription_expires;
+        delete result.subscription_status;
+      }
+      // Transform usage fields
+      if (result.usage_count !== undefined) {
+        result.usage = {
+          count: result.usage_count || 0,
+          reset_at: result.usage_reset_at || null
+        };
+        delete result.usage_count;
+        delete result.usage_reset_at;
+      }
     }
     return result;
   }
@@ -109,7 +123,7 @@ export class SQLiteProvider {
     const updateData = update.$set;
 
     // Whitelist of allowed fields to prevent SQL injection
-    const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeID', 'subscription_expires', 'subscription_status'];
+    const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeID', 'subscription_expires', 'subscription_status', 'usage_count', 'usage_reset_at'];
 
     if (updateData.subscription) {
       const { stripeID, expires, status } = updateData.subscription;
@@ -119,6 +133,14 @@ export class SQLiteProvider {
         subscription_status = ?
         WHERE _id = ?`;
       const result = db.prepare(sql).run(stripeID, expires, status, _id);
+      return { modifiedCount: result.changes };
+    } else if (updateData.usage) {
+      const { count, reset_at } = updateData.usage;
+      const sql = `UPDATE Users SET
+        usage_count = ?,
+        usage_reset_at = ?
+        WHERE _id = ?`;
+      const result = db.prepare(sql).run(count, reset_at, _id);
       return { modifiedCount: result.changes };
     } else {
       // Handle other updates with field validation

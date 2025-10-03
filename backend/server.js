@@ -794,6 +794,79 @@ app.put("/me", authMiddleware, csrfProtection, validateUserUpdate, async (req, r
   }
 });
 
+// ==== USAGE TRACKING ====
+app.post("/usage", authMiddleware, async (req, res) => {
+  try {
+    const { operation } = req.body; // "check" or "track"
+
+    if (!operation || !['check', 'track'].includes(operation)) {
+      return res.status(400).json({ error: "Invalid operation. Must be 'check' or 'track'" });
+    }
+
+    // Get user
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Check if user is a subscriber - subscribers get unlimited
+    const isSubscriber = user.subscription?.status === 'active' &&
+      (!user.subscription?.expires || user.subscription.expires > Math.floor(Date.now() / 1000));
+
+    if (isSubscriber) {
+      return res.json({ remaining: -1, total: -1, unlimited: true });
+    }
+
+    // Get usage limit from environment
+    const limit = parseInt(process.env.FREE_USAGE_LIMIT || '20');
+    const now = Math.floor(Date.now() / 1000);
+
+    // Initialize usage if not set
+    let usage = user.usage || { count: 0, reset_at: null };
+
+    // Check if we need to reset (30 days = 2592000 seconds)
+    if (!usage.reset_at || now > usage.reset_at) {
+      usage = {
+        count: 0,
+        reset_at: now + (30 * 24 * 60 * 60) // 30 days from now
+      };
+      await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
+        { _id: req.userID },
+        { $set: { usage } }
+      );
+    }
+
+    if (operation === 'track') {
+      // Check if at limit
+      if (usage.count >= limit) {
+        return res.status(429).json({
+          error: "Usage limit reached",
+          remaining: 0,
+          total: limit,
+          unlimited: false
+        });
+      }
+
+      // Increment count
+      usage.count += 1;
+      await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
+        { _id: req.userID },
+        { $set: { usage } }
+      );
+    }
+
+    // Return usage info
+    return res.json({
+      remaining: Math.max(0, limit - usage.count),
+      total: limit,
+      unlimited: false,
+      used: usage.count
+    });
+
+  } catch (error) {
+    console.error('Usage tracking error:', error);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ==== STRIPE ROUTES ====
 app.post("/create-checkout-session", authMiddleware, csrfProtection, async (req, res) => {
   try {

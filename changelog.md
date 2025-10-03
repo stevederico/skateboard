@@ -1,5 +1,15 @@
 ## CHANGELOG
 
+0.9.0
+
+  Add backend usage tracking
+  Add FREE_USAGE_LIMIT environment variable
+  Add usage fields database schema
+  Add POST /usage endpoint
+  Update getRemainingUsage backend call
+  Update trackUsage backend call
+  Add 30-day usage reset
+
 0.8.1
 
   Update getRemainingUsage localStorage check
