@@ -1,5 +1,6 @@
 // ==== IMPORTS ====
 import express from "express";
+import cookieParser from "cookie-parser";
 import Stripe from "stripe";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
@@ -348,6 +349,7 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin === allowedOrigin) {
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-csrf-token");
@@ -408,7 +410,7 @@ app.use('/auth/', authLimiter);
 app.use(globalLimiter);
 
 app.use(express.json({ limit: '10kb' }));
-app.use(express.cookieParser());
+app.use(cookieParser());
 
 // CSRF protection will be applied per-route after authMiddleware
 // Not globally, to avoid chicken-egg problem with req.userID
@@ -476,7 +478,7 @@ async function authMiddleware(req, res, next) {
     return res.status(503).json({ error: "Authentication service unavailable" });
   }
 
-  // Read token from HttpOnly cookie
+  // Read token from HttpOnly cookie (use simple 'token' name)
   const token = req.cookies.token;
   if (!token) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -625,8 +627,9 @@ app.post("/signup", validateSignup, async (req, res) => {
       // Set HttpOnly cookie
       res.cookie('token', token, {
         httpOnly: true,
-        secure: !isDevelopment,
-        sameSite: 'strict',
+        secure: false,
+        sameSite: 'lax',
+        path: '/',
         maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
       });
 
@@ -693,8 +696,9 @@ app.post("/signin", validateSignin, async (req, res) => {
     // Set HttpOnly cookie
     res.cookie('token', token, {
       httpOnly: true,
-      secure: !isDevelopment,
-      sameSite: 'strict',
+      secure: false,
+      sameSite: 'lax',
+      path: '/',
       maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
     });
 
@@ -730,8 +734,9 @@ app.post("/signout", authMiddleware, async (req, res) => {
     // Clear the HttpOnly cookie
     res.cookie('token', '', {
       httpOnly: true,
-      secure: !isDevelopment,
-      sameSite: 'strict',
+      secure: false,
+      sameSite: 'lax',
+      path: '/',
       expires: new Date(0) // Expire immediately
     });
 
