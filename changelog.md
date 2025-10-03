@@ -1,5 +1,16 @@
 ## CHANGELOG
 
+0.7.8
+
+  Update SignIn button styling
+  Update SignUp button styling
+  Add gradient button effects
+  Add dark mode support
+  Fix dark mode flash
+  Add input autofocus
+  Update input backgrounds
+  Fix body background color
+
 0.7.7
 
   Add package-lock.json gitignore

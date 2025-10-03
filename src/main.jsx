@@ -51,11 +51,6 @@ const App = () => {
   const { state, dispatch } = getState();
 
   useEffect(() => {
-    const html = document.documentElement;
-    if (!location.pathname.toLowerCase().includes('app')) {
-      document.body.classList.remove('dark');
-      html.classList.remove('dark');
-    }
     document.title = constants.appName;
     const appStart = async () => {
       if (!location.pathname.toLowerCase().includes('app')) {

@@ -21,7 +21,20 @@
     <meta name="twitter:title" content="{{APP_NAME}}">
     <meta name="twitter:description" content="{{TAGLINE}}">
     <meta name="twitter:image" content="/icons/icon.png">
-    
+
+    <!-- Prevent dark mode flash -->
+    <script>
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const isDark = savedTheme ? savedTheme === 'dark' : systemPrefersDark;
+
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+
     <script defer type="module" src="/src/main.jsx"></script>
   </head>
   <body style="height: 100%; overscroll-behavior: none;">
