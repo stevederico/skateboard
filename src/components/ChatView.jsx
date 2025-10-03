@@ -17,10 +17,9 @@ export default function ChatView() {
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
-  const isUserSubscriber = true; // Assume subscriber for now
+  const isUserSubscriber = state.user?.subscription?.status === 'active' &&
+    (!state.user?.subscription?.expires || state.user?.subscription?.expires > Math.floor(Date.now() / 1000))
   const upgradeSheetRef = useRef();
-
-  // Subscriber status is now fetched once in main.jsx and stored in context
 
   // Update usage info when messages change
   useEffect(() => {

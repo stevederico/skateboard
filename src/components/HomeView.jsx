@@ -9,7 +9,8 @@ import constants from '../constants.json';
 export default function HomeView() {
   const { state } = getState();
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
-  const isUserSubscriber = true; // Assume subscriber for now
+  const isUserSubscriber = state.user?.subscription?.status === 'active' &&
+    (!state.user?.subscription?.expires || state.user?.subscription?.expires > Math.floor(Date.now() / 1000))
 
   // Get app-specific localStorage key
   const getTodosKey = () => {

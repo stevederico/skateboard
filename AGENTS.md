@@ -59,35 +59,21 @@ The application uses a database factory pattern supporting three database types:
 **Configuration** (`backend/config.json`):
 ```json
 {
-  "clients": [
-    "http://localhost:5173"
-  ],
-  "databases": [
-    {
-      "db": "MyApp",
-      "origin": "http://localhost:8000",
-      "dbType": "sqlite",
-      "connectionString": "./databases/MyApp.db"
-    },
-    {
-      "db": "MyApp",
-      "origin": "https://myapp.com",
-      "dbType": "mongodb",
-      "connectionString": "${MONGODB_URL}"
-    },
-    {
-      "db": "MyApp",
-      "origin": "https://staging.myapp.com",
-      "dbType": "postgresql",
-      "connectionString": "${POSTGRES_URL}"
-    }
-  ]
+  "client": "http://localhost:5173",
+  "database": {
+    "db": "MyApp",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
+  }
 }
 ```
 
 **Configuration Structure:**
-- **`clients`** - Frontend origins allowed for CORS requests
-- **`databases`** - Backend server database configurations by origin
+- **`client`** - Frontend origin allowed for CORS requests
+- **`database`** - Single database configuration
+  - **`db`** - Database name
+  - **`dbType`** - Database type: `sqlite`, `postgresql`, or `mongodb`
+  - **`connectionString`** - Connection path/URL (supports `${VAR_NAME}` for env variables)
 
 **Environment Variable Support:**
 Connection strings support `${VAR_NAME}` syntax for production deployments.
@@ -108,16 +94,19 @@ Standard variables: `DATABASE_URL`, `MONGODB_URL`, `POSTGRES_URL`
 - User state management with reducer pattern
 - Automatic session persistence
 
-### Authentication & Multi-Tenancy
-**Origin-Based Isolation:**
-- Database selection by request origin header
-- JWT tokens include database configuration
-- App-specific auth storage keys prevent cross-contamination
+### Authentication & Security
+**Authentication System:**
+- JWT tokens in HttpOnly cookies
+- CSRF token protection for state-changing operations
+- App-specific auth storage keys based on app name from constants.json
 
 **Security Features:**
-- Bcrypt with 14 salt rounds
-- JWT with proper expiration handling
+- Bcrypt password hashing with 10 salt rounds
+- JWT with 30-day expiration
+- CSRF token store with 24-hour expiry
+- Rate limiting (10 req/15min for auth, 300 req/15min global)
 - CORS validation and origin checking
+- Security headers (CSP, HSTS, X-Frame-Options, etc.)
 - Graceful shutdown handling for containers
 
 ### Build System Integration
@@ -154,10 +143,14 @@ Backend requires `.env` file with:
 
 ### App Customization Workflow
 1. Update `src/constants.json` for branding and features
-2. Modify `backend/config.json` for database configuration  
-3. Set environment variables in `backend/.env` for production databases
+2. Modify `backend/config.json` for client origin and database settings
+3. Set environment variables in `backend/.env`:
+   - `JWT_SECRET` - Required for authentication
+   - `STRIPE_KEY` - Required for payments
+   - `STRIPE_ENDPOINT_SECRET` - Required for webhooks
+   - Database URLs (if using environment variables in connectionString)
 4. Run `npm run start` - Vite plugins auto-generate SEO assets
-5. Legal content uses placeholder replacement system
+5. Legal content uses placeholder replacement system (`_COMPANY_`, `_EMAIL_`, `_WEBSITE_`)
 
 ## Database Migration Notes
 When switching database types, ensure proper schema translation:

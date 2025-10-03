@@ -1,5 +1,16 @@
 ## CHANGELOG
 
+0.8.0
+
+  Remove hardcoded subscriber status
+  Use state subscription data
+  Update CLAUDE.md database config
+
+0.7.9
+
+  Remove currentUser cache
+  Remove isSubscriber cache
+
 0.7.8
 
   Update SignIn button styling
