@@ -55,7 +55,8 @@ Everything you need to ship a production-ready app:
 - **Protected routes** with automatic redirects
 - **User context** management across your app
 - **Session persistence** with secure cookies
-- **App-specific auth isolation** 
+- **App-specific auth isolation**
+- **Usage tracking** with configurable limits for free users 
 
 ### 💳 **Stripe Integration**
 - **Checkout flows** ready to go
@@ -102,17 +103,12 @@ Update `src/constants.json` to customize your app:
 
 ```json
 {
-  "clients": [
-    "http://localhost:5173"
-  ],
-  "databases": [
-    {
-      "db": "MyApp",
-      "origin": "http://localhost:8000",
-      "dbType": "sqlite",
-      "connectionString": "./databases/MyApp.db"
-    }
-  ]
+  "client": "http://localhost:5173",
+  "database": {
+    "db": "MyApp",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
+  }
 }
 ```
 
@@ -129,6 +125,7 @@ enter a unique random string below
 
 ```bash
 JWT_SECRET=your-secret-key
+FREE_USAGE_LIMIT=20  # Optional: Monthly usage limit for free users (default: 20)
 ```
 
 **Supported Database Types:**

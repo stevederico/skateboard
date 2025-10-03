@@ -1,5 +1,15 @@
 ## CHANGELOG
 
+0.9.1
+
+  Change unlimited to isSubscriber
+  Add subscription data usage response
+  Update trackUsage return full data
+  Simplify component usage checks
+  Update CLAUDE.md usage documentation
+  Update README.md usage documentation
+  Fix backend config structure
+
 0.9.0
 
   Add backend usage tracking

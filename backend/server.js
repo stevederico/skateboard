@@ -812,7 +812,15 @@ app.post("/usage", authMiddleware, async (req, res) => {
       (!user.subscription?.expires || user.subscription.expires > Math.floor(Date.now() / 1000));
 
     if (isSubscriber) {
-      return res.json({ remaining: -1, total: -1, unlimited: true });
+      return res.json({
+        remaining: -1,
+        total: -1,
+        isSubscriber: true,
+        subscription: {
+          status: user.subscription.status,
+          expiresAt: user.subscription.expires ? new Date(user.subscription.expires * 1000).toISOString() : null
+        }
+      });
     }
 
     // Get usage limit from environment
@@ -841,7 +849,7 @@ app.post("/usage", authMiddleware, async (req, res) => {
           error: "Usage limit reached",
           remaining: 0,
           total: limit,
-          unlimited: false
+          isSubscriber: false
         });
       }
 
@@ -853,12 +861,16 @@ app.post("/usage", authMiddleware, async (req, res) => {
       );
     }
 
-    // Return usage info
+    // Return usage info (with subscription details for free users too)
     return res.json({
       remaining: Math.max(0, limit - usage.count),
       total: limit,
-      unlimited: false,
-      used: usage.count
+      isSubscriber: false,
+      used: usage.count,
+      subscription: user.subscription ? {
+        status: user.subscription.status,
+        expiresAt: user.subscription.expires ? new Date(user.subscription.expires * 1000).toISOString() : null
+      } : null
     });
 
   } catch (error) {

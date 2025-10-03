@@ -16,9 +16,8 @@ export default function ChatView() {
 
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
-  const isUserSubscriber = state.user?.subscription?.status === 'active' &&
-    (!state.user?.subscription?.expires || state.user?.subscription?.expires > Math.floor(Date.now() / 1000))
+  const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
+  const isUserSubscriber = usageInfo.isSubscriber
   const upgradeSheetRef = useRef();
 
   // Update usage info when messages change
@@ -37,9 +36,8 @@ export default function ChatView() {
 
   const handleSend = async () => {
     if (newMessage.trim()) {
-      // Check usage limit
-      const usage = await getRemainingUsage('messages');
-      if (!usage.unlimited && usage.remaining <= 0) {
+      // Check usage limit from current state
+      if (!usageInfo.isSubscriber && usageInfo.remaining <= 0) {
         showUpgradeSheet(upgradeSheetRef);
         return;
       }
@@ -50,13 +48,14 @@ export default function ChatView() {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isMe: true
       };
-      
+
       setMessages(prev => [...prev, userMessage]);
       setNewMessage("");
       setIsTyping(true);
-      
-      // Track usage
-      trackUsage('messages');
+
+      // Track usage and update state with response
+      const updatedUsage = await trackUsage('messages');
+      setUsageInfo(updatedUsage);
       
       // Auto-response after 200ms
       setTimeout(() => {
@@ -74,10 +73,10 @@ export default function ChatView() {
 
   return (
     <div className="flex flex-col h-screen">
-      <Header 
-        title="Chat" 
-        buttonTitle={!isUserSubscriber && !usageInfo.unlimited ? `${usageInfo.remaining}` : undefined}
-        buttonClass={!isUserSubscriber && !usageInfo.unlimited ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
+      <Header
+        title="Chat"
+        buttonTitle={!isUserSubscriber && usageInfo.remaining >= 0 ? `${usageInfo.remaining}` : undefined}
+        buttonClass={!isUserSubscriber && usageInfo.remaining >= 0 ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
         onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet(upgradeSheetRef) : undefined}
       />
       

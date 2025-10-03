@@ -8,9 +8,8 @@ import constants from '../constants.json';
 
 export default function HomeView() {
   const { state } = getState();
-  const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
-  const isUserSubscriber = state.user?.subscription?.status === 'active' &&
-    (!state.user?.subscription?.expires || state.user?.subscription?.expires > Math.floor(Date.now() / 1000))
+  const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
+  const isUserSubscriber = usageInfo.isSubscriber
 
   // Get app-specific localStorage key
   const getTodosKey = () => {
@@ -54,9 +53,8 @@ export default function HomeView() {
 
   const addTodo = async () => {
     if (newTodo.trim()) {
-      // Check usage limit
-      const usage = await getRemainingUsage('todos');
-      if (!usage.unlimited && usage.remaining <= 0) {
+      // Check usage limit from current state
+      if (!usageInfo.isSubscriber && usageInfo.remaining <= 0) {
         showUpgradeSheet(upgradeSheetRef);
         return;
       }
@@ -69,9 +67,10 @@ export default function HomeView() {
       };
       setTodos([todo, ...todos]);
       setNewTodo('');
-      
-      // Track usage
-      trackUsage('todos');
+
+      // Track usage and update state with response
+      const updatedUsage = await trackUsage('todos');
+      setUsageInfo(updatedUsage);
     }
   };
 
@@ -142,8 +141,8 @@ export default function HomeView() {
     <>
       <Header
         title="Home"
-        buttonTitle={!isUserSubscriber ? (!usageInfo.unlimited ? `${usageInfo.remaining}` : "Get Unlimited") : undefined}
-        buttonClass={!isUserSubscriber && !usageInfo.unlimited ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
+        buttonTitle={!isUserSubscriber ? (usageInfo.remaining >= 0 ? `${usageInfo.remaining}` : "Get Unlimited") : undefined}
+        buttonClass={!isUserSubscriber && usageInfo.remaining >= 0 ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
         onButtonTitleClick={!isUserSubscriber ? () => {
           showUpgradeSheet(upgradeSheetRef);
         } : undefined}
