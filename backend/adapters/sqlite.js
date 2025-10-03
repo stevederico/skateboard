@@ -107,25 +107,28 @@ export class SQLiteProvider {
   async updateUser(db, query, update) {
     const { _id } = query;
     const updateData = update.$set;
-    
+
+    // Whitelist of allowed fields to prevent SQL injection
+    const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeID', 'subscription_expires', 'subscription_status'];
+
     if (updateData.subscription) {
       const { stripeID, expires, status } = updateData.subscription;
-      const sql = `UPDATE Users SET 
-        subscription_stripeID = ?, 
-        subscription_expires = ?, 
-        subscription_status = ? 
+      const sql = `UPDATE Users SET
+        subscription_stripeID = ?,
+        subscription_expires = ?,
+        subscription_status = ?
         WHERE _id = ?`;
       const result = db.prepare(sql).run(stripeID, expires, status, _id);
       return { modifiedCount: result.changes };
     } else {
-      // Handle other updates
-      const fields = Object.keys(updateData);
+      // Handle other updates with field validation
+      const fields = Object.keys(updateData).filter(field => ALLOWED_FIELDS.includes(field));
       if (fields.length === 0) return { modifiedCount: 0 };
-      
+
       const setClause = fields.map(field => `${field} = ?`).join(', ');
       const values = fields.map(field => updateData[field]);
       values.push(_id);
-      
+
       const sql = `UPDATE Users SET ${setClause} WHERE _id = ?`;
       const result = db.prepare(sql).run(...values);
       return { modifiedCount: result.changes };

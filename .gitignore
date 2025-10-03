@@ -20,6 +20,7 @@ deno.lock
 .env.development.local
 .env.test.local
 .env.production.local
+backend/.env
 
 # Editor directories and files
 .vscode/*
@@ -36,4 +37,4 @@ deno.lock
 *.db
 *.db-shm
 *.db-wal
-ISSUES.md
+

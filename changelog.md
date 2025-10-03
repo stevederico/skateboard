@@ -1,5 +1,15 @@
 ## CHANGELOG
 
+0.7.5
+
+  Fix SQL injection vulnerability
+  Fix CSRF middleware ordering
+  Add CSRF token expiration
+  Add XSS input sanitization
+  Add rate limit cleanup
+  Add signout endpoint
+  Update dependencies
+
 0.7.4
 
   Add comprehensive security logging

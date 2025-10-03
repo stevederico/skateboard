@@ -117,27 +117,30 @@ export class PostgreSQLProvider {
   async updateUser(pool, query, update) {
     const { _id } = query;
     const updateData = update.$set;
-    
+
+    // Whitelist of allowed fields to prevent SQL injection
+    const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeid', 'subscription_expires', 'subscription_status'];
+
     const client = await pool.connect();
     try {
       if (updateData.subscription) {
         const { stripeID, expires, status } = updateData.subscription;
-        const sql = `UPDATE users SET 
-          subscription_stripeid = $1, 
-          subscription_expires = $2, 
-          subscription_status = $3 
+        const sql = `UPDATE users SET
+          subscription_stripeid = $1,
+          subscription_expires = $2,
+          subscription_status = $3
           WHERE _id = $4`;
         const result = await client.query(sql, [stripeID, expires, status, _id]);
         return { modifiedCount: result.rowCount };
       } else {
-        // Handle other updates
-        const fields = Object.keys(updateData);
+        // Handle other updates with field validation
+        const fields = Object.keys(updateData).filter(field => ALLOWED_FIELDS.includes(field));
         if (fields.length === 0) return { modifiedCount: 0 };
-        
+
         const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
         const values = fields.map(field => updateData[field]);
         values.push(_id);
-        
+
         const sql = `UPDATE users SET ${setClause} WHERE _id = $${values.length}`;
         const result = await client.query(sql, values);
         return { modifiedCount: result.rowCount };

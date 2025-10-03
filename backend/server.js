@@ -15,7 +15,8 @@ import { promisify } from 'node:util';
 const rateLimitStore = new Map();
 
 // ==== CSRF PROTECTION ====
-const csrfTokenStore = new Map(); // userID -> csrfToken
+const csrfTokenStore = new Map(); // userID -> { token, timestamp }
+const CSRF_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 function generateCSRFToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -30,8 +31,19 @@ function csrfProtection(req, res, next) {
   const csrfToken = req.headers['x-csrf-token'];
   const userID = req.userID; // Set by authMiddleware
 
-  if (!csrfToken || !userID || csrfTokenStore.get(userID) !== csrfToken) {
+  if (!csrfToken || !userID) {
     return res.status(403).json({ error: 'Invalid CSRF token' });
+  }
+
+  const storedData = csrfTokenStore.get(userID);
+  if (!storedData || storedData.token !== csrfToken) {
+    return res.status(403).json({ error: 'Invalid CSRF token' });
+  }
+
+  // Check if token is expired
+  if (Date.now() - storedData.timestamp > CSRF_TOKEN_EXPIRY) {
+    csrfTokenStore.delete(userID);
+    return res.status(403).json({ error: 'CSRF token expired' });
   }
 
   next();
@@ -68,6 +80,44 @@ const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
 // Define limiters
 const authLimiter = rateLimiter(10, 15 * 60 * 1000, 'auth routes'); // 10 requests per 15 minutes
 const globalLimiter = rateLimiter(300, 15 * 60 * 1000, 'global'); // 300 requests per 15 minutes
+
+// Cleanup old rate limit entries every hour to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  const maxWindow = 15 * 60 * 1000; // 15 minutes (largest window)
+  let cleaned = 0;
+
+  for (const [ip, requests] of rateLimitStore.entries()) {
+    const validRequests = requests.filter(time => time > now - maxWindow);
+    if (validRequests.length === 0) {
+      rateLimitStore.delete(ip);
+      cleaned++;
+    } else {
+      rateLimitStore.set(ip, validRequests);
+    }
+  }
+
+  if (cleaned > 0) {
+    console.log(`[${new Date().toISOString()}] Rate limit cleanup: removed ${cleaned} inactive IPs`);
+  }
+}, 60 * 60 * 1000); // Run every hour
+
+// Cleanup expired CSRF tokens every hour to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+
+  for (const [userID, data] of csrfTokenStore.entries()) {
+    if (now - data.timestamp > CSRF_TOKEN_EXPIRY) {
+      csrfTokenStore.delete(userID);
+      cleaned++;
+    }
+  }
+
+  if (cleaned > 0) {
+    console.log(`[${new Date().toISOString()}] CSRF cleanup: removed ${cleaned} expired tokens`);
+  }
+}, 60 * 60 * 1000); // Run every hour
 
 // ==== CONFIG & ENV ====
 // Environment setup - MUST happen before config loading
@@ -300,7 +350,7 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
   }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-csrf-token");
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
@@ -360,8 +410,8 @@ app.use(globalLimiter);
 app.use(express.json({ limit: '10kb' }));
 app.use(express.cookieParser());
 
-// Apply CSRF protection to all routes after auth middleware
-app.use(csrfProtection);
+// CSRF protection will be applied per-route after authMiddleware
+// Not globally, to avoid chicken-egg problem with req.userID
 
 // Request logging middleware (dev only)
 app.use((req, res, next) => {
@@ -468,7 +518,20 @@ function generateUUID() {
   return crypto.randomUUID();
 }
 
-// ==== VALIDATION MIDDLEWARE ====
+// ==== VALIDATION & SANITIZATION ====
+const escapeHtml = (text) => {
+  if (typeof text !== 'string') return text;
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '/': '&#x2F;',
+  };
+  return text.replace(/[&<>"'/]/g, (char) => map[char]);
+};
+
 const validateEmail = (email) => {
   if (!email || typeof email !== 'string') return false;
   if (email.length > 254) return false; // RFC 5321
@@ -539,6 +602,7 @@ app.post("/signup", validateSignup, async (req, res) => {
 
     var { email, password, name } = req.body;
     email = email.toLowerCase().trim();
+    name = escapeHtml(name.trim());
 
     const hash = await hashPassword(password);
     let insertID = generateUUID()
@@ -547,7 +611,7 @@ app.post("/signup", validateSignup, async (req, res) => {
       const result = await databaseManager.insertUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, {
         _id: insertID,
         email: email,
-        name: name.trim(),
+        name: name,
         created_at: Date.now()
       });
 
@@ -556,7 +620,7 @@ app.post("/signup", validateSignup, async (req, res) => {
 
       // Generate CSRF token
       const csrfToken = generateCSRFToken();
-      csrfTokenStore.set(insertID.toString(), csrfToken);
+      csrfTokenStore.set(insertID.toString(), { token: csrfToken, timestamp: Date.now() });
 
       // Set HttpOnly cookie
       res.cookie('token', token, {
@@ -624,7 +688,7 @@ app.post("/signin", validateSignin, async (req, res) => {
 
     // Generate CSRF token
     const csrfToken = generateCSRFToken();
-    csrfTokenStore.set(user._id.toString(), csrfToken);
+    csrfTokenStore.set(user._id.toString(), { token: csrfToken, timestamp: Date.now() });
 
     // Set HttpOnly cookie
     res.cookie('token', token, {
@@ -656,6 +720,28 @@ app.post("/signin", validateSignin, async (req, res) => {
   }
 });
 
+app.post("/signout", authMiddleware, async (req, res) => {
+  try {
+    const userID = req.userID;
+
+    // Clear CSRF token from store
+    csrfTokenStore.delete(userID);
+
+    // Clear the HttpOnly cookie
+    res.cookie('token', '', {
+      httpOnly: true,
+      secure: !isDevelopment,
+      sameSite: 'strict',
+      expires: new Date(0) // Expire immediately
+    });
+
+    console.log(`[${new Date().toISOString()}] Signout success for userID: ${userID}`);
+    res.json({ message: "Signed out successfully" });
+  } catch (e) {
+    console.error(`[${new Date().toISOString()}] Signout error:`, e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // ==== USER DATA ROUTES ====
 app.get("/me", authMiddleware, async (req, res) => {
@@ -665,7 +751,7 @@ app.get("/me", authMiddleware, async (req, res) => {
   return res.json(user);
 });
 
-app.put("/me", authMiddleware, validateUserUpdate, async (req, res) => {
+app.put("/me", authMiddleware, csrfProtection, validateUserUpdate, async (req, res) => {
   try {
     // Whitelist of fields users are allowed to update
     const UPDATEABLE_USER_FIELDS = ['name'];
@@ -678,7 +764,8 @@ app.put("/me", authMiddleware, validateUserUpdate, async (req, res) => {
     const update = {};
     for (const [key, value] of Object.entries(req.body)) {
       if (UPDATEABLE_USER_FIELDS.includes(key)) {
-        update[key] = value;
+        // Sanitize string values to prevent XSS
+        update[key] = typeof value === 'string' ? escapeHtml(value.trim()) : value;
       }
     }
 
@@ -717,7 +804,7 @@ app.get("/isSubscriber", authMiddleware, async (req, res) => {
 });
 
 // ==== STRIPE ROUTES ====
-app.post("/create-checkout-session", authMiddleware, async (req, res) => {
+app.post("/create-checkout-session", authMiddleware, csrfProtection, async (req, res) => {
   try {
     const { email, lookup_key } = req.body;
     if (!email || !lookup_key) return res.status(400).json({ error: "Missing email or lookup_key" });
@@ -751,7 +838,7 @@ app.post("/create-checkout-session", authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/create-portal-session", authMiddleware, async (req, res) => {
+app.post("/create-portal-session", authMiddleware, csrfProtection, async (req, res) => {
   try {
     const { customerID } = req.body;
     if (!customerID) return res.status(400).json({ error: "Missing customerID" });
