@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.7.2
+
+  Extend token expiration 30 days
+  Improve JWT error handling
+  Reduce bcrypt rounds performance
+
 0.7.1
 
   Improve rate limiting configuration

@@ -381,11 +381,11 @@ app.use((req, res, next) => {
   next();
 });
 
-const tokenExpirationDays = 7;
+const tokenExpirationDays = 30;
 
 // ==== BCRYPT HELPERS ====
 async function hashPassword(password) {
-  const salt = await bcrypt.genSalt(14);
+  const salt = await bcrypt.genSalt(10);
   return await bcrypt.hash(password, salt);
 }
 
@@ -440,6 +440,10 @@ async function authMiddleware(req, res, next) {
 
     next();
   } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      console.error("Token expired:", error.message);
+      return res.status(401).json({ error: "Token expired" });
+    }
     console.error("Token verification error:", error);
     return res.status(401).json({ error: "Invalid token" });
   }
