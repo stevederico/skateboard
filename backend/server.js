@@ -66,8 +66,8 @@ const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
 };
 
 // Define limiters
-const authLimiter = rateLimiter(5, 15 * 60 * 1000, 'auth routes'); // 5 requests per 15 minutes
-const globalLimiter = rateLimiter(100, 60 * 60 * 1000, 'global'); // 100 requests per hour
+const authLimiter = rateLimiter(10, 15 * 60 * 1000, 'auth routes'); // 10 requests per 15 minutes
+const globalLimiter = rateLimiter(300, 15 * 60 * 1000, 'global'); // 300 requests per 15 minutes
 
 // ==== CONFIG & ENV ====
 // Environment setup - MUST happen before config loading
@@ -464,18 +464,77 @@ function generateUUID() {
   return crypto.randomUUID();
 }
 
+// ==== VALIDATION MIDDLEWARE ====
+const validateEmail = (email) => {
+  if (!email || typeof email !== 'string') return false;
+  if (email.length > 254) return false; // RFC 5321
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const validatePassword = (password) => {
+  if (!password || typeof password !== 'string') return false;
+  if (password.length < 6 || password.length > 72) return false; // bcrypt limit
+  return true;
+};
+
+const validateName = (name) => {
+  if (!name || typeof name !== 'string') return false;
+  if (name.trim().length === 0 || name.length > 100) return false;
+  return true;
+};
+
+const validateSignup = (req, res, next) => {
+  const { email, password, name } = req.body;
+
+  if (!validateEmail(email)) {
+    return res.status(400).json({ error: 'Invalid email format or length' });
+  }
+
+  if (!validatePassword(password)) {
+    return res.status(400).json({ error: 'Password must be 6-72 characters' });
+  }
+
+  if (!validateName(name)) {
+    return res.status(400).json({ error: 'Name required (max 100 characters)' });
+  }
+
+  next();
+};
+
+const validateSignin = (req, res, next) => {
+  const { email, password } = req.body;
+
+  if (!validateEmail(email)) {
+    return res.status(400).json({ error: 'Invalid credentials' });
+  }
+
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Invalid credentials' });
+  }
+
+  next();
+};
+
+const validateUserUpdate = (req, res, next) => {
+  const { name } = req.body;
+
+  // Only validate if name is being updated
+  if (name !== undefined && !validateName(name)) {
+    return res.status(400).json({ error: 'Name must be 1-100 characters' });
+  }
+
+  next();
+};
+
 // ==== AUTH ROUTES ====
-app.post("/signup", async (req, res) => {
+app.post("/signup", validateSignup, async (req, res) => {
   try {
     const origin = req.headers.origin;
     // No need to get database config - we always use the same one
     // const dbConfig = getDBConfig(origin);
 
     var { email, password, name } = req.body;
-    email = email?.toLowerCase().trim()
-    if (!email || !password?.trim() || !name?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: "Invalid input" });
-    }
+    email = email.toLowerCase().trim();
 
     const hash = await hashPassword(password);
     let insertID = generateUUID()
@@ -522,23 +581,13 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-app.post("/signin", async (req, res) => {
+app.post("/signin", validateSignin, async (req, res) => {
   try {
     const origin = req.headers.origin;
     // No need to get database config - we always use the same one
     // const dbConfig = getDBConfig(origin);
 
-    if (!req.headers["content-type"]?.includes("application/json")) {
-      console.log(`[${new Date().toISOString()}] Invalid content type:`, req.headers["content-type"]);
-      return res.status(400).json({ error: "Invalid content type" });
-    }
-
     var { email, password } = req.body;
-    if (!email || !password) {
-      console.log(`[${new Date().toISOString()}] Missing credentials`);
-      return res.status(400).json({ error: "Missing credentials" });
-    }
-
     email = email.toLowerCase().trim();
     console.log(`[${new Date().toISOString()}] Attempting signin for email:`, email);
 
@@ -606,7 +655,7 @@ app.get("/me", authMiddleware, async (req, res) => {
   return res.json(user);
 });
 
-app.put("/me", authMiddleware, async (req, res) => {
+app.put("/me", authMiddleware, validateUserUpdate, async (req, res) => {
   try {
     // Whitelist of fields users are allowed to update
     const UPDATEABLE_USER_FIELDS = ['name'];

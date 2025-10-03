@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+0.7.1
+
+  Improve rate limiting configuration
+  Add input validation middleware
+  Enforce password length requirements
+  Add email format validation
+
 0.7.0
 
   Add HttpOnly cookie authentication
