@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+0.7.4
+
+  Add comprehensive security logging
+  Add timestamps to logs
+
 0.7.3
 
   Add request size limits

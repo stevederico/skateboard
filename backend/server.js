@@ -52,8 +52,8 @@ const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
     const validRequests = requests.filter(time => time > windowStart);
     
     if (validRequests.length >= maxRequests) {
-      console.error(`RATE LIMIT EXCEEDED: IP ${key} blocked on ${routeName} (${validRequests.length}/${maxRequests} requests in ${windowMs/1000}s window)`);
-      return res.status(429).json({ 
+      console.error(`[${new Date().toISOString()}] RATE LIMIT EXCEEDED: IP ${key} blocked on ${routeName} (${validRequests.length}/${maxRequests} requests in ${windowMs/1000}s window)`);
+      return res.status(429).json({
         error: 'Too many requests, please try again later.',
         retryAfter: Math.ceil((windowStart + windowMs - now) / 1000)
       });
@@ -441,10 +441,10 @@ async function authMiddleware(req, res, next) {
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      console.error("Token expired:", error.message);
+      console.error(`[${new Date().toISOString()}] Token expired:`, error.message);
       return res.status(401).json({ error: "Token expired" });
     }
-    console.error("Token verification error:", error);
+    console.error(`[${new Date().toISOString()}] Token verification error:`, error);
     return res.status(401).json({ error: "Invalid token" });
   }
 }
@@ -566,6 +566,8 @@ app.post("/signup", validateSignup, async (req, res) => {
         maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
       });
 
+      console.log(`[${new Date().toISOString()}] Signup success for email: ${email}, userID: ${insertID}`);
+
       res.status(201).json({
         id: insertID.toString(),
         email: email,
@@ -576,12 +578,13 @@ app.post("/signup", validateSignup, async (req, res) => {
     } catch (e) {
       if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('duplicate key') || e.code === 11000) {
         // Generic message to prevent user enumeration
+        console.log(`[${new Date().toISOString()}] Signup failed for email: ${email} - duplicate account`);
         return res.status(400).json({ error: "Unable to create account with provided credentials" });
       }
       throw e;
     }
   } catch (e) {
-    console.error("Signup error:", e.message);
+    console.error(`[${new Date().toISOString()}] Signup error:`, e.message);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -631,6 +634,8 @@ app.post("/signin", validateSignin, async (req, res) => {
       maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
     });
 
+    console.log(`[${new Date().toISOString()}] Signin success for email: ${user.email}, userID: ${user._id}`);
+
     res.json({
       id: user._id.toString(),
       email: user.email,
@@ -646,7 +651,7 @@ app.post("/signin", validateSignin, async (req, res) => {
       csrfToken: csrfToken
     });
   } catch (e) {
-    console.error("Signin error:", e);
+    console.error(`[${new Date().toISOString()}] Signin error:`, e);
     res.status(500).json({ error: "Server error" });
   }
 });
