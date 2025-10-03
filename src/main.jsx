@@ -8,7 +8,7 @@ import {
   useNavigate,
   useLocation,
 } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import './assets/styles.css';
 import Layout from '@stevederico/skateboard-ui/Layout';
 import LandingView from '@stevederico/skateboard-ui/LandingView';
@@ -49,14 +49,26 @@ const App = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { state, dispatch } = getState();
+  const fetchingRef = useRef(false);
 
   useEffect(() => {
     document.title = constants.appName;
-    const appStart = async () => {
-      if (!location.pathname.toLowerCase().includes('app')) {
-        return;
-      }
+  }, []);
 
+  useEffect(() => {
+    const isAppRoute = location.pathname.toLowerCase().includes('app');
+
+    // Only fetch when entering app routes, not on every pathname change within app
+    if (!isAppRoute) return;
+
+    // Skip if we already have user data
+    if (state.user && Object.keys(state.user).length > 0) return;
+
+    // Skip if already fetching
+    if (fetchingRef.current) return;
+
+    const appStart = async () => {
+      fetchingRef.current = true;
       // Always try to fetch user data regardless of noLogin // The server will allow the request through if noLogin is enabled on its side
       try {
         const data = await getCurrentUser();
@@ -68,11 +80,13 @@ const App = () => {
         if (!constants.noLogin) {
           navigate('/signin');
         }
+      } finally {
+        fetchingRef.current = false;
       }
     };
 
     appStart();
-  }, [location.pathname, navigate, dispatch]);
+  }, [location.pathname]);
 
   return (
     <Routes>

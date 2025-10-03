@@ -47,7 +47,9 @@ const getInitialUser = () => {
   }
 };
 
-const initialState = { user: getInitialUser()};
+const initialState = {
+  user: getInitialUser()
+};
 
 function reducer(state, action) {
   try {
@@ -65,7 +67,6 @@ function reducer(state, action) {
         localStorage.removeItem(storageKey);
         localStorage.removeItem(csrfKey); // Clear CSRF token
         clearCookie(cookieName);
-
 
         return { ...state, user: null };
       default:

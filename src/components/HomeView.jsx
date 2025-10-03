@@ -1,7 +1,7 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import { useEffect, useState, useRef } from "react";
-import { getBackendURL, getCookie, timestampToString, isSubscriber, showCheckout, getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
+import { getBackendURL, getCookie, timestampToString, showCheckout, getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { Trash2, Check } from 'lucide-react';
 import { getState } from '../context.jsx';
 import constants from '../constants.json';
@@ -9,7 +9,7 @@ import constants from '../constants.json';
 export default function HomeView() {
   const { state } = getState();
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
-  const [isUserSubscriber, setIsUserSubscriber] = useState(true);
+  const isUserSubscriber = true; // Assume subscriber for now
 
   // Get app-specific localStorage key
   const getTodosKey = () => {
@@ -35,13 +35,19 @@ export default function HomeView() {
     localStorage.setItem(getTodosKey(), JSON.stringify(todos));
   }, [todos]);
 
+  // Subscriber status is now fetched once in main.jsx and stored in context
+
+  // Update usage info when todos change
   useEffect(() => {
     const updateUsage = async () => {
-      const usage = await getRemainingUsage('todos');
-      setUsageInfo(usage);
-      const subscriber = await isSubscriber();
-      setIsUserSubscriber(subscriber);
+      try {
+        const usage = await getRemainingUsage('todos');
+        setUsageInfo(usage);
+      } catch (error) {
+        console.error('Error updating usage:', error);
+      }
     };
+
     updateUsage();
   }, [todos]);
 

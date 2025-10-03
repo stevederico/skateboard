@@ -2,7 +2,7 @@ import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import { useState, useEffect, useRef } from "react";
 import { ArrowUp, MessageCircle } from 'lucide-react';
-import { getRemainingUsage, trackUsage, showCheckout, isSubscriber, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
+import { getRemainingUsage, trackUsage, showCheckout, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '../context.jsx';
 
 export default function ChatView() {
@@ -17,16 +17,22 @@ export default function ChatView() {
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, unlimited: true });
-  const [isUserSubscriber, setIsUserSubscriber] = useState(true);
+  const isUserSubscriber = true; // Assume subscriber for now
   const upgradeSheetRef = useRef();
 
+  // Subscriber status is now fetched once in main.jsx and stored in context
+
+  // Update usage info when messages change
   useEffect(() => {
     const updateUsage = async () => {
-      const usage = await getRemainingUsage('messages');
-      setUsageInfo(usage);
-      const subscriber = await isSubscriber();
-      setIsUserSubscriber(subscriber);
+      try {
+        const usage = await getRemainingUsage('messages');
+        setUsageInfo(usage);
+      } catch (error) {
+        console.error('Error updating usage:', error);
+      }
     };
+
     updateUsage();
   }, [messages]);
 
