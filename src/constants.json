@@ -24,8 +24,8 @@
             }
         ]
     },
-    "backendURL": "/api",
-    "devBackendURL": "/api",
+    "backendURL": "http://localhost:8000",
+    "devBackendURL": "http://localhost:8000",
     "pages": [
         {
             "title": "Home",

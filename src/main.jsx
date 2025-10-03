@@ -15,7 +15,7 @@ import LandingView from '@stevederico/skateboard-ui/LandingView';
 import TextView from '@stevederico/skateboard-ui/TextView';
 import SignUpView from '@stevederico/skateboard-ui/SignUpView';
 import SignInView from '@stevederico/skateboard-ui/SignInView';
-import StripeView from '@stevederico/skateboard-ui/StripeView';
+import PaymentView from '@stevederico/skateboard-ui/PaymentView';
 import SettingsView from '@stevederico/skateboard-ui/SettingsView';
 import NotFound from '@stevederico/skateboard-ui/NotFound';
 import { getCurrentUser } from '@stevederico/skateboard-ui/Utilities';
@@ -97,7 +97,7 @@ const App = () => {
           <Route path="home" element={<HomeView />} />
           <Route path="chat" element={<ChatView />} />
           <Route path="settings" element={<SettingsView />} />
-          <Route path="stripe" element={<StripeView />} />
+          <Route path="payment" element={<PaymentView />} />
         </Route>
       </Route>
       <Route path="/" element={<LandingView />} />

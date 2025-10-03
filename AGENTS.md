@@ -161,9 +161,13 @@ Backend requires `.env` file with:
   - `operation: "track"` - Increment usage and get updated stats
   - Returns: `{ remaining, total, isSubscriber, used, subscription }`
 
-**Database Schema:**
-- `usage_count` - Total actions taken in current period
-- `usage_reset_at` - Timestamp when usage resets (30-day rolling window)
+**Database Schema (SQLite/PostgreSQL):**
+- `usage_count` - Total actions taken in current period (flat field)
+- `usage_reset_at` - Timestamp when usage resets (flat field)
+
+**API Response Format:**
+- Nested object: `usage: { count: 5, reset_at: 1733097600 }`
+- Database adapters transform flat fields to nested object
 
 **Frontend Integration:**
 - `getRemainingUsage()` - Calls `POST /usage` with `operation: "check"`

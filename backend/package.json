@@ -7,7 +7,7 @@
         "node": ">=22.5.0"
     },
     "scripts": {
-        "start": "node --experimental-sqlite --watch server.js"
+        "start": "node --experimental-sqlite server.js"
     },
     "dependencies": {
         "bcrypt": "^6.0.0",

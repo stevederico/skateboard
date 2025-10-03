@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+0.9.2
+
+  Remove Vite proxy
+  Fix direct backend requests
+  Remove backend watch flag
+  Update backend URLs
+
 0.9.1
 
   Change unlimited to isSubscriber

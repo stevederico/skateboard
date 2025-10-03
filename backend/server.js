@@ -294,8 +294,8 @@ const currentDbConfig = dbConfig;
 const app = express();
 const allowedOrigin = config.client;
 
-app.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
-  console.log("Webhook received");
+app.post("/payment", express.raw({ type: "application/json" }), async (req, res) => {
+  console.log("Payment webhook received");
 
   const signature = req.headers["stripe-signature"];
   let event;
@@ -879,8 +879,8 @@ app.post("/usage", authMiddleware, async (req, res) => {
   }
 });
 
-// ==== STRIPE ROUTES ====
-app.post("/create-checkout-session", authMiddleware, csrfProtection, async (req, res) => {
+// ==== PAYMENT ROUTES ====
+app.post("/checkout", authMiddleware, csrfProtection, async (req, res) => {
   try {
     const { email, lookup_key } = req.body;
     if (!email || !lookup_key) return res.status(400).json({ error: "Missing email or lookup_key" });
@@ -903,8 +903,8 @@ app.post("/create-checkout-session", authMiddleware, csrfProtection, async (req,
       payment_method_types: ["card"],
       line_items: [{ price: prices.data[0].id, quantity: 1 }],
       billing_address_collection: "auto",
-      success_url: `${origin}/app/stripe?success=true`,
-      cancel_url: `${origin}/app/stripe?canceled=true`,
+      success_url: `${origin}/app/payment?success=true`,
+      cancel_url: `${origin}/app/payment?canceled=true`,
       subscription_data: { metadata: { email } },
     });
     res.json({ url: session.url, id: session.id, customerID: session.customer });
@@ -914,7 +914,7 @@ app.post("/create-checkout-session", authMiddleware, csrfProtection, async (req,
   }
 });
 
-app.post("/create-portal-session", authMiddleware, csrfProtection, async (req, res) => {
+app.post("/portal", authMiddleware, csrfProtection, async (req, res) => {
   try {
     const { customerID } = req.body;
     if (!customerID) return res.status(400).json({ error: "Missing customerID" });
@@ -928,7 +928,7 @@ app.post("/create-portal-session", authMiddleware, csrfProtection, async (req, r
     const origin = req.headers.origin || config.client;
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerID,
-      return_url: `${origin}/app/stripe?portal=return`,
+      return_url: `${origin}/app/payment?portal=return`,
     });
     res.json({ url: portalSession.url, id: portalSession.id });
   } catch (e) {

@@ -159,7 +159,7 @@ To enable payments, configure your Stripe products:
 3. **Setup Webhook**
    - Go to **stripe.com** → **Developers** (lower left) → **Webhooks**
    - Click **Add Endpoint**
-   - Add your endpoint URL: `https://yourdomain.com/webhook`
+   - Add your endpoint URL: `https://yourdomain.com/payment`
    - Select these events:
      - `customer.subscription.created` - Customer signed up for new plan
      - `customer.subscription.deleted` - Customer's subscription ends  
