@@ -357,7 +357,7 @@ app.use((req, res, next) => {
 app.use('/auth/', authLimiter);
 app.use(globalLimiter);
 
-app.use(express.json());
+app.use(express.json({ limit: '10kb' }));
 app.use(express.cookieParser());
 
 // Apply CSRF protection to all routes after auth middleware
@@ -575,7 +575,8 @@ app.post("/signup", validateSignup, async (req, res) => {
       });
     } catch (e) {
       if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('duplicate key') || e.code === 11000) {
-        return res.status(409).json({ error: "Email exists" });
+        // Generic message to prevent user enumeration
+        return res.status(400).json({ error: "Unable to create account with provided credentials" });
       }
       throw e;
     }

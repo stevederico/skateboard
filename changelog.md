@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+0.7.3
+
+  Add request size limits
+  Fix user enumeration vulnerability
+
 0.7.2
 
   Extend token expiration 30 days
