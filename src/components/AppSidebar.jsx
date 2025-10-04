@@ -52,8 +52,8 @@ export default function AppSidebar({ ...props }) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="/app">
-                <div className="flex aspect-square size-5 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+              <a href="/app" className="cursor-pointer">
+                <div className="flex aspect-square size-6 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
                   <DynamicIcon
                     name={constants.appIcon}
                     size={14}
@@ -118,16 +118,16 @@ export default function AppSidebar({ ...props }) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/app/settings')}>
+                <DropdownMenuItem onClick={() => navigate('/app/settings')} className="cursor-pointer">
                   <Settings className="mr-2 h-4 w-4" />
                   Settings
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/app/payment')}>
+                <DropdownMenuItem onClick={() => navigate('/app/payment')} className="cursor-pointer">
                   <User className="mr-2 h-4 w-4" />
                   Account
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/signin')}>
+                <DropdownMenuItem onClick={() => navigate('/signin')} className="cursor-pointer">
                   <LogOut className="mr-2 h-4 w-4" />
                   Log out
                 </DropdownMenuItem>

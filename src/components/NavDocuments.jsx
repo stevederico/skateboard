@@ -16,7 +16,7 @@ export default function NavDocuments({ items }) {
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>
             <SidebarMenuButton asChild>
-              <a href={item.url}>
+              <a href={item.url} className="cursor-pointer">
                 <DynamicIcon name={item.icon} size={18} strokeWidth={1.5} />
                 <span>{item.name}</span>
               </a>
@@ -24,7 +24,7 @@ export default function NavDocuments({ items }) {
           </SidebarMenuItem>
         ))}
         <SidebarMenuItem>
-          <SidebarMenuButton className="text-sidebar-foreground/70">
+          <SidebarMenuButton className="cursor-pointer text-sidebar-foreground/70">
             <MoreHorizontal className="text-sidebar-foreground/70" size={18} />
             <span>More</span>
           </SidebarMenuButton>

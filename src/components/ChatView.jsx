@@ -75,66 +75,76 @@ export default function ChatView() {
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <Header
-        title="Chat"
-        buttonTitle={!isUserSubscriber && usageInfo.remaining >= 0 ? `${usageInfo.remaining}` : undefined}
-        buttonClass={!isUserSubscriber && usageInfo.remaining >= 0 ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
-        onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet(upgradeSheetRef) : undefined}
-      />
-      
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {messages.map(msg => (
-          <div key={msg.id} className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
-            <Card className={`max-w-sm p-3 ${
-              msg.isMe
-                ? 'bg-primary text-primary-foreground'
-                : ''
-            }`}>
-              <p className="text-sm">{msg.text}</p>
-            </Card>
-            <p className="text-xs opacity-60 mt-1">{msg.time}</p>
-          </div>
-        ))}
-        
-        {isTyping && (
-          <div className="flex flex-col items-start">
-            <Card className="max-w-sm p-3">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              </div>
-            </Card>
-          </div>
-        )}
-      </div>
+    <div className="@container/main flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
+        <div className="flex-1 px-4 lg:px-6 overflow-y-auto">
+          {!isUserSubscriber && usageInfo.remaining >= 0 && (
+            <div className="flex justify-end mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="cursor-pointer rounded-full"
+                onClick={() => showUpgradeSheet(upgradeSheetRef)}
+              >
+                {usageInfo.remaining} remaining
+              </Button>
+            </div>
+          )}
 
-      <div className="p-6 pb-20 md:pb-6 border-t bg-background">
-        <div className="flex gap-2">
-          <Input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Message..."
-            className="flex-1 rounded-full"
-          />
-          <Button
-            onClick={handleSend}
-            size="icon"
-            className={`h-12 w-12 rounded-full ${
-              newMessage.trim()
-                ? ''
-                : 'bg-accent text-foreground hover:bg-accent/80'
-            }`}
-          >
-            <ArrowUp size={20} />
-          </Button>
+          <div className="flex flex-col space-y-6 min-h-[500px]">
+            {messages.map(msg => (
+              <div key={msg.id} className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
+                <Card className={`max-w-sm p-3 ${
+                  msg.isMe
+                    ? 'bg-primary text-primary-foreground'
+                    : ''
+                }`}>
+                  <p className="text-sm">{msg.text}</p>
+                </Card>
+                <p className="text-xs opacity-60 mt-1">{msg.time}</p>
+              </div>
+            ))}
+
+            {isTyping && (
+              <div className="flex flex-col items-start">
+                <Card className="max-w-sm p-3">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                </Card>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-background px-4 lg:px-6 pb-4">
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Message..."
+              className="flex-1 rounded-full"
+            />
+            <Button
+              onClick={handleSend}
+              size="icon"
+              className={`cursor-pointer h-12 w-12 rounded-full ${
+                newMessage.trim()
+                  ? ''
+                  : 'bg-accent text-foreground hover:bg-accent/80'
+              }`}
+            >
+              <ArrowUp size={20} />
+            </Button>
+          </div>
         </div>
       </div>
-      
-      <UpgradeSheet 
+
+      <UpgradeSheet
         ref={upgradeSheetRef}
         userEmail={state.user?.email}
       />

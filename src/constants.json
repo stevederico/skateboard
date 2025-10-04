@@ -28,9 +28,9 @@
     "devBackendURL": "http://localhost:8000",
     "pages": [
         {
-            "title": "Home",
-            "url": "home",
-            "icon": "house"
+            "title": "Dashboard",
+            "url": "dashboard",
+            "icon": "layout-dashboard"
         },
         {
             "title": "Chat",

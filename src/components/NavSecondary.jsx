@@ -15,7 +15,7 @@ export default function NavSecondary({ items, ...props }) {
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild>
-                <a href={item.url}>
+                <a href={item.url} className="cursor-pointer">
                   <DynamicIcon name={item.icon} size={18} strokeWidth={1.5} />
                   <span>{item.title}</span>
                 </a>

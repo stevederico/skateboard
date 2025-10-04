@@ -21,14 +21,14 @@ export default function NavMain({ items }) {
           <SidebarMenuItem className="flex items-center gap-2">
             <SidebarMenuButton
               tooltip="Quick Create"
-              className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground active:bg-sidebar-primary/90 active:text-sidebar-primary-foreground min-w-8 duration-200 ease-linear"
+              className="cursor-pointer bg-black text-white hover:bg-black/90 hover:text-white active:bg-black/90 active:text-white dark:bg-white dark:text-black dark:hover:bg-white/90 dark:hover:text-black dark:active:bg-white/90 dark:active:text-black min-w-8 duration-200 ease-linear"
             >
-              <CirclePlus className="fill-current" />
+              <CirclePlus className="fill-white dark:fill-black" />
               <span>Quick Create</span>
             </SidebarMenuButton>
             <Button
               size="icon"
-              className="size-8 group-data-[collapsible=icon]:opacity-0"
+              className="cursor-pointer size-8 group-data-[collapsible=icon]:opacity-0 border-sidebar-border"
               variant="outline"
             >
               <Mail />
@@ -45,6 +45,7 @@ export default function NavMain({ items }) {
                   tooltip={item.title}
                   onClick={() => navigate(item.url)}
                   isActive={isActive}
+                  className="cursor-pointer"
                 >
                   <DynamicIcon name={item.icon} size={18} strokeWidth={1.5} />
                   <span>{item.title}</span>

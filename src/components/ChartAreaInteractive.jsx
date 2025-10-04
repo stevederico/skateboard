@@ -164,24 +164,24 @@ export default function ChartAreaInteractive() {
                 <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
                   <stop
                     offset="5%"
-                    stopColor="#ffffff"
+                    stopColor="var(--color-chart-1)"
                     stopOpacity={0.8}
                   />
                   <stop
                     offset="95%"
-                    stopColor="#ffffff"
+                    stopColor="var(--color-chart-1)"
                     stopOpacity={0.1}
                   />
                 </linearGradient>
                 <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
                   <stop
                     offset="5%"
-                    stopColor="#ffffff"
+                    stopColor="var(--color-chart-2)"
                     stopOpacity={0.5}
                   />
                   <stop
                     offset="95%"
-                    stopColor="#ffffff"
+                    stopColor="var(--color-chart-2)"
                     stopOpacity={0.05}
                   />
                 </linearGradient>
@@ -220,7 +220,7 @@ export default function ChartAreaInteractive() {
                 dataKey="mobile"
                 type="natural"
                 fill="url(#fillMobile)"
-                stroke="#ffffff"
+                stroke="var(--color-chart-2)"
                 strokeWidth={1.5}
                 stackId="a"
               />
@@ -228,7 +228,7 @@ export default function ChartAreaInteractive() {
                 dataKey="desktop"
                 type="natural"
                 fill="url(#fillDesktop)"
-                stroke="#ffffff"
+                stroke="var(--color-chart-1)"
                 strokeWidth={1.5}
                 stackId="a"
               />

@@ -23,7 +23,7 @@ import { getCurrentUser } from '@stevederico/skateboard-ui/Utilities';
 import { ContextProvider, getState } from './context.jsx';
 import constants from './constants.json';
 
-import HomeView from './components/HomeView.jsx';
+import DashboardView from './components/DashboardView.jsx';
 import ChatView from './components/ChatView.jsx';
 import AppSidebar from './components/AppSidebar.jsx';
 import SiteHeader from './components/SiteHeader.jsx';
@@ -96,8 +96,8 @@ const App = () => {
       <Route element={<DashboardLayout />}>
         <Route path="/console" element={<Navigate to="/app" replace />} />
         <Route path="/app" element={<ProtectedRoute />}>
-          <Route index element={<Navigate to="home" replace />} />
-          <Route path="home" element={<HomeView />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardView />} />
           <Route path="chat" element={<ChatView />} />
           <Route path="settings" element={<SettingsView />} />
           <Route path="payment" element={<PaymentView />} />
