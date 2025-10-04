@@ -202,7 +202,11 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['react-dom', '@radix-ui/react-slot'],
+    include: [
+      'react-dom',
+      '@radix-ui/react-slot',
+      'use-sync-external-store/shim'
+    ],
     esbuildOptions: {
       define: {
         global: 'globalThis',

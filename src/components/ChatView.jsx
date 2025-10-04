@@ -1,7 +1,10 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
+import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
+import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
+import { Card } from '@stevederico/skateboard-ui/shadcn/ui/card';
 import { useState, useEffect, useRef } from "react";
-import { ArrowUp, MessageCircle } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import { getRemainingUsage, trackUsage, showCheckout, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '../context.jsx';
 
@@ -83,50 +86,51 @@ export default function ChatView() {
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {messages.map(msg => (
           <div key={msg.id} className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-sm px-4 py-3 rounded-lg ${
-              msg.isMe 
-                ? 'bg-app text-white' 
-                : 'bg-accent'
+            <Card className={`max-w-sm p-3 ${
+              msg.isMe
+                ? 'bg-primary text-primary-foreground'
+                : ''
             }`}>
               <p className="text-sm">{msg.text}</p>
-            </div>
+            </Card>
             <p className="text-xs opacity-60 mt-1">{msg.time}</p>
           </div>
         ))}
         
         {isTyping && (
           <div className="flex flex-col items-start">
-            <div className="max-w-sm px-4 py-3 rounded-lg bg-accent">
+            <Card className="max-w-sm p-3">
               <div className="flex space-x-1">
                 <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
                 <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                 <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               </div>
-            </div>
+            </Card>
           </div>
         )}
       </div>
 
       <div className="p-6 pb-20 md:pb-6 border-t bg-background">
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Message..."
-            className="flex-1 px-4 py-3 bg-accent rounded-full outline-none"
+            className="flex-1 rounded-full"
           />
-          <button
+          <Button
             onClick={handleSend}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-              newMessage.trim() 
-                ? 'bg-app text-white' 
-                : 'bg-accent text-foreground'
+            size="icon"
+            className={`h-12 w-12 rounded-full ${
+              newMessage.trim()
+                ? ''
+                : 'bg-accent text-foreground hover:bg-accent/80'
             }`}
           >
             <ArrowUp size={20} />
-          </button>
+          </Button>
         </div>
       </div>
       

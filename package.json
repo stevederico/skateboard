@@ -20,7 +20,10 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.3",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "use-sync-external-store": "^1.2.0",
+    "recharts": "^2.15.0",
+    "@tanstack/react-table": "^8.20.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",

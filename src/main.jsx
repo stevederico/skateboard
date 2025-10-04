@@ -10,7 +10,6 @@ import {
 } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import './assets/styles.css';
-import Layout from '@stevederico/skateboard-ui/Layout';
 import LandingView from '@stevederico/skateboard-ui/LandingView';
 import TextView from '@stevederico/skateboard-ui/TextView';
 import SignUpView from '@stevederico/skateboard-ui/SignUpView';
@@ -18,12 +17,16 @@ import SignInView from '@stevederico/skateboard-ui/SignInView';
 import PaymentView from '@stevederico/skateboard-ui/PaymentView';
 import SettingsView from '@stevederico/skateboard-ui/SettingsView';
 import NotFound from '@stevederico/skateboard-ui/NotFound';
+import TabBar from '@stevederico/skateboard-ui/TabBar';
+import { SidebarProvider, SidebarInset } from '@stevederico/skateboard-ui/shadcn/ui/sidebar';
 import { getCurrentUser } from '@stevederico/skateboard-ui/Utilities';
 import { ContextProvider, getState } from './context.jsx';
 import constants from './constants.json';
 
-import HomeView from './components/HomeView.jsx'
-import ChatView from './components/ChatView.jsx'
+import HomeView from './components/HomeView.jsx';
+import ChatView from './components/ChatView.jsx';
+import AppSidebar from './components/AppSidebar.jsx';
+import SiteHeader from './components/SiteHeader.jsx';
 
 
 
@@ -90,7 +93,7 @@ const App = () => {
 
   return (
     <Routes>
-      <Route element={<Layout />}>
+      <Route element={<DashboardLayout />}>
         <Route path="/console" element={<Navigate to="/app" replace />} />
         <Route path="/app" element={<ProtectedRoute />}>
           <Route index element={<Navigate to="home" replace />} />
@@ -118,6 +121,42 @@ const App = () => {
       />
       <Route path="*" element={<NotFound />} />
     </Routes>
+  );
+};
+
+const DashboardLayout = () => {
+  useEffect(() => {
+    const root = document.documentElement;
+    let theme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    if (!theme) {
+      theme = systemPrefersDark ? 'dark' : 'light';
+    }
+
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, []);
+
+  return (
+    <SidebarProvider
+      style={{
+        "--sidebar-width": "calc(var(--spacing) * 72)",
+      }}
+    >
+      {!constants.hideSidebar && <AppSidebar variant="inset" />}
+      <SidebarInset>
+        <SiteHeader />
+        <div className="flex flex-1 flex-col">
+          <Outlet />
+        </div>
+      </SidebarInset>
+      <TabBar className="md:hidden" />
+    </SidebarProvider>
   );
 };
 
