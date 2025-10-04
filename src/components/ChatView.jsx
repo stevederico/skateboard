@@ -1,12 +1,12 @@
-import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
-import { Card } from '@stevederico/skateboard-ui/shadcn/ui/card';
+import { Avatar, AvatarFallback } from '@stevederico/skateboard-ui/shadcn/ui/avatar';
 import { useState, useEffect, useRef } from "react";
-import { ArrowUp } from 'lucide-react';
-import { getRemainingUsage, trackUsage, showCheckout, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
+import { ArrowUp, Sparkles } from 'lucide-react';
+import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '../context.jsx';
+import constants from '../constants.json';
 
 export default function ChatView() {
   const { state } = getState();
@@ -20,8 +20,17 @@ export default function ChatView() {
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
-  const isUserSubscriber = usageInfo.isSubscriber
+  const isUserSubscriber = usageInfo.isSubscriber;
   const upgradeSheetRef = useRef();
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
 
   // Update usage info when messages change
   useEffect(() => {
@@ -59,7 +68,7 @@ export default function ChatView() {
       // Track usage and update state with response
       const updatedUsage = await trackUsage('messages');
       setUsageInfo(updatedUsage);
-      
+
       // Auto-response after 200ms
       setTimeout(() => {
         const aiResponse = {
@@ -74,73 +83,102 @@ export default function ChatView() {
     }
   };
 
+  const getInitials = () => {
+    if (state.user?.name) {
+      return state.user.name.split(' ').map(word => word[0]).join('').toUpperCase();
+    }
+    return state.user?.email?.substring(0, 2).toUpperCase() || 'U';
+  };
+
+  // Pass usage info to SiteHeader
+  useEffect(() => {
+    if (window.updateChatUsageInfo) {
+      window.updateChatUsageInfo(usageInfo, () => showUpgradeSheet(upgradeSheetRef));
+    }
+
+    // Cleanup: clear usage info when component unmounts
+    return () => {
+      if (window.updateChatUsageInfo) {
+        window.updateChatUsageInfo(null, null);
+      }
+    };
+  }, [usageInfo]);
+
   return (
-    <div className="@container/main flex flex-1 flex-col">
-      <div className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
-        <div className="flex-1 px-4 lg:px-6 overflow-y-auto">
-          {!isUserSubscriber && usageInfo.remaining >= 0 && (
-            <div className="flex justify-end mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                className="cursor-pointer rounded-full"
-                onClick={() => showUpgradeSheet(upgradeSheetRef)}
-              >
-                {usageInfo.remaining} remaining
-              </Button>
+    <div className="@container/main flex flex-1 flex-col h-full">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 lg:px-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {messages.map(msg => (
+            <div key={msg.id} className={`flex gap-3 ${msg.isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className={msg.isMe ? 'bg-primary text-primary-foreground' : 'bg-muted'}>
+                  {msg.isMe ? getInitials() : <Sparkles className="h-4 w-4" />}
+                </AvatarFallback>
+              </Avatar>
+              <div className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'} flex-1 max-w-[85%]`}>
+                <div className={`rounded-2xl px-4 py-3 ${
+                  msg.isMe
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted'
+                }`}>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.text}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {isTyping && (
+            <div className="flex gap-3">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className="bg-muted">
+                  <Sparkles className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col items-start">
+                <div className="rounded-2xl px-4 py-3 bg-muted">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          <div className="flex flex-col space-y-6 min-h-[500px]">
-            {messages.map(msg => (
-              <div key={msg.id} className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
-                <Card className={`max-w-sm p-3 ${
-                  msg.isMe
-                    ? 'bg-primary text-primary-foreground'
-                    : ''
-                }`}>
-                  <p className="text-sm">{msg.text}</p>
-                </Card>
-                <p className="text-xs opacity-60 mt-1">{msg.time}</p>
-              </div>
-            ))}
-
-            {isTyping && (
-              <div className="flex flex-col items-start">
-                <Card className="max-w-sm p-3">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                  </div>
-                </Card>
-              </div>
-            )}
-          </div>
+          <div ref={messagesEndRef} />
         </div>
+      </div>
 
-        <div className="sticky bottom-0 bg-background px-4 lg:px-6 pb-4">
-          <div className="flex gap-2">
+      {/* Input Area */}
+      <div className="border-t bg-background">
+        <div className="max-w-3xl mx-auto px-4 py-4 lg:px-6">
+          <div className="relative flex items-center gap-2">
             <Input
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
               placeholder="Message..."
-              className="flex-1 rounded-full"
+              className="flex-1 rounded-3xl pr-12 h-12 text-base resize-none"
             />
             <Button
               onClick={handleSend}
               size="icon"
-              className={`cursor-pointer h-12 w-12 rounded-full ${
+              disabled={!newMessage.trim()}
+              className={`cursor-pointer h-10 w-10 rounded-full absolute right-1 ${
                 newMessage.trim()
                   ? ''
-                  : 'bg-accent text-foreground hover:bg-accent/80'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
             >
               <ArrowUp size={20} />
             </Button>
           </div>
+          <p className="text-xs text-center text-muted-foreground mt-2">
+            {constants.appName} can make mistakes. Check important info.
+          </p>
         </div>
       </div>
 

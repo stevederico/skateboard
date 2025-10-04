@@ -32,15 +32,15 @@ export default function AppSidebar({ ...props }) {
   }));
 
   const documentItems = [
-    { name: 'Data Library', url: '/app/data', icon: 'database' },
-    { name: 'Reports', url: '/app/reports', icon: 'file-text' },
-    { name: 'Word Assistant', url: '/app/assistant', icon: 'file' },
+    { name: 'Data Library', url: '#', icon: 'database' },
+    { name: 'Reports', url: '#', icon: 'file-text' },
+    { name: 'Word Assistant', url: '#', icon: 'file' },
   ];
 
   const secondaryItems = [
     { title: 'Settings', url: '/app/settings', icon: 'settings' },
-    { title: 'Get Help', url: '/help', icon: 'help-circle' },
-    { title: 'Search', url: '/search', icon: 'search' },
+    { title: 'Get Help', url: '#', icon: 'help-circle' },
+    { title: 'Search', url: '#', icon: 'search' },
   ];
 
   return (

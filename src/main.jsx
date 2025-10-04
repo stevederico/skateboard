@@ -8,14 +8,13 @@ import {
   useNavigate,
   useLocation,
 } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import './assets/styles.css';
 import LandingView from '@stevederico/skateboard-ui/LandingView';
 import TextView from '@stevederico/skateboard-ui/TextView';
 import SignUpView from '@stevederico/skateboard-ui/SignUpView';
 import SignInView from '@stevederico/skateboard-ui/SignInView';
 import PaymentView from '@stevederico/skateboard-ui/PaymentView';
-import SettingsView from '@stevederico/skateboard-ui/SettingsView';
 import NotFound from '@stevederico/skateboard-ui/NotFound';
 import TabBar from '@stevederico/skateboard-ui/TabBar';
 import { SidebarProvider, SidebarInset } from '@stevederico/skateboard-ui/shadcn/ui/sidebar';
@@ -27,6 +26,7 @@ import DashboardView from './components/DashboardView.jsx';
 import ChatView from './components/ChatView.jsx';
 import AppSidebar from './components/AppSidebar.jsx';
 import SiteHeader from './components/SiteHeader.jsx';
+import SettingsView from './components/SettingsView.jsx';
 
 
 
@@ -125,6 +125,9 @@ const App = () => {
 };
 
 const DashboardLayout = () => {
+  const [chatUsageInfo, setChatUsageInfo] = React.useState(null);
+  const [onUpgradeClick, setOnUpgradeClick] = React.useState(null);
+
   useEffect(() => {
     const root = document.documentElement;
     let theme = localStorage.getItem('theme');
@@ -140,6 +143,16 @@ const DashboardLayout = () => {
       root.classList.remove('dark');
     }
     localStorage.setItem('theme', theme);
+
+    // Setup global callback for chat usage
+    window.updateChatUsageInfo = (info, callback) => {
+      setChatUsageInfo(info);
+      setOnUpgradeClick(() => callback);
+    };
+
+    return () => {
+      delete window.updateChatUsageInfo;
+    };
   }, []);
 
   return (
@@ -150,7 +163,7 @@ const DashboardLayout = () => {
     >
       {!constants.hideSidebar && <AppSidebar variant="inset" />}
       <SidebarInset>
-        <SiteHeader />
+        <SiteHeader usageInfo={chatUsageInfo} onUpgradeClick={onUpgradeClick} />
         <div className="flex flex-1 flex-col">
           <Outlet />
         </div>
