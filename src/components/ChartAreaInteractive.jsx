@@ -157,9 +157,9 @@ export default function ChartAreaInteractive() {
         </CardAction>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        <div className="aspect-auto h-[250px] w-full">
+        <div className="aspect-auto h-[250px] w-full bg-card">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={filteredData}>
+            <AreaChart data={filteredData} style={{ backgroundColor: 'transparent' }}>
               <defs>
                 <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
                   <stop
@@ -186,14 +186,14 @@ export default function ChartAreaInteractive() {
                   />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+              <CartesianGrid vertical={false} stroke="#333333" strokeDasharray="0" horizontal={true} />
               <XAxis
                 dataKey="date"
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
                 minTickGap={32}
-                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fill: '#888888' }}
                 tickFormatter={(value) => {
                   const date = new Date(value);
                   return date.toLocaleDateString("en-US", {
