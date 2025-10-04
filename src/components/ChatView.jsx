@@ -1,4 +1,4 @@
-import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
+import UpgradeSheet from './UpgradeSheet';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Avatar, AvatarFallback } from '@stevederico/skateboard-ui/shadcn/ui/avatar';
@@ -107,11 +107,11 @@ export default function ChatView() {
   return (
     <div className="@container/main flex flex-1 flex-col h-full">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 lg:px-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+      <div className="flex-1 overflow-y-auto py-6 px-4">
+        <div className="space-y-6">
           {messages.map(msg => (
-            <div key={msg.id} className={`flex gap-3 ${msg.isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-              <Avatar className="h-8 w-8 shrink-0">
+            <div key={msg.id} className={`flex gap-3 items-start ${msg.isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+              <Avatar className="h-8 w-8 shrink-0 mt-0.5">
                 <AvatarFallback className={msg.isMe ? 'bg-primary text-primary-foreground' : 'bg-muted'}>
                   {msg.isMe ? getInitials() : <Sparkles className="h-4 w-4" />}
                 </AvatarFallback>
@@ -129,8 +129,8 @@ export default function ChatView() {
           ))}
 
           {isTyping && (
-            <div className="flex gap-3">
-              <Avatar className="h-8 w-8 shrink-0">
+            <div className="flex gap-3 items-start">
+              <Avatar className="h-8 w-8 shrink-0 mt-0.5">
                 <AvatarFallback className="bg-muted">
                   <Sparkles className="h-4 w-4" />
                 </AvatarFallback>
@@ -153,7 +153,7 @@ export default function ChatView() {
 
       {/* Input Area */}
       <div className="border-t bg-background">
-        <div className="max-w-3xl mx-auto px-4 py-4 lg:px-6">
+        <div className="py-4 px-4">
           <div className="relative flex items-center gap-2">
             <Input
               type="text"

@@ -455,6 +455,7 @@
 
 
 ## To-Do
+- Add Geist font
 - move init theme from settingsview to main 
 - PRD 
 - system prompts

@@ -18,7 +18,7 @@ import {
 import { Avatar, AvatarFallback } from "@stevederico/skateboard-ui/shadcn/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@stevederico/skateboard-ui/shadcn/ui/dropdown-menu";
 import { getState } from '../context.jsx';
-import { MoreVertical, User, Settings, LogOut } from 'lucide-react';
+import { MoreVertical, HelpCircle, Settings, LogOut } from 'lucide-react';
 
 export default function AppSidebar({ ...props }) {
   const navigate = useNavigate();
@@ -37,11 +37,7 @@ export default function AppSidebar({ ...props }) {
     { name: 'Word Assistant', url: '#', icon: 'file' },
   ];
 
-  const secondaryItems = [
-    { title: 'Settings', url: '/app/settings', icon: 'settings' },
-    { title: 'Get Help', url: '#', icon: 'help-circle' },
-    { title: 'Search', url: '#', icon: 'search' },
-  ];
+  const secondaryItems = [];
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -84,11 +80,11 @@ export default function AppSidebar({ ...props }) {
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarFallback className="rounded-lg bg-primary text-primary-foreground">
-                      {user.name ? user.name.substring(0, 2).toUpperCase() : user.email ? user.email.substring(0, 2).toUpperCase() : 'U'}
+                      {user.name ? user.name.substring(0, 1).toUpperCase() : user.email ? user.email.substring(0, 1).toUpperCase() : 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{user.name || 'User'}</span>
+                    <span className="truncate font-medium capitalize">{user.name || 'User'}</span>
                     <span className="truncate text-xs text-muted-foreground">
                       {user.email || ''}
                     </span>
@@ -106,11 +102,11 @@ export default function AppSidebar({ ...props }) {
                   <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarFallback className="rounded-lg bg-primary text-primary-foreground">
-                        {user.name ? user.name.substring(0, 2).toUpperCase() : user.email ? user.email.substring(0, 2).toUpperCase() : 'U'}
+                        {user.name ? user.name.substring(0, 1).toUpperCase() : user.email ? user.email.substring(0, 1).toUpperCase() : 'U'}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-medium">{user.name || 'User'}</span>
+                      <span className="truncate font-medium capitalize">{user.name || 'User'}</span>
                       <span className="truncate text-xs text-muted-foreground">
                         {user.email || ''}
                       </span>
@@ -122,9 +118,9 @@ export default function AppSidebar({ ...props }) {
                   <Settings className="mr-2 h-4 w-4" />
                   Settings
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/app/payment')} className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  Account
+                <DropdownMenuItem className="cursor-pointer">
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  Get Help
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/signin')} className="cursor-pointer">

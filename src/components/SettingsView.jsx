@@ -64,13 +64,13 @@ export default function SettingsView() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    <AvatarFallback className="bg-primary text-primary-foreground text-lg">
+                  <Avatar className="h-16 w-16 rounded-lg">
+                    <AvatarFallback className="rounded-lg bg-primary text-primary-foreground text-lg">
                       {getInitials()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <p className="text-base font-medium">{state.user?.name || "No Name"}</p>
+                    <p className="text-base font-medium capitalize">{state.user?.name || "No Name"}</p>
                     <p className="text-sm text-muted-foreground">{state.user?.email || "no@user.com"}</p>
                   </div>
                   <Button
@@ -92,7 +92,7 @@ export default function SettingsView() {
 
           {/* Billing Card */}
           {(constants.noLogin == false || typeof constants.noLogin === 'undefined') && (
-            <Card className="@container/card">
+            <Card className="@container/card flex flex-col">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -114,7 +114,7 @@ export default function SettingsView() {
                   </Badge>
                 </div>
               </CardHeader>
-              <CardFooter>
+              <CardFooter className="mt-auto">
                 {state.user?.stripeID ? (
                   <Button
                     variant="outline"
@@ -136,7 +136,7 @@ export default function SettingsView() {
           )}
 
           {/* Support Card */}
-          <Card className="@container/card">
+          <Card className="@container/card flex flex-col">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Mail className="h-5 w-5" />
@@ -144,7 +144,7 @@ export default function SettingsView() {
               </CardTitle>
               <CardDescription>Get help from our support team</CardDescription>
             </CardHeader>
-            <CardFooter>
+            <CardFooter className="mt-auto">
               <Button
                 variant="outline"
                 className="cursor-pointer w-full"
