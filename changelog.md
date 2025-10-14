@@ -1,5 +1,15 @@
 ## CHANGELOG
 
+0.9.3
+
+  Add ProtectedRoute component
+  Add useAppSetup hook
+  Add isAuthenticated utility
+  Add getCSRFToken utility
+  Add getAppKey utility
+  Add SignOutView component
+  Update skateboard-ui 0.9.8
+
 0.9.2
 
   Remove Vite proxy

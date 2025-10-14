@@ -4,89 +4,38 @@ import {
   Routes,
   Route,
   Navigate,
-  Outlet,
   useNavigate,
   useLocation,
 } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import './assets/styles.css';
 import Layout from '@stevederico/skateboard-ui/Layout';
 import LandingView from '@stevederico/skateboard-ui/LandingView';
 import TextView from '@stevederico/skateboard-ui/TextView';
 import SignUpView from '@stevederico/skateboard-ui/SignUpView';
 import SignInView from '@stevederico/skateboard-ui/SignInView';
+import SignOutView from '@stevederico/skateboard-ui/SignOutView';
 import PaymentView from '@stevederico/skateboard-ui/PaymentView';
 import SettingsView from '@stevederico/skateboard-ui/SettingsView';
 import NotFound from '@stevederico/skateboard-ui/NotFound';
-import { getCurrentUser } from '@stevederico/skateboard-ui/Utilities';
+import ProtectedRoute from '@stevederico/skateboard-ui/ProtectedRoute';
+import { useAppSetup, isAuthenticated, getCSRFToken, getAppKey } from '@stevederico/skateboard-ui/Utilities';
 import { ContextProvider, getState } from './context.jsx';
 import constants from './constants.json';
 
 import HomeView from './components/HomeView.jsx'
 import ChatView from './components/ChatView.jsx'
 
-
-
-const ProtectedRoute = () => {
-  const auth = isAuthenticated();
-  return auth ? <Outlet /> : <Navigate to="/signin" replace />;
-};
-
-function isAuthenticated() {
-  // Check client-side noLogin flag first
-  if (constants.noLogin === true) {
-    return true;
-  }
-  // HttpOnly cookies can't be read by JavaScript
-  // Server validates auth via cookie, so assume authenticated if CSRF token exists
-  const appName = constants.appName || 'skateboard';
-  const csrfKey = `${appName.toLowerCase().replace(/\s+/g, '-')}_csrf`;
-  const csrfToken = localStorage.getItem(csrfKey);
-  return Boolean(csrfToken);
-}
-
 const App = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { state, dispatch } = getState();
-  const fetchingRef = useRef(false);
+  const { dispatch } = getState();
 
   useEffect(() => {
     document.title = constants.appName;
   }, []);
 
-  useEffect(() => {
-    const isAppRoute = location.pathname.toLowerCase().includes('app');
-
-    // Only fetch when entering app routes, not on every pathname change within app
-    if (!isAppRoute) return;
-
-    // Skip if we already have user data
-    if (state.user && Object.keys(state.user).length > 0) return;
-
-    // Skip if already fetching
-    if (fetchingRef.current) return;
-
-    const appStart = async () => {
-      fetchingRef.current = true;
-      // Always try to fetch user data regardless of noLogin // The server will allow the request through if noLogin is enabled on its side
-      try {
-        const data = await getCurrentUser();
-        if (data) {
-          dispatch({ type: 'SET_USER', payload: data });
-        }
-      } catch (error) {
-        console.error('Failed to fetch user:', error);
-        if (!constants.noLogin) {
-          navigate('/signin');
-        }
-      } finally {
-        fetchingRef.current = false;
-      }
-    };
-
-    appStart();
-  }, [location.pathname]);
+  useAppSetup(location, navigate, dispatch);
 
   return (
     <Routes>
@@ -103,6 +52,7 @@ const App = () => {
       <Route path="/" element={<LandingView />} />
       <Route path="/signin" element={<SignInView />} />
       <Route path="/signup" element={<SignUpView />} />
+      <Route path="/signout" element={<SignOutView />} />
       <Route
         path="/terms"
         element={<TextView details={constants.termsOfService} />}
