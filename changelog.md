@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+0.9.4
+
+  Remove tailwindcss-animate dependency
+  Update styles configuration
+  Add MIGRATION_GUIDE gitignore
+
 0.9.3
 
   Add ProtectedRoute component

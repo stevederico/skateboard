@@ -39,3 +39,5 @@ backend/.env
 *.db-shm
 *.db-wal
 
+MIGRATION_GUIDE.md
+

@@ -2,8 +2,6 @@
 
 @source '../../node_modules/@stevederico/skateboard-ui';
 
-@plugin 'tailwindcss-animate';
-
 @custom-variant dark (&:is(.dark *));
 
 @theme {
