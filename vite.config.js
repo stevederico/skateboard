@@ -1,49 +1,38 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react-swc'
-import tailwindcss from '@tailwindcss/vite'
-import { resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
+import { defineConfig } from 'vite';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url))
-
-const customLoggerPlugin = () => {
-  return {
+const customLoggerPlugin = () => ({
     name: 'custom-logger',
     configureServer(server) {
-      const originalPrint = server.printUrls;
-      server.printUrls = () => {
-        console.log(`🖥️  React is running on http://localhost:${server.config.server.port || 5173}`);
-      };
+        server.printUrls = () => {
+            const port = server.config.server.port || 5173;
+            console.log(`React dev server running on http://localhost:${port}`);
+        };
     }
-  };
-};
+});
 
-const htmlReplacePlugin = () => {
-  return {
+const htmlReplacePlugin = () => ({
     name: 'html-replace',
-    transformIndexHtml(html) {
-      const constants = JSON.parse(readFileSync('src/constants.json', 'utf8'));
-      
-      return html
-        .replace(/{{APP_NAME}}/g, constants.appName)
-        .replace(/{{TAGLINE}}/g, constants.tagline)
-        .replace(/{{COMPANY_WEBSITE}}/g, constants.companyWebsite);
-    }
-  };
-};
+    async transformIndexHtml(html) {
+        const { readFileSync } = await import('node:fs');
+        const constants = JSON.parse(readFileSync('src/constants.json', 'utf8'));
 
-const dynamicRobotsPlugin = () => {
-  return {
+        return html
+            .replace(/{{APP_NAME}}/g, constants.appName)
+            .replace(/{{TAGLINE}}/g, constants.tagline)
+            .replace(/{{COMPANY_WEBSITE}}/g, constants.companyWebsite);
+    }
+});
+
+const dynamicRobotsPlugin = () => ({
     name: 'dynamic-robots',
-    generateBundle() {
-      const constants = JSON.parse(readFileSync('src/constants.json', 'utf8'));
-      const website = constants.companyWebsite.startsWith('http') 
-        ? constants.companyWebsite 
-        : `https://${constants.companyWebsite}`;
-      
-      const robotsContent = `User-agent: Googlebot
+    async generateBundle() {
+        const { readFileSync } = await import('node:fs');
+        const constants = JSON.parse(readFileSync('src/constants.json', 'utf8'));
+        const website = constants.companyWebsite.startsWith('http')
+            ? constants.companyWebsite
+            : `https://${constants.companyWebsite}`;
+
+        const robotsContent = `User-agent: Googlebot
 Disallow: /app/
 Disallow: /console/
 Disallow: /signin/
@@ -85,27 +74,26 @@ Disallow: /
 Sitemap: ${website}/sitemap.xml
 `;
 
-      this.emitFile({
-        type: 'asset',
-        fileName: 'robots.txt',
-        source: robotsContent
-      });
+        this.emitFile({
+            type: 'asset',
+            fileName: 'robots.txt',
+            source: robotsContent
+        });
     }
-  };
-};
+});
 
-const dynamicSitemapPlugin = () => {
-  return {
+const dynamicSitemapPlugin = () => ({
     name: 'dynamic-sitemap',
-    generateBundle() {
-      const constants = JSON.parse(readFileSync('src/constants.json', 'utf8'));
-      const website = constants.companyWebsite.startsWith('http') 
-        ? constants.companyWebsite 
-        : `https://${constants.companyWebsite}`;
-      
-      const currentDate = new Date().toISOString().split('T')[0];
-      
-      const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
+    async generateBundle() {
+        const { readFileSync } = await import('node:fs');
+        const constants = JSON.parse(readFileSync('src/constants.json', 'utf8'));
+        const website = constants.companyWebsite.startsWith('http')
+            ? constants.companyWebsite
+            : `https://${constants.companyWebsite}`;
+
+        const currentDate = new Date().toISOString().split('T')[0];
+
+        const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>${website}/</loc>
@@ -139,89 +127,121 @@ const dynamicSitemapPlugin = () => {
   </url>
 </urlset>`;
 
-      this.emitFile({
-        type: 'asset',
-        fileName: 'sitemap.xml',
-        source: sitemapContent
-      });
+        this.emitFile({
+            type: 'asset',
+            fileName: 'sitemap.xml',
+            source: sitemapContent
+        });
     }
-  };
-};
+});
 
-const dynamicManifestPlugin = () => {
-  return {
+const dynamicManifestPlugin = () => ({
     name: 'dynamic-manifest',
-    generateBundle() {
-      const constants = JSON.parse(readFileSync('src/constants.json', 'utf8'));
-      
-      const manifestContent = {
-        short_name: constants.appName,
-        name: constants.appName,
-        description: constants.tagline,
-        icons: [
-          {
-            src: "/icons/icon.svg",
-            sizes: "192x192",
-            type: "image/svg+xml"
-          }
+    async generateBundle() {
+        const { readFileSync } = await import('node:fs');
+        const constants = JSON.parse(readFileSync('src/constants.json', 'utf8'));
+
+        const manifestContent = {
+            short_name: constants.appName,
+            name: constants.appName,
+            description: constants.tagline,
+            icons: [
+                {
+                    src: "/icons/icon.svg",
+                    sizes: "192x192",
+                    type: "image/svg+xml"
+                }
+            ],
+            start_url: "./app",
+            display: "standalone",
+            theme_color: "#000000",
+            background_color: "#ffffff"
+        };
+
+        this.emitFile({
+            type: 'asset',
+            fileName: 'manifest.json',
+            source: JSON.stringify(manifestContent, null, 2)
+        });
+    }
+});
+
+async function createSkateboardViteConfig(customConfig = {}) {
+    const [{ default: react }, { default: tailwindcss }, path] = await Promise.all([
+        import('@vitejs/plugin-react-swc'),
+        import('@tailwindcss/vite'),
+        import('node:path')
+    ]);
+
+    return {
+        plugins: [
+            react(),
+            tailwindcss(),
+            customLoggerPlugin(),
+            htmlReplacePlugin(),
+            dynamicRobotsPlugin(),
+            dynamicSitemapPlugin(),
+            dynamicManifestPlugin(),
+            ...(customConfig.plugins || [])
         ],
-        start_url: "./app",
-        display: "standalone",
-        theme_color: "#000000",
-        background_color: "#ffffff"
-      };
+        esbuild: {
+            drop: []
+        },
+        resolve: {
+            alias: {
+                '@': path.resolve(process.cwd(), './src'),
+                '@package': path.resolve(process.cwd(), 'package.json'),
+                '@root': path.resolve(process.cwd()),
+                'react/jsx-runtime': path.resolve(process.cwd(), 'node_modules/react/jsx-runtime.js'),
+                ...(customConfig.resolve?.alias || {})
+            }
+        },
+        optimizeDeps: {
+            include: [
+                'react',
+                'react-dom',
+                'react-dom/client',
+                '@radix-ui/react-slot',
+                'cookie',
+                'set-cookie-parser'
+            ],
+            exclude: [
+                '@swc/core',
+                '@swc/core-darwin-arm64',
+                '@swc/wasm',
+                '@tailwindcss/oxide',
+                '@tailwindcss/oxide-darwin-arm64',
+                'lightningcss',
+                'fsevents'
+            ],
+            esbuildOptions: {
+                target: 'esnext',
+                define: {
+                    global: 'globalThis'
+                }
+            },
+            ...(customConfig.optimizeDeps || {})
+        },
+        server: {
+            host: '127.0.0.1',
+            open: false,
+            port: 5173,
+            strictPort: false,
+            hmr: {
+                port: 5173,
+                overlay: false
+            },
+            watch: {
+                usePolling: false,
+                ignored: ['**/node_modules/**', '**/.git/**']
+            },
+            ...(customConfig.server || {})
+        },
+        logLevel: 'error',
+        ...customConfig
+    };
+}
 
-      this.emitFile({
-        type: 'asset',
-        fileName: 'manifest.json',
-        source: JSON.stringify(manifestContent, null, 2)
-      });
-    }
-  };
-};
-
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    customLoggerPlugin(),
-    htmlReplacePlugin(),
-    dynamicRobotsPlugin(),
-    dynamicSitemapPlugin(),
-    dynamicManifestPlugin()
-  ],
-  esbuild: {
-    drop: []
-  },
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
-      '@package': path.resolve(__dirname, 'package.json'),
-      '@root': path.resolve(__dirname),
-      'react/jsx-runtime': path.resolve(__dirname, 'node_modules/react/jsx-runtime.js'),
-    }
-  },
-  optimizeDeps: {
-    include: ['react-dom', '@radix-ui/react-slot'],
-    esbuildOptions: {
-      define: {
-        global: 'globalThis',
-      },
-    },
-  },
-  server: {
-    host: 'localhost',
-    open: false,
-    port: 5173,
-    strictPort: false,
-    hmr: {
-      port: 5173,
-      overlay: false,
-    },
-    watch: {
-      usePolling: false,
-      ignored: ['**/node_modules/**', '**/.git/**']
-    },
-  },
-  logLevel: 'error'
-})
+export default defineConfig(async () => {
+    return createSkateboardViteConfig();
+});

@@ -3,7 +3,7 @@ import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import { useState, useEffect, useRef } from "react";
 import { ArrowUp, MessageCircle } from 'lucide-react';
 import { getRemainingUsage, trackUsage, showCheckout, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
-import { getState } from '../context.jsx';
+import { getState } from '@stevederico/skateboard-ui/Context';
 
 export default function ChatView() {
   const { state } = getState();

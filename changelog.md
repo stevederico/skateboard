@@ -1,5 +1,26 @@
 ## CHANGELOG
 
+1.0.0
+
+  Application Shell Architecture Release
+  Add createSkateboardApp() function
+  Add Context exports (ContextProvider, getState)
+  Add App.jsx with complete routing shell
+  Add getSkateboardViteConfig() utility
+  Add base styles.css theme export
+  Add apiRequest() and apiRequestWithParams() utilities
+  Add useListData() hook for data fetching
+  Add useForm() hook for form management
+  Add individual Vite plugins exports
+  Simplify main.jsx (82 lines → 16 lines)
+  Simplify vite.config.js (227 lines → 3 lines)
+  Simplify styles.css (182 lines → 7 lines)
+  Remove need for local context.jsx
+  95% boilerplate reduction per app
+  Update skateboard boilerplate to demonstrate 1.0.0 patterns
+  Add MIGRATION_GUIDE-1.0.0.md
+  Add ARCHITECTURE.md documentation
+
 0.9.4
 
   Remove tailwindcss-animate dependency

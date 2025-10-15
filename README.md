@@ -50,13 +50,20 @@ That's it, your app is now running at `http://localhost:5173` 🎉
 
 Everything you need to ship a production-ready app:
 
+### 🏗️ **Application Shell Architecture (v1.0)**
+- **95% less boilerplate** - Focus on features, not infrastructure
+- **Shell + Content + Config** - Framework provides structure, you provide content
+- **Update once, fix everywhere** - All apps inherit improvements from skateboard-ui
+- **16-line main.jsx** - Just define your routes
+- **Convention over configuration** - Sensible defaults with escape hatches everywhere
+
 ### 🔐 **Authentication & User Management**
 - **Sign up / Sign in** with JWT tokens
 - **Protected routes** with automatic redirects
 - **User context** management across your app
 - **Session persistence** with secure cookies
 - **App-specific auth isolation**
-- **Usage tracking** with configurable limits for free users 
+- **Usage tracking** with configurable limits for free users
 
 ### 💳 **Stripe Integration**
 - **Checkout flows** ready to go
@@ -78,6 +85,8 @@ Everything you need to ship a production-ready app:
 - **Multi-database support** - SQLite (default), MongoDB, PostgreSQL
 - **constants.json** - customize everything in one place
 - **Modern JavaScript** - no TypeScript complexity
+- **Built-in hooks** - useListData, useForm for common patterns
+- **API utilities** - apiRequest with automatic auth and error handling
 
 <br />
 
@@ -177,6 +186,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
+| **skateboard-ui** | v1.0+ | Application Shell Framework |
 | **Vite** | v7.1+ | Build Tool & Dev Server |
 | **Tailwind CSS** | v4.1+ | Styling |
 | **Shadcn/ui** | Latest | Component Library |
@@ -185,6 +195,36 @@ Built with the latest and greatest:
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
 | **Stripe** | Latest | Payments |
 | **JWT** | Latest | Authentication |
+
+<br />
+
+## 📚 Architecture
+
+Skateboard uses an **Application Shell Architecture** where the framework (skateboard-ui) provides structure and your app provides content.
+
+**Your app in 3 parts:**
+1. **Shell** (skateboard-ui) - Routing, auth, context, utilities
+2. **Content** (your code) - Components and business logic
+3. **Config** (constants.json) - App-specific settings
+
+**Example main.jsx** (complete app):
+```javascript
+import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
+import constants from './constants.json';
+import HomeView from './components/HomeView.jsx';
+
+const appRoutes = [
+  { path: 'home', element: <HomeView /> }
+];
+
+createSkateboardApp({ constants, appRoutes });
+```
+
+That's it! The shell handles routing, auth, layout, landing page, sign in/up, settings, payment, and all legal pages.
+
+**Learn more:**
+- [Architecture Documentation](docs/ARCHITECTURE.md) - Deep dive into the shell pattern
+- [Migration Guide](docs/MIGRATION_GUIDE-1.0.0.md) - Upgrade from 0.9.x to 1.0.0
 
 <br />
 

@@ -25,27 +25,46 @@ npm run --workspace=backend start    # Backend with --watch and experimental SQL
 
 ## Architecture Overview
 
+### Application Shell Architecture (v1.0)
+
+Skateboard uses an **Application Shell Architecture** where skateboard-ui provides the framework (shell) and your app provides the content. This eliminates 95% of boilerplate.
+
+**Three-part architecture:**
+1. **Shell** (skateboard-ui package) - Routing, context, auth, utilities, components
+2. **Content** (your code) - Custom components and business logic
+3. **Config** (constants.json) - App-specific configuration
+
+**Key principle:** Update skateboard-ui package once, all apps inherit improvements.
+
 ### Monorepo Structure
-- **Root**: React frontend with Vite 7.1+ build system
+- **Root**: React frontend with Vite 7.1+ build system using skateboard-ui@1.0+
 - **Backend Workspace**: Express server with multi-database support
 
-### Project Structure
+### Project Structure (v1.0)
 ```
 skateboard/
 ├── src/
-│   ├── components/       # Your custom components
-│   ├── assets/          # Images, styles
-│   ├── context.jsx      # Global state management
-│   ├── main.jsx         # App entry point
+│   ├── components/       # Your custom components (e.g., HomeView.jsx)
+│   ├── assets/
+│   │   └── styles.css   # Brand color override (7 lines)
+│   ├── main.jsx         # Route definitions (16 lines)
 │   └── constants.json   # All your app config
 ├── backend/
 │   ├── server.js        # Express server
 │   ├── adapters/        # Database adapters (SQLite, PostgreSQL, MongoDB)
 │   ├── databases/       # SQLite database files
 │   └── config.json      # Backend config with database settings
-├── package.json         # Dependencies
-└── vite.config.js       # Vite configuration
+├── package.json         # Dependencies (includes skateboard-ui@1.0+)
+└── vite.config.js       # Vite configuration (3 lines using utility)
 ```
+
+**What's NOT in your app anymore (provided by skateboard-ui):**
+- ❌ `context.jsx` - Imported from skateboard-ui/Context
+- ❌ Complex routing setup - Uses createSkateboardApp()
+- ❌ Full theme CSS - Imports base theme from skateboard-ui
+- ❌ Vite plugin definitions - Uses getSkateboardViteConfig()
+
+**Result:** ~550 lines of boilerplate → ~26 lines
 
 ### Multi-Database Architecture
 The application uses a database factory pattern supporting three database types:
@@ -84,15 +103,41 @@ Standard variables: `DATABASE_URL`, `MONGODB_URL`, `POSTGRES_URL`
 - Generic queries: `databaseManager.executeQuery(dbType, dbName, connectionString, queryObject)`
 
 ### Frontend Configuration System
+
+**skateboard-ui@1.0 Exports:**
+- `Context` - ContextProvider and getState (user state management)
+- `App` - createSkateboardApp() function (complete routing shell)
+- `Utilities` - apiRequest, hooks (useListData, useForm), Vite config
+- `Components` - Layout, Landing, SignIn, Settings, Payment, etc.
+- `styles.css` - Complete base theme (182 lines)
+
 **Constants-Driven UI** (`src/constants.json`):
 - App branding, navigation, features, Stripe products
 - Legal content with placeholder replacement (e.g., `_COMPANY_`, `_EMAIL_`)
 - Dynamic generation of robots.txt, sitemap.xml, manifest.json via Vite plugins
 
-**Context Management** (`src/context.jsx`):
+**Context Management** (from skateboard-ui):
+```javascript
+import { ContextProvider, getState } from '@stevederico/skateboard-ui/Context';
+```
 - App-specific localStorage/cookie keys based on app name
-- User state management with reducer pattern
+- User state management with reducer pattern (SET_USER, CLEAR_USER)
 - Automatic session persistence
+
+**Main Entry Point** (`src/main.jsx`):
+```javascript
+import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
+import constants from './constants.json';
+import HomeView from './components/HomeView.jsx';
+
+const appRoutes = [
+  { path: 'home', element: <HomeView /> }
+];
+
+createSkateboardApp({ constants, appRoutes, defaultRoute: 'home' });
+```
+- Defines only custom routes
+- Shell handles all infrastructure (routing, layout, auth, landing, settings, etc.)
 
 ### Authentication & Security
 **Authentication System:**
@@ -110,13 +155,144 @@ Standard variables: `DATABASE_URL`, `MONGODB_URL`, `POSTGRES_URL`
 - Graceful shutdown handling for containers
 
 ### Build System Integration
-**Vite Configuration:**
+
+**Vite Configuration** (v1.0 simplified):
+```javascript
+// vite.config.js
+import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
+
+export default getSkateboardViteConfig();
+```
+
+**Includes automatically:**
 - Dynamic content replacement in HTML from constants.json
-- SEO assets generation (robots, sitemap, manifest) 
+- SEO assets generation (robots.txt, sitemap.xml, manifest.json)
 - Custom logging and HMR configuration
 - Optimized production builds with console removal
+- All standard plugins and aliases
 
-## Key Implementation Patterns
+**Override if needed:**
+```javascript
+export default getSkateboardViteConfig({
+  server: { port: 3000, proxy: { '/api': 'http://localhost:8080' } },
+  plugins: [customPlugin()],
+  build: { sourcemap: true }
+});
+```
+
+**Styling** (v1.0 simplified):
+```css
+/* src/assets/styles.css */
+@import "@stevederico/skateboard-ui/styles.css";
+
+@source '../../node_modules/@stevederico/skateboard-ui';
+
+@theme {
+  --color-app: var(--color-purple-500);
+}
+```
+- Import complete base theme (182 lines of CSS variables)
+- Override only what you need
+- All light/dark mode handled automatically
+
+## Key Implementation Patterns (v1.0)
+
+### API Requests
+
+**Use apiRequest utility** (from skateboard-ui):
+```javascript
+import { apiRequest, apiRequestWithParams } from '@stevederico/skateboard-ui/Utilities';
+
+// GET request
+const deals = await apiRequest('/deals');
+
+// POST with body
+const newDeal = await apiRequest('/deals', {
+  method: 'POST',
+  body: JSON.stringify({ name: 'New Deal', amount: 5000 })
+});
+
+// GET with query parameters
+const results = await apiRequestWithParams('/search', { query: 'test', page: 1 });
+```
+
+**Features:**
+- Auto-includes credentials
+- Auto-adds CSRF token for mutations
+- Auto-redirects to /signout on 401
+- JSON error handling
+
+### Data Fetching with Hooks
+
+**useListData hook** (from skateboard-ui):
+```javascript
+import { useListData } from '@stevederico/skateboard-ui/Utilities';
+
+function DealsView() {
+  const { data, loading, error, refetch } = useListData(
+    '/deals',
+    (a, b) => new Date(b.created) - new Date(a.created)  // optional sort
+  );
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+
+  return (
+    <div>
+      {data.map(deal => <DealCard key={deal.id} {...deal} />)}
+      <button onClick={refetch}>Refresh</button>
+    </div>
+  );
+}
+```
+
+**useForm hook** (from skateboard-ui):
+```javascript
+import { useForm } from '@stevederico/skateboard-ui/Utilities';
+
+function CreateDeal() {
+  const { values, handleChange, handleSubmit, submitting, error } = useForm(
+    { name: '', amount: 0 },
+    async (values) => {
+      await apiRequest('/deals', {
+        method: 'POST',
+        body: JSON.stringify(values)
+      });
+    }
+  );
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={values.name} onChange={handleChange('name')} />
+      <input value={values.amount} onChange={handleChange('amount')} type="number" />
+      <button disabled={submitting}>Create Deal</button>
+      {error && <div className="error">{error}</div>}
+    </form>
+  );
+}
+```
+
+### Context Usage
+
+**Access user state** (from skateboard-ui):
+```javascript
+import { getState } from '@stevederico/skateboard-ui/Context';
+
+function MyComponent() {
+  const { state, dispatch } = getState();
+
+  // Access user
+  const user = state.user;
+
+  // Update user
+  dispatch({ type: 'SET_USER', payload: newUserData });
+
+  // Clear user (sign out)
+  dispatch({ type: 'CLEAR_USER' });
+}
+```
+
+## Legacy Patterns (Pre-1.0)
 
 ### Database Query Examples
 ```javascript
@@ -142,17 +318,48 @@ Backend requires `.env` file with:
 - `FREE_USAGE_LIMIT` - Usage limit for free users (default: 20)
 - `MONGODB_URL`, `POSTGRES_URL`, `DATABASE_URL` - Database connections (production)
 
-### App Customization Workflow
-1. Update `src/constants.json` for branding and features
-2. Modify `backend/config.json` for client origin and database settings
-3. Set environment variables in `backend/.env`:
+### App Customization Workflow (v1.0)
+
+**Initial Setup:**
+1. Install dependencies: `npm install`
+2. Update `src/constants.json` for branding, features, navigation
+3. Configure `backend/config.json` for database and CORS
+4. Set environment variables in `backend/.env`:
    - `JWT_SECRET` - Required for authentication
    - `STRIPE_KEY` - Required for payments
    - `STRIPE_ENDPOINT_SECRET` - Required for webhooks
-   - `FREE_USAGE_LIMIT` - Optional, sets monthly usage limit for free users (default: 20)
-   - Database URLs (if using environment variables in connectionString)
-4. Run `npm run start` - Vite plugins auto-generate SEO assets
-5. Legal content uses placeholder replacement system (`_COMPANY_`, `_EMAIL_`, `_WEBSITE_`)
+   - `FREE_USAGE_LIMIT` - Optional, monthly limit for free users (default: 20)
+   - Database URLs (if using environment variables)
+5. Run `npm run start` - Vite auto-generates SEO assets
+
+**Add New Routes:**
+1. Create component in `src/components/` (e.g., `DashboardView.jsx`)
+2. Add to `src/main.jsx`:
+```javascript
+const appRoutes = [
+  { path: 'home', element: <HomeView /> },
+  { path: 'dashboard', element: <DashboardView /> }  // ← Add this
+];
+```
+3. That's it! Shell handles routing infrastructure
+
+**Customize Styles:**
+```css
+/* src/assets/styles.css */
+@import "@stevederico/skateboard-ui/styles.css";
+
+@theme {
+  --color-app: var(--color-green-500);  /* Change brand color */
+  --radius: 0.5rem;                      /* Override radius */
+}
+```
+
+**Update skateboard-ui Package:**
+```bash
+npm install @stevederico/skateboard-ui@latest
+npm install
+```
+All apps automatically inherit improvements!
 
 ### Usage Tracking System
 **Backend Endpoints:**
@@ -182,3 +389,20 @@ When switching database types, ensure proper schema translation:
 - Usage fields are flattened in SQL (`usage_count`, `usage_reset_at`) but nested in MongoDB
 - Connection string format varies by database type
 - Use environment variables (`${MONGODB_URL}`) for production deployments
+
+## Documentation
+
+**Architecture & Migration:**
+- [Architecture Documentation](docs/ARCHITECTURE.md) - Deep dive into Application Shell Architecture
+- [Migration Guide 1.0.0](docs/MIGRATION_GUIDE-1.0.0.md) - Upgrade from 0.9.x to 1.0.0
+- [Migration Guide 0.9.8](docs/MIGRATION_GUIDE-0.9.8.md) - Legacy migration guide
+
+**Key Concepts:**
+- **Application Shell** - Framework provides structure, app provides content
+- **Convention over Configuration** - Sensible defaults with escape hatches
+- **Update Once, Fix Everywhere** - Central package updates propagate to all apps
+- **95% Boilerplate Reduction** - Focus on features, not infrastructure
+
+**Version:**
+- skateboard@1.0.0
+- skateboard-ui@1.0.0

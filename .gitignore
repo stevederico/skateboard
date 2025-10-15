@@ -39,5 +39,5 @@ backend/.env
 *.db-shm
 *.db-wal
 
-MIGRATION_GUIDE.md
-
+MIGRATION_GUIDE-0.9.8.md
+SKATEBOARD_UI_EXTENSIONS_PROPOSAL.md

@@ -3,7 +3,7 @@ import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import { useEffect, useState, useRef } from "react";
 import { getBackendURL, getCookie, timestampToString, showCheckout, getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { Trash2, Check } from 'lucide-react';
-import { getState } from '../context.jsx';
+import { getState } from '@stevederico/skateboard-ui/Context';
 import constants from '../constants.json';
 
 export default function HomeView() {

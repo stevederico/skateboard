@@ -1,7 +1,7 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "0.9.4",
+  "version": "1.0.0",
   "type": "module",  
   "workspaces": [
     "backend"
@@ -10,16 +10,16 @@
     "start": "npm run front & npm run server",
     "front": "vite --force --mode development",
     "server": "npm run --workspace=backend start",
-    
     "build": "vite build --mode development;",
     "prod": "vite build --mode production;",
     "install-all": "npm install && npm install --workspace=backend"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "^0.9.8",
+    "@stevederico/skateboard-ui": "^1.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.4"
+    "react-router-dom": "^7.9.4",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",
