@@ -1,8 +1,8 @@
-# Migration Guide: skateboard-ui 1.1.0
+# Migration Guide: skateboard-ui 1.1.1
 
 ## Overview
 
-This guide covers migrating from skateboard-ui **0.9.x** to **1.1.0**, which introduces the **Application Shell Architecture**—a paradigm shift that eliminates nearly all boilerplate from your apps.
+This guide covers migrating from skateboard-ui **0.9.x** to **1.1.1**, which introduces the **Application Shell Architecture**—a paradigm shift that eliminates nearly all boilerplate from your apps.
 
 **Migration Time**: ~15 minutes per app
 
@@ -844,7 +844,8 @@ Override specific theme variables:
 
 | skateboard-ui | Status | Notes |
 |--------------|--------|-------|
-| 1.1.0 | ✅ Current | Pure UI library, build config in apps, TailwindCSS v4 native modules fixed |
+| 1.1.1 | ✅ Current | Added Error Boundary, automatic constants validation, improved error handling |
+| 1.1.0 | ⚠️ Upgrade | Pure UI library, build config in apps, TailwindCSS v4 native modules fixed |
 | 1.0.8 | ⚠️ Upgrade | Fixed cookie@1.0.2 ESM export error in Deno (deprecated) |
 | 1.0.7 | ⚠️ Upgrade | Fixed wrapper rendering, wrapper inside ContextProvider (deprecated) |
 | 1.0.6 | ⚠️ Upgrade | Added wrapper parameter support (deprecated) |
@@ -1115,13 +1116,15 @@ deno run prod
 
 ## Summary
 
-skateboard-ui 1.1.0 transforms your apps from traditional React projects with hundreds of lines of boilerplate into clean, minimal applications that focus on your unique features.
+skateboard-ui 1.1.1 transforms your apps from traditional React projects with hundreds of lines of boilerplate into clean, minimal applications that focus on your unique features.
 
 **Migration time**: ~15 minutes per app (from 0.9.x) or ~5 minutes (from 1.0.x)
 **Benefit**: Update once, fix everywhere
 **Result**: 95% less boilerplate, 100% more focus on features
 
-**Key improvements in 1.1.0:**
+**Key improvements in 1.1.1:**
+- ✅ Error boundary component for robust error handling
+- ✅ Automatic constants validation on app initialization
 - ✅ Fully compatible with TailwindCSS v4 native bindings
 - ✅ Build configuration in each app (no more binary bundling issues)
 - ✅ Pure component and utility library (smaller skateboard-ui package)
@@ -1129,7 +1132,7 @@ skateboard-ui 1.1.0 transforms your apps from traditional React projects with hu
 - ✅ Resolved cookie/set-cookie-parser ESM issues
 - ✅ Cleaner architecture: UI library + app configuration
 
-**Architecture (v1.1.0):**
+**Architecture (v1.1.1):**
 ```
 skateboard-ui (pure runtime library)
 ├── Components (Layout, SignIn, etc.)
