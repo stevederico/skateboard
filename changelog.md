@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+1.0.2
+
+  Update skateboard-ui to 1.0.7
+  Clean up migration documentation
+
 1.0.1
 
   Update skateboard-ui to 1.0.4

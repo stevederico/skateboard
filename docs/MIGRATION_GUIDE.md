@@ -1,8 +1,8 @@
-# Migration Guide: skateboard-ui 1.0.0
+# Migration Guide: skateboard-ui 1.0.7
 
 ## Overview
 
-This guide covers migrating from skateboard-ui **0.9.x** to **1.0.0**, which introduces the **Application Shell Architecture**—a paradigm shift that eliminates nearly all boilerplate from your apps.
+This guide covers migrating from skateboard-ui **0.9.x** to **1.0.7**, which introduces the **Application Shell Architecture**—a paradigm shift that eliminates nearly all boilerplate from your apps.
 
 **Migration Time**: ~15 minutes per app
 
@@ -15,15 +15,15 @@ Your app becomes three simple pieces:
 
 **Result**: Apps go from ~500 lines of boilerplate to ~20 lines of app-specific code.
 
-## What's New in 1.0.0
+## What's New in 1.0.7
 
-### skateboard-ui@1.0.0 Exports
+### skateboard-ui@1.0.7 Exports
 
-**New Components:**
+**Core Components:**
 - `Context` - ContextProvider and getState (no need to define locally)
-- `App` - createSkateboardApp() function (replaces manual setup)
+- `App` - createSkateboardApp() function with wrapper support (replaces manual setup)
 
-**New Utilities:**
+**Utilities:**
 - `getSkateboardViteConfig()` - Complete Vite config with override support
 - `apiRequest()` - Unified API request handler with CSRF and auth
 - `apiRequestWithParams()` - API requests with query parameters
@@ -31,8 +31,13 @@ Your app becomes three simple pieces:
 - `useForm()` - Hook for form state management
 - `validateConstants()` - Constants.json validation
 
-**New Base Theme:**
+**Base Theme:**
 - `styles.css` - Complete theme system (182 lines) available for import
+
+**New in 1.0.6-1.0.7:**
+- `wrapper` parameter in createSkateboardApp() - Support for custom context providers
+- Fixed wrapper rendering order (wrapper now renders inside ContextProvider)
+- Fixed internal context imports in skateboard-ui components
 
 ## Benefits
 
@@ -70,8 +75,8 @@ Total: 26 lines
 ### 1. Update Dependencies
 
 ```bash
-# Update skateboard-ui to 1.0.0
-deno install npm:@stevederico/skateboard-ui@1.0.0
+# Update skateboard-ui to 1.0.7
+deno install npm:@stevederico/skateboard-ui@1.0.7
 
 # Add tailwindcss-animate if not present
 deno install npm:tailwindcss-animate@^1.0.7
@@ -84,7 +89,7 @@ deno install
 ```json
 {
   "dependencies": {
-    "@stevederico/skateboard-ui": "^1.0.0",
+    "@stevederico/skateboard-ui": "^1.0.7",
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
@@ -347,7 +352,68 @@ createSkateboardApp({
 
 **You only define:** Your app's custom routes
 
-### 6. Update Component Imports
+### 6. (Optional) Add Custom Context Wrapper
+
+**New in 1.0.6-1.0.7:** If your app needs additional context providers (like a FavoritesProvider, ThemeProvider, etc.) that need access to skateboard's ContextProvider, use the `wrapper` parameter:
+
+```javascript
+import './assets/styles.css';
+import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
+import { FavoritesProvider } from './contexts/FavoritesContext';
+import constants from './constants.json';
+import HomeView from './components/HomeView.jsx';
+import MapView from './components/MapView.jsx';
+
+const appRoutes = [
+  { path: 'home', element: <HomeView /> },
+  { path: 'map', element: <MapView /> }
+];
+
+// Custom wrapper to include FavoritesProvider
+const AppWrapper = ({ children }) => (
+  <FavoritesProvider>
+    {children}
+  </FavoritesProvider>
+);
+
+createSkateboardApp({
+  constants,
+  appRoutes,
+  defaultRoute: 'home',
+  wrapper: AppWrapper  // ← Add wrapper parameter
+});
+```
+
+**Example FavoritesContext that uses getState():**
+```javascript
+import { createContext, useContext, useState, useEffect } from 'react';
+import { getState } from '@stevederico/skateboard-ui/Context';
+
+const FavoritesContext = createContext();
+
+export function FavoritesProvider({ children }) {
+  const { state } = getState(); // Works because wrapper is inside ContextProvider
+  const [favorites, setFavorites] = useState([]);
+
+  useEffect(() => {
+    if (state.user) {
+      // Fetch user's favorites
+    }
+  }, [state.user]);
+
+  return (
+    <FavoritesContext.Provider value={{ favorites, setFavorites }}>
+      {children}
+    </FavoritesContext.Provider>
+  );
+}
+
+export const useFavorites = () => useContext(FavoritesContext);
+```
+
+**Important:** The wrapper renders **inside** ContextProvider (fixed in 1.0.7), so your custom providers can access `getState()` from skateboard-ui.
+
+### 7. Update Component Imports
 
 Components that imported from local context.jsx need to update:
 
@@ -670,20 +736,23 @@ Override specific theme variables:
 
 | skateboard-ui | Status | Notes |
 |--------------|--------|-------|
-| 1.0.4 | ✅ Current | Remove initializeUtilities, simplified config |
+| 1.0.7 | ✅ Current | Fixed wrapper rendering, wrapper inside ContextProvider |
+| 1.0.6 | ⚠️ Upgrade | Added wrapper parameter support |
+| 1.0.5 | ⚠️ Upgrade | Fixed internal context imports |
+| 1.0.4 | ⚠️ Upgrade | Remove initializeUtilities, simplified config |
 | 1.0.0 | ⚠️ Upgrade | Application Shell Architecture base |
 | 0.9.8 | ⚠️ Upgrade | Migration recommended |
 | 0.9.x | ⚠️ Upgrade | Use this guide |
 | 0.8.x | ❌ Upgrade to 0.9.8 first | Use MIGRATION_GUIDE-0.9.8.md |
 
-## Update to 1.0.4
+## Update from 1.0.0-1.0.6 to 1.0.7
 
-If you're already on skateboard-ui 1.0.0+, follow these quick steps to update to 1.0.4:
+If you're already on skateboard-ui 1.0.0+, follow these quick steps to update to 1.0.7:
 
 ### 1. Update package.json
 
 ```bash
-deno install npm:@stevederico/skateboard-ui@1.0.4
+deno install npm:@stevederico/skateboard-ui@1.0.7
 deno install
 ```
 
@@ -691,16 +760,16 @@ deno install
 ```json
 {
   "dependencies": {
-    "@stevederico/skateboard-ui": "^1.0.4"
+    "@stevederico/skateboard-ui": "^1.0.7"
   }
 }
 ```
 
-### 2. Remove initializeUtilities Call
+### 2. Remove initializeUtilities Call (if present)
 
 If you have this in your `src/main.jsx`, remove it:
 
-**Before (1.0.0):**
+**Before (1.0.0-1.0.3):**
 ```javascript
 import './assets/styles.css';
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
@@ -721,7 +790,7 @@ createSkateboardApp({
 });
 ```
 
-**After (1.0.4):**
+**After (1.0.4+):**
 ```javascript
 import './assets/styles.css';
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
@@ -740,19 +809,29 @@ createSkateboardApp({
 ```
 
 **What changed:**
-- `initializeUtilities(constants)` no longer needed
+- `initializeUtilities(constants)` no longer needed (removed in 1.0.4)
 - `createSkateboardApp()` handles initialization automatically
 - Cleaner main.jsx with no side effects
 
-### 3. Vite Config (Already Simplified)
+### 3. Update Wrapper Usage (if applicable)
 
-If you're using `getSkateboardViteConfig()`, you're already good! The 1.0.4 update maintains full compatibility:
+**If you're using custom context providers** (like FavoritesProvider), 1.0.7 fixes a critical bug where the wrapper was rendered outside ContextProvider. No code changes needed—just update the package!
 
-```javascript
-import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
-
-export default getSkateboardViteConfig();
+**Before 1.0.7 (broken):**
 ```
+Wrapper (outside)
+  └─ ContextProvider
+     └─ App
+```
+Custom providers couldn't access `getState()` ❌
+
+**After 1.0.7 (fixed):**
+```
+ContextProvider
+  └─ Wrapper (inside)
+     └─ App
+```
+Custom providers can access `getState()` ✅
 
 ### 4. Verify and Test
 
@@ -765,12 +844,13 @@ deno run start
 # ✅ Sign in/Sign up flows work
 # ✅ App routes work
 # ✅ API calls succeed
+# ✅ Custom context providers work (if using wrapper parameter)
 
 # Test production build
 deno run prod
 ```
 
-**That's it!** Your app is now on 1.0.4.
+**That's it!** Your app is now on 1.0.7.
 
 ## Next Steps
 
@@ -788,12 +868,18 @@ deno run prod
 
 ## Summary
 
-skateboard-ui 1.0.0 transforms your apps from traditional React projects with hundreds of lines of boilerplate into clean, minimal applications that focus on your unique features.
+skateboard-ui 1.0.7 transforms your apps from traditional React projects with hundreds of lines of boilerplate into clean, minimal applications that focus on your unique features.
 
 **Migration time**: ~15 minutes per app
 **Benefit**: Update once, fix everywhere
 **Result**: 95% less boilerplate, 100% more focus on features
 
+**Key improvements in 1.0.7:**
+- ✅ Fixed wrapper rendering order (wrapper now inside ContextProvider)
+- ✅ Custom context providers can access skateboard's getState()
+- ✅ Fixed internal context imports in skateboard-ui components
+- ✅ Full support for apps with custom providers (FavoritesProvider, etc.)
+
 ---
 
-**Ready to migrate?** Follow this guide step-by-step. Start with one app, verify it works, then migrate the rest. The skateboard boilerplate in the repo demonstrates the complete 1.0.0 pattern.
+**Ready to migrate?** Follow this guide step-by-step. Start with one app, verify it works, then migrate the rest. The skateboard boilerplate in the repo demonstrates the complete 1.0.7 pattern.
