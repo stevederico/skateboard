@@ -1,5 +1,14 @@
 ## CHANGELOG
 
+1.0.3
+
+  Fix cookie imports
+  Add Vite optimizeDeps
+  Replace lucide-react DynamicIcon
+  Update migration guide
+  Add deno.json config
+  Pin cookie version
+
 1.0.2
 
   Update skateboard-ui to 1.0.7

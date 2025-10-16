@@ -1,11 +1,14 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "1.0.2",
-  "type": "module",  
+  "version": "1.0.3",
+  "type": "module",
   "workspaces": [
     "backend"
   ],
+  "overrides": {
+    "cookie": "0.7.2"
+  },
   "scripts": {
     "start": "npm run front & npm run server",
     "front": "vite --force --mode development",
@@ -15,7 +18,8 @@
     "install-all": "npm install && npm install --workspace=backend"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "^1.0.7",
+    "@stevederico/skateboard-ui": "1.0.9",
+    "cookie": "0.7.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.4",

@@ -1,7 +1,7 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
+import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 import { useState, useEffect, useRef } from "react";
-import { ArrowUp, MessageCircle } from 'lucide-react';
 import { getRemainingUsage, trackUsage, showCheckout, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '@stevederico/skateboard-ui/Context';
 
@@ -120,12 +120,12 @@ export default function ChatView() {
           <button
             onClick={handleSend}
             className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-              newMessage.trim() 
-                ? 'bg-app text-white' 
+              newMessage.trim()
+                ? 'bg-app text-white'
                 : 'bg-accent text-foreground'
             }`}
           >
-            <ArrowUp size={20} />
+            <DynamicIcon name="arrow-up" size={20} />
           </button>
         </div>
       </div>

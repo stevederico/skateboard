@@ -1,8 +1,8 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
+import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 import { useEffect, useState, useRef } from "react";
 import { getBackendURL, getCookie, timestampToString, showCheckout, getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
-import { Trash2, Check } from 'lucide-react';
 import { getState } from '@stevederico/skateboard-ui/Context';
 import constants from '../constants.json';
 
@@ -191,7 +191,7 @@ export default function HomeView() {
                   onClick={() => toggleTodo(todo.id)}
                   className={`w-6 h-6 border-2 border-accent rounded cursor-pointer flex items-center justify-center bg-background`}
                 >
-                  {todo.completed && <Check size={14} className="text-foreground" />}
+                  {todo.completed && <DynamicIcon name="check" size={14} className="text-foreground" />}
                 </div>
 
                 {/* Todo Text */}
@@ -214,7 +214,7 @@ export default function HomeView() {
                   className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all p-1 cursor-pointer"
                   title="Delete task"
                 >
-                  <Trash2 size={16} />
+                  <DynamicIcon name="trash-2" size={16} />
                 </button>
               </div>
             ))

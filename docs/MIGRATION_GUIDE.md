@@ -22,6 +22,7 @@ Your app becomes three simple pieces:
 **Core Components:**
 - `Context` - ContextProvider and getState (no need to define locally)
 - `App` - createSkateboardApp() function with wrapper support (replaces manual setup)
+- `DynamicIcon` - Icon component using lucide-react (use instead of direct imports)
 
 **Utilities:**
 - `getSkateboardViteConfig()` - Complete Vite config with override support
@@ -454,6 +455,70 @@ Common files to update:
 - All view components (HomeView.jsx, ChatView.jsx, etc.)
 - Any component using `getState()`
 
+### 8. Use DynamicIcon Instead of lucide-react
+
+**Important**: Do NOT import `lucide-react` directly in your app components. Use skateboard-ui's `DynamicIcon` component instead.
+
+**Before (incorrect):**
+```javascript
+import { Trash2, Check, ArrowUp } from 'lucide-react';
+
+function MyComponent() {
+  return (
+    <>
+      <Trash2 size={16} />
+      <Check size={14} />
+      <ArrowUp size={20} />
+    </>
+  );
+}
+```
+
+**After (correct):**
+```javascript
+import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
+
+function MyComponent() {
+  return (
+    <>
+      <DynamicIcon name="trash-2" size={16} />
+      <DynamicIcon name="check" size={14} />
+      <DynamicIcon name="arrow-up" size={20} />
+    </>
+  );
+}
+```
+
+**Why this matters:**
+- ✅ Icons come from skateboard-ui's lucide-react dependency
+- ✅ No need to add lucide-react to your app's package.json
+- ✅ Consistent with Application Shell Architecture
+- ✅ Update icons in one place (skateboard-ui)
+- ✅ Works with Deno's node_modules structure
+
+**Icon name conversion:**
+- PascalCase → kebab-case
+- `Trash2` → `"trash-2"`
+- `ArrowUp` → `"arrow-up"`
+- `MessageCircle` → `"message-circle"`
+
+**Find and replace:**
+```bash
+# Find files importing lucide-react
+grep -r "from 'lucide-react'" src/components/
+
+# Update each file to use DynamicIcon
+```
+
+**Remove from package.json:**
+```json
+{
+  "dependencies": {
+    "lucide-react": "^0.537.0"  // ← Remove this line
+  }
+}
+```
+
 ## New Features in 1.0.0
 
 ### 1. API Request Utilities
@@ -556,12 +621,12 @@ export default defineConfig({
 ## Migration Checklist
 
 ### Files to Update
-- [ ] **package.json** - Update to skateboard-ui@1.0.0
+- [ ] **package.json** - Update to skateboard-ui@1.0.0, remove lucide-react if present
 - [ ] **src/assets/styles.css** - Replace with import statement (7 lines)
 - [ ] **vite.config.js** - Replace with getSkateboardViteConfig() (3 lines)
 - [ ] **src/context.jsx** - DELETE (use import from skateboard-ui)
 - [ ] **src/main.jsx** - Rewrite using createSkateboardApp() (~16 lines)
-- [ ] **src/components/*.jsx** - Update context imports
+- [ ] **src/components/*.jsx** - Update context imports, replace lucide-react with DynamicIcon
 
 ### Testing
 - [ ] App starts without errors
@@ -661,6 +726,34 @@ import { getState } from '../context.jsx';
 import { getState } from '@stevederico/skateboard-ui/Context';
 ```
 
+### "Failed to resolve import 'lucide-react'"
+
+**Cause**: App components directly importing lucide-react instead of using DynamicIcon
+
+**Fix**: Use DynamicIcon from skateboard-ui:
+```javascript
+// Change this:
+import { Trash2, Check } from 'lucide-react';
+<Trash2 size={16} />
+
+// To this:
+import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
+<DynamicIcon name="trash-2" size={16} />
+```
+
+Remove lucide-react from package.json:
+```bash
+# Remove the dependency
+grep -v "lucide-react" package.json > package.json.tmp
+mv package.json.tmp package.json
+
+# Or manually edit package.json and remove:
+# "lucide-react": "^0.537.0"
+
+# Reinstall
+deno install
+```
+
 ## Advanced Usage
 
 ### Custom Route Configuration
@@ -751,7 +844,8 @@ Override specific theme variables:
 
 | skateboard-ui | Status | Notes |
 |--------------|--------|-------|
-| 1.0.7 | ✅ Current | Fixed wrapper rendering, wrapper inside ContextProvider |
+| 1.0.8 | ✅ Current | Fixed cookie@1.0.2 ESM export error in Deno |
+| 1.0.7 | ⚠️ Upgrade | Fixed wrapper rendering, wrapper inside ContextProvider |
 | 1.0.6 | ⚠️ Upgrade | Added wrapper parameter support |
 | 1.0.5 | ⚠️ Upgrade | Fixed internal context imports |
 | 1.0.4 | ⚠️ Upgrade | Remove initializeUtilities, simplified config |
@@ -759,6 +853,47 @@ Override specific theme variables:
 | 0.9.8 | ⚠️ Upgrade | Migration recommended |
 | 0.9.x | ⚠️ Upgrade | Use this guide |
 | 0.8.x | ❌ Upgrade to 0.9.8 first | Use MIGRATION_GUIDE-0.9.8.md |
+
+## Update from 1.0.7 to 1.0.8
+
+**Quick update - bug fix only, no code changes required.**
+
+skateboard-ui@1.0.8 fixes a critical bug where `cookie` and `set-cookie-parser` were included in Vite's `optimizeDeps`, causing ESM export errors with cookie@1.0.2 in Deno environments.
+
+**Error fixed:**
+```
+The requested module 'cookie' does not provide an export named 'parse'
+```
+
+### Update Steps
+
+```bash
+deno install npm:@stevederico/skateboard-ui@1.0.8
+deno install
+```
+
+**Update package.json:**
+```json
+{
+  "dependencies": {
+    "@stevederico/skateboard-ui": "^1.0.8"
+  }
+}
+```
+
+**What changed:**
+- Removed unused `cookie` and `set-cookie-parser` from Vite pre-bundling
+- No functional changes - packages were never imported
+- Fixes Deno/Vite ESM conversion issues
+
+**Test:**
+```bash
+deno run start  # Should work without cookie export errors
+```
+
+That's it! If you were experiencing cookie export errors, they're now resolved.
+
+---
 
 ## Update from 1.0.0-1.0.6 to 1.0.7
 
