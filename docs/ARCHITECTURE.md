@@ -356,54 +356,80 @@ function MyComponent() {
 }
 ```
 
-### 4. Build Configuration
+### 4. Build Configuration (v1.1.0+)
 
-**App uses utility**:
+**Important Change**: In skateboard-ui v1.1.0, build configuration moved from the package to individual apps.
+
+**Why?** TailwindCSS v4 uses native Rust bindings (.node files) that cannot be bundled for browser runtime. skateboard-ui is now a pure component library.
+
+**App owns vite.config.js** (v1.1.0+):
 ```javascript
 // vite.config.js
-import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'path';
+import fs from 'fs';
 
-export default getSkateboardViteConfig();
-```
+// All build plugins now defined in your app
+const customLoggerPlugin = () => { /* ... */ };
+const htmlReplacePlugin = () => { /* ... */ };
+const dynamicRobotsPlugin = () => { /* ... */ };
+const dynamicSitemapPlugin = () => { /* ... */ };
+const dynamicManifestPlugin = () => { /* ... */ };
 
-**Utility provides** (in skateboard-ui):
-```javascript
-export const getSkateboardViteConfig = (customConfig = {}) => {
-  return {
-    plugins: [
-      react(),
-      tailwindcss(),
-      customLoggerPlugin(),
-      htmlReplacePlugin(),
-      dynamicRobotsPlugin(),
-      dynamicSitemapPlugin(),
-      dynamicManifestPlugin(),
-      ...(customConfig.plugins || [])
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    customLoggerPlugin(),
+    htmlReplacePlugin(),
+    dynamicRobotsPlugin(),
+    dynamicSitemapPlugin(),
+    dynamicManifestPlugin()
+  ],
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      '@radix-ui/react-slot',
+      'cookie',
+      'set-cookie-parser'
     ],
-    resolve: {
-      alias: {
-        '@': resolve(process.cwd(), './src'),
-        ...(customConfig.resolve?.alias || {})
-      }
-    },
-    server: {
-      host: 'localhost',
-      port: 5173,
-      ...(customConfig.server || {})
-    },
-    ...customConfig
-  };
-};
+    exclude: [
+      '@swc/core',
+      '@tailwindcss/oxide',
+      'lightningcss',
+      'fsevents'
+    ]
+  },
+  server: {
+    host: 'localhost',
+    port: 5173
+  }
+});
 ```
 
-**App can override**:
+**App can customize** any part:
 ```javascript
-export default getSkateboardViteConfig({
+export default defineConfig({
+  plugins: [...],
   server: {
     port: 3000,
     proxy: { '/api': 'http://localhost:8080' }
+  },
+  build: {
+    sourcemap: true
   }
 });
+```
+
+**For v1.0.7 and earlier** (deprecated):
+```javascript
+// Old pattern - no longer used
+import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
+export default getSkateboardViteConfig();
 ```
 
 ## API Reference
@@ -447,37 +473,18 @@ createSkateboardApp({
 - `/app/payment` - Payment page
 - `/terms`, `/privacy`, `/eula`, `/subs` - Legal pages
 
-### getSkateboardViteConfig(customConfig)
+### Vite Configuration (v1.1.0+)
 
-Returns complete Vite configuration with optional overrides.
+**Note**: `getSkateboardViteConfig()` was removed in v1.1.0. Build configuration is now in your app.
 
-**Parameters**:
-```typescript
-customConfig?: {
-  plugins?: Plugin[],
-  server?: ServerOptions,
-  resolve?: ResolveOptions,
-  build?: BuildOptions,
-  // ... any other Vite config options
-}
-```
-
-**Example**:
-```javascript
-getSkateboardViteConfig({
-  server: {
-    port: 3000
-  },
-  plugins: [myPlugin()]
-});
-```
-
-**Plugins included**:
+**Available build plugins** (copy to your vite.config.js):
 - `customLoggerPlugin()` - Clean console output
 - `htmlReplacePlugin()` - Replace {{APP_NAME}} etc in index.html
 - `dynamicRobotsPlugin()` - Generate robots.txt
 - `dynamicSitemapPlugin()` - Generate sitemap.xml
 - `dynamicManifestPlugin()` - Generate manifest.json
+
+See the reference implementation: [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
 
 ### Context API
 
@@ -973,14 +980,29 @@ export default function HomeView() {
 
 ```javascript
 // vite.config.js
-import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'path';
+import fs from 'fs';
 
-export default getSkateboardViteConfig({
+// Your plugins
+const customLoggerPlugin = () => { /* ... */ };
+const htmlReplacePlugin = () => { /* ... */ };
+const myAnalyticsPlugin = () => { /* ... */ };
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    customLoggerPlugin(),
+    htmlReplacePlugin(),
+    myAnalyticsPlugin()
+  ],
   server: {
     port: 3000,
     proxy: { '/api': 'http://backend:8080' }
-  },
-  plugins: [myAnalyticsPlugin()]
+  }
 });
 ```
 
@@ -1000,25 +1022,38 @@ export default getSkateboardViteConfig({
 
 ## Summary
 
-Skateboard's Application Shell Architecture transforms React apps from 500+ lines of boilerplate to 20 lines of routes and components. The framework handles infrastructure, you focus on features.
+Skateboard's Application Shell Architecture (v1.1.0+) transforms React apps from 500+ lines of boilerplate to 20 lines of routes and components. The framework handles infrastructure, you focus on features.
+
+**Architecture (v1.1.0):**
+- **skateboard-ui** - Pure component and utility library (no build tools)
+- **Your app** - Owns vite.config.js, main.jsx, constants.json
+- **Separation of concerns** - Build config ≠ Runtime library
 
 **Key Principles**:
 1. **Convention over configuration** - sensible defaults
 2. **Escape hatches everywhere** - override anything
-3. **Centralized maintenance** - update once, fix everywhere
+3. **Centralized maintenance** - update skateboard-ui, all apps benefit
 4. **Simple mental model** - routes + components + config
+5. **Pure runtime library** - no binary bundling issues
 
 **Update Pattern**:
 ```bash
 # Update package
-deno install npm:@stevederico/skateboard-ui@latest
+npm install @stevederico/skateboard-ui@1.1.0
 
-# All apps inherit improvements
-# No code changes needed
+# Copy vite.config.js from reference if upgrading from 1.0.x
+# All other code works as-is
 ```
+
+**Benefits in v1.1.0:**
+- ✅ Full TailwindCSS v4 support (native bindings excluded)
+- ✅ Build configuration in your app (better control)
+- ✅ Pure component library (smaller package, simpler)
+- ✅ No ESM/CommonJS conversion issues
+- ✅ Cleaner separation of concerns
 
 ---
 
-For migration instructions, see `MIGRATION_GUIDE-1.0.0.md`
+For migration instructions, see `MIGRATION_GUIDE.md`
 
 For the reference implementation, see [github.com/stevederico/skateboard](https://github.com/stevederico/skateboard)
