@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+1.0.8
+
+  Remove duplicate initializeUtilities call (now automatic)
+  Add Error Boundary component to skateboard-ui
+  Call validateConstants on app initialization
+  Update skateboard-ui peer dependencies (react ^19.1.0 → ^19.2.0)
+  Update version references to 1.1.1
+
 1.0.7
 
   Add initializeUtilities to main.jsx

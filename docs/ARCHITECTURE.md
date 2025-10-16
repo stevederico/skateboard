@@ -358,7 +358,7 @@ function MyComponent() {
 
 ### 4. Build Configuration (v1.1.0+)
 
-**Important Change**: In skateboard-ui v1.1.0, build configuration moved from the package to individual apps.
+**Important Change**: In skateboard-ui v1.1.0+, build configuration moved from the package to individual apps.
 
 **Why?** TailwindCSS v4 uses native Rust bindings (.node files) that cannot be bundled for browser runtime. skateboard-ui is now a pure component library.
 
@@ -475,7 +475,7 @@ createSkateboardApp({
 
 ### Vite Configuration (v1.1.0+)
 
-**Note**: `getSkateboardViteConfig()` was removed in v1.1.0. Build configuration is now in your app.
+**Note**: `getSkateboardViteConfig()` was removed in v1.1.0+. Build configuration is now in your app.
 
 **Available build plugins** (copy to your vite.config.js):
 - `customLoggerPlugin()` - Clean console output
@@ -1022,9 +1022,9 @@ export default defineConfig({
 
 ## Summary
 
-Skateboard's Application Shell Architecture (v1.1.0+) transforms React apps from 500+ lines of boilerplate to 20 lines of routes and components. The framework handles infrastructure, you focus on features.
+Skateboard's Application Shell Architecture (v1.1.1+) transforms React apps from 500+ lines of boilerplate to 20 lines of routes and components. The framework handles infrastructure, you focus on features.
 
-**Architecture (v1.1.0):**
+**Architecture (v1.1.1):**
 - **skateboard-ui** - Pure component and utility library (no build tools)
 - **Your app** - Owns vite.config.js, main.jsx, constants.json
 - **Separation of concerns** - Build config ≠ Runtime library
@@ -1039,13 +1039,15 @@ Skateboard's Application Shell Architecture (v1.1.0+) transforms React apps from
 **Update Pattern**:
 ```bash
 # Update package
-npm install @stevederico/skateboard-ui@1.1.0
+npm install @stevederico/skateboard-ui@1.1.1
 
 # Copy vite.config.js from reference if upgrading from 1.0.x
 # All other code works as-is
 ```
 
-**Benefits in v1.1.0:**
+**Benefits in v1.1.1:**
+- ✅ Error boundary for robust error handling
+- ✅ Automatic constants validation
 - ✅ Full TailwindCSS v4 support (native bindings excluded)
 - ✅ Build configuration in your app (better control)
 - ✅ Pure component library (smaller package, simpler)
