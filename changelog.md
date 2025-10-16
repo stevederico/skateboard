@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+1.0.1
+
+  Update skateboard-ui to 1.0.4
+  Remove initializeUtilities call
+  Simplify vite.config.js
+
 1.0.0
 
   Application Shell Architecture Release
