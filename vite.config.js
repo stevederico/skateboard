@@ -1,39 +1,202 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite';
-import path from 'node:path';
+import path from 'path';
+import fs from 'fs';
 
-// Import the plugins directly from skateboard-ui
-import {
-  customLoggerPlugin,
-  htmlReplacePlugin,
-  dynamicRobotsPlugin,
-  dynamicSitemapPlugin,
-  dynamicManifestPlugin
-} from '@stevederico/skateboard-ui/Utilities';
+// ===== CUSTOM VITE PLUGINS =====
 
-// Custom plugin to handle native modules
-const nativeModuleHandler = () => ({
-  name: 'native-module-handler',
-  enforce: 'pre',
-  resolveId(id) {
-    // Handle native binary modules
-    if (id.endsWith('.node') || id.includes('@tailwindcss/oxide')) {
-      return { id, external: true };
-    }
-    return null;
-  },
-  load(id) {
-    if (id.endsWith('.node')) {
-      // Return empty module for native binaries
-      return 'export default {}';
-    }
-  }
-});
+/**
+ * Custom logger plugin for Vite
+ */
+const customLoggerPlugin = () => {
+    return {
+        name: 'custom-logger',
+        configureServer(server) {
+            server.printUrls = () => {
+                console.log(`🖥️  React is running on http://localhost:${server.config.server.port || 5173}`);
+            };
+        }
+    };
+};
+
+/**
+ * HTML replacement plugin
+ * Replaces {{APP_NAME}}, {{TAGLINE}}, {{COMPANY_WEBSITE}} in index.html
+ */
+const htmlReplacePlugin = () => {
+    return {
+        name: 'html-replace',
+        transformIndexHtml(html) {
+            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+
+            return html
+                .replace(/{{APP_NAME}}/g, constants.appName)
+                .replace(/{{TAGLINE}}/g, constants.tagline)
+                .replace(/{{COMPANY_WEBSITE}}/g, constants.companyWebsite);
+        }
+    };
+};
+
+/**
+ * Dynamic robots.txt plugin
+ */
+const dynamicRobotsPlugin = () => {
+    return {
+        name: 'dynamic-robots',
+        generateBundle() {
+            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+            const website = constants.companyWebsite.startsWith('http')
+                ? constants.companyWebsite
+                : `https://${constants.companyWebsite}`;
+
+            const robotsContent = `User-agent: Googlebot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: Bingbot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: Applebot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: facebookexternalhit
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: Facebot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: Twitterbot
+Disallow: /app/
+Disallow: /console/
+Disallow: /signin/
+Disallow: /signup/
+
+User-agent: *
+Disallow: /
+
+Sitemap: ${website}/sitemap.xml
+`;
+
+            this.emitFile({
+                type: 'asset',
+                fileName: 'robots.txt',
+                source: robotsContent
+            });
+        }
+    };
+};
+
+/**
+ * Dynamic sitemap.xml plugin
+ */
+const dynamicSitemapPlugin = () => {
+    return {
+        name: 'dynamic-sitemap',
+        generateBundle() {
+            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+            const website = constants.companyWebsite.startsWith('http')
+                ? constants.companyWebsite
+                : `https://${constants.companyWebsite}`;
+
+            const currentDate = new Date().toISOString().split('T')[0];
+
+            const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${website}/</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${website}/terms</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${website}/privacy</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>${website}/subs</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>${website}/eula</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>`;
+
+            this.emitFile({
+                type: 'asset',
+                fileName: 'sitemap.xml',
+                source: sitemapContent
+            });
+        }
+    };
+};
+
+/**
+ * Dynamic manifest.json plugin
+ */
+const dynamicManifestPlugin = () => {
+    return {
+        name: 'dynamic-manifest',
+        generateBundle() {
+            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+
+            const manifestContent = {
+                short_name: constants.appName,
+                name: constants.appName,
+                description: constants.tagline,
+                icons: [
+                    {
+                        src: "/icons/icon.svg",
+                        sizes: "192x192",
+                        type: "image/svg+xml"
+                    }
+                ],
+                start_url: "./app",
+                display: "standalone",
+                theme_color: "#000000",
+                background_color: "#ffffff"
+            };
+
+            this.emitFile({
+                type: 'asset',
+                fileName: 'manifest.json',
+                source: JSON.stringify(manifestContent, null, 2)
+            });
+        }
+    };
+};
+
+// ===== VITE CONFIGURATION =====
 
 export default defineConfig({
   plugins: [
-    nativeModuleHandler(),
     react(),
     tailwindcss(),
     customLoggerPlugin(),
@@ -58,7 +221,9 @@ export default defineConfig({
       'react',
       'react-dom',
       'react-dom/client',
-      '@radix-ui/react-slot'
+      '@radix-ui/react-slot',
+      'cookie',
+      'set-cookie-parser'
     ],
     exclude: [
       '@swc/core',
@@ -71,9 +236,7 @@ export default defineConfig({
       '@tailwindcss/oxide-linux-x64-musl',
       '@tailwindcss/oxide-win32-x64-msvc',
       'lightningcss',
-      'fsevents',
-      'cookie',
-      'set-cookie-parser'
+      'fsevents'
     ],
     esbuildOptions: {
       target: 'esnext',

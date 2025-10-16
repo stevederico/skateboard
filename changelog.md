@@ -1,5 +1,14 @@
 ## CHANGELOG
 
+1.0.5
+
+  Update skateboard-ui to 1.1.0
+  Move Vite config to app
+  Remove unused cookie package
+  Fix CommonJS module bundling
+  Add cookie to optimizeDeps
+  Add set-cookie-parser prebundling
+
 1.0.4
 
   Fix Vite configuration
