@@ -1,6 +1,0 @@
-{
-  "nodeModulesDir": "auto",
-  "imports": {
-    "cookie": "npm:cookie@0.7.2"
-  }
-}

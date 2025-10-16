@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+1.0.4
+
+  Fix Vite configuration
+  Add native module handler
+  Remove deno dependencies
+  Update TailwindCSS v4 support
+
 1.0.3
 
   Fix cookie imports
