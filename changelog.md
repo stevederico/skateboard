@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+1.0.7
+
+  Add initializeUtilities to main.jsx
+  Fix utilities initialization for v1.1.1
+
 1.0.6
 
   Update skateboard-ui to 1.1.1
