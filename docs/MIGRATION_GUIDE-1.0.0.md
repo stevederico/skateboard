@@ -670,10 +670,107 @@ Override specific theme variables:
 
 | skateboard-ui | Status | Notes |
 |--------------|--------|-------|
-| 1.0.0 | ✅ Current | Application Shell Architecture |
+| 1.0.4 | ✅ Current | Remove initializeUtilities, simplified config |
+| 1.0.0 | ⚠️ Upgrade | Application Shell Architecture base |
 | 0.9.8 | ⚠️ Upgrade | Migration recommended |
 | 0.9.x | ⚠️ Upgrade | Use this guide |
 | 0.8.x | ❌ Upgrade to 0.9.8 first | Use MIGRATION_GUIDE-0.9.8.md |
+
+## Update to 1.0.4
+
+If you're already on skateboard-ui 1.0.0+, follow these quick steps to update to 1.0.4:
+
+### 1. Update package.json
+
+```bash
+deno install npm:@stevederico/skateboard-ui@1.0.4
+deno install
+```
+
+**Update package.json:**
+```json
+{
+  "dependencies": {
+    "@stevederico/skateboard-ui": "^1.0.4"
+  }
+}
+```
+
+### 2. Remove initializeUtilities Call
+
+If you have this in your `src/main.jsx`, remove it:
+
+**Before (1.0.0):**
+```javascript
+import './assets/styles.css';
+import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
+import { initializeUtilities } from '@stevederico/skateboard-ui/Utilities';
+import constants from './constants.json';
+import HomeView from './components/HomeView.jsx';
+
+const appRoutes = [
+  { path: 'home', element: <HomeView /> }
+];
+
+initializeUtilities(constants);  // ← Remove this
+
+createSkateboardApp({
+  constants,
+  appRoutes,
+  defaultRoute: 'home'
+});
+```
+
+**After (1.0.4):**
+```javascript
+import './assets/styles.css';
+import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
+import constants from './constants.json';
+import HomeView from './components/HomeView.jsx';
+
+const appRoutes = [
+  { path: 'home', element: <HomeView /> }
+];
+
+createSkateboardApp({
+  constants,
+  appRoutes,
+  defaultRoute: 'home'
+});
+```
+
+**What changed:**
+- `initializeUtilities(constants)` no longer needed
+- `createSkateboardApp()` handles initialization automatically
+- Cleaner main.jsx with no side effects
+
+### 3. Vite Config (Already Simplified)
+
+If you're using `getSkateboardViteConfig()`, you're already good! The 1.0.4 update maintains full compatibility:
+
+```javascript
+import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
+
+export default getSkateboardViteConfig();
+```
+
+### 4. Verify and Test
+
+```bash
+deno install
+deno run start
+
+# Test in browser
+# ✅ Landing page loads
+# ✅ Sign in/Sign up flows work
+# ✅ App routes work
+# ✅ API calls succeed
+
+# Test production build
+deno run prod
+```
+
+**That's it!** Your app is now on 1.0.4.
 
 ## Next Steps
 
