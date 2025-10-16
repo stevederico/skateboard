@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+1.0.6
+
+  Update skateboard-ui to 1.1.1
+  Update MIGRATION_GUIDE for v1.1.0
+  Update ARCHITECTURE.md documentation
+
 1.0.5
 
   Update skateboard-ui to 1.1.0
