@@ -1,44 +1,47 @@
-# Migration Guide: skateboard-ui 1.0.7
+# Migration Guide: skateboard-ui 1.1.0
 
 ## Overview
 
-This guide covers migrating from skateboard-ui **0.9.x** to **1.0.7**, which introduces the **Application Shell Architecture**—a paradigm shift that eliminates nearly all boilerplate from your apps.
+This guide covers migrating from skateboard-ui **0.9.x** to **1.1.0**, which introduces the **Application Shell Architecture**—a paradigm shift that eliminates nearly all boilerplate from your apps.
 
 **Migration Time**: ~15 minutes per app
 
 ### What is Application Shell Architecture?
 
 Your app becomes three simple pieces:
-1. **Shell** (from skateboard-ui package) - Framework, routing, context, utilities
+1. **Shell** (from skateboard-ui package) - Framework, routing, context, utilities, UI components
 2. **Content** (your code) - Components and business logic
 3. **Config** (constants.json) - App-specific configuration
 
 **Result**: Apps go from ~500 lines of boilerplate to ~20 lines of app-specific code.
 
-## What's New in 1.0.7
+## What's New in 1.1.0
 
-### skateboard-ui@1.0.7 Exports
+### skateboard-ui@1.1.0 (Pure UI Library)
+
+**skateboard-ui is now a pure component and utility library**—all Vite build configuration has been moved to individual apps.
 
 **Core Components:**
 - `Context` - ContextProvider and getState (no need to define locally)
 - `App` - createSkateboardApp() function with wrapper support (replaces manual setup)
 - `DynamicIcon` - Icon component using lucide-react (use instead of direct imports)
+- `Layout`, `LandingView`, `SignInView`, `SignUpView`, `SignOutView`, `PaymentView`, `SettingsView`, `ProtectedRoute` - Complete UI shell
 
 **Utilities:**
-- `getSkateboardViteConfig()` - Complete Vite config with override support
 - `apiRequest()` - Unified API request handler with CSRF and auth
 - `apiRequestWithParams()` - API requests with query parameters
 - `useListData()` - Hook for fetching and managing list data
 - `useForm()` - Hook for form state management
-- `validateConstants()` - Constants.json validation
+- `getCookie()`, `setCookie()` - Cookie utilities
 
 **Base Theme:**
 - `styles.css` - Complete theme system (182 lines) available for import
 
-**New in 1.0.6-1.0.7:**
-- `wrapper` parameter in createSkateboardApp() - Support for custom context providers
-- Fixed wrapper rendering order (wrapper now renders inside ContextProvider)
-- Fixed internal context imports in skateboard-ui components
+**Key Change in 1.1.0:**
+- ✅ Removed `getSkateboardViteConfig()` - Build config now in each app's vite.config.js
+- ✅ Removed all Vite plugins from skateboard-ui
+- ✅ Fixed TailwindCSS v4 native module bundling issues
+- ✅ Simplified package for pure runtime usage
 
 ## Benefits
 
@@ -170,31 +173,29 @@ Each app should override `--color-app` to match its brand identity:
 }
 ```
 
-### 3. Simplify vite.config.js
+### 3. Vite Configuration (v1.1.0)
 
-**Before (0.9.x)**: 227 lines with custom plugins
+**Important Change in 1.1.0**: Build configuration is now in your app, not imported from skateboard-ui.
+
+**Why?** skateboard-ui v1.1.0 is a pure runtime library. TailwindCSS v4 uses native bindings (.node files) that cannot be bundled for browser runtime. By keeping build config in your app, we avoid binary bundling issues.
+
+**New Approach (1.1.0+)**: Copy vite.config.js to your app
+
+Your `vite.config.js` should contain all Vite plugins directly:
+
 ```javascript
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react-swc'
-import tailwindcss from '@tailwindcss/vite'
-import { resolve } from 'node:path'
-// ... more imports
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'path';
+import fs from 'fs';
 
-const customLoggerPlugin = () => {
-  return {
-    name: 'custom-logger',
-    // ... 10 lines
-  };
-};
-
-const htmlReplacePlugin = () => {
-  return {
-    name: 'html-replace',
-    // ... 15 lines
-  };
-};
-
-// ... 3 more plugins (200+ lines)
+// Custom plugins defined in your app
+const customLoggerPlugin = () => { /* ... */ };
+const htmlReplacePlugin = () => { /* ... */ };
+const dynamicRobotsPlugin = () => { /* ... */ };
+const dynamicSitemapPlugin = () => { /* ... */ };
+const dynamicManifestPlugin = () => { /* ... */ };
 
 export default defineConfig({
   plugins: [
@@ -206,36 +207,35 @@ export default defineConfig({
     dynamicSitemapPlugin(),
     dynamicManifestPlugin()
   ],
-  // ... 40+ more lines of config
-})
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      '@radix-ui/react-slot',
+      'cookie',
+      'set-cookie-parser'
+    ],
+    exclude: [
+      '@swc/core',
+      '@tailwindcss/oxide',
+      'lightningcss',
+      'fsevents'
+    ]
+  },
+  // ... rest of config
+});
 ```
 
-**After (1.0.0)**: 3 lines using utility
+**Migration path from 1.0.7 → 1.1.0:**
+
+If you're on 1.0.7, your app likely had a minimal vite.config.js:
 ```javascript
 import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
-
 export default getSkateboardViteConfig();
 ```
 
-**With overrides (if needed):**
-```javascript
-import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
-
-export default getSkateboardViteConfig({
-  server: {
-    port: 3000,
-    proxy: {
-      '/api': 'http://localhost:8080'
-    }
-  },
-  plugins: [customPlugin()],
-  resolve: {
-    alias: {
-      '@custom': './custom-path'
-    }
-  }
-});
-```
+**Update to 1.1.0** by copying the full config from the reference implementation at [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js).
 
 ### 4. Delete context.jsx
 
@@ -844,54 +844,151 @@ Override specific theme variables:
 
 | skateboard-ui | Status | Notes |
 |--------------|--------|-------|
-| 1.0.8 | ✅ Current | Fixed cookie@1.0.2 ESM export error in Deno |
-| 1.0.7 | ⚠️ Upgrade | Fixed wrapper rendering, wrapper inside ContextProvider |
-| 1.0.6 | ⚠️ Upgrade | Added wrapper parameter support |
-| 1.0.5 | ⚠️ Upgrade | Fixed internal context imports |
-| 1.0.4 | ⚠️ Upgrade | Remove initializeUtilities, simplified config |
-| 1.0.0 | ⚠️ Upgrade | Application Shell Architecture base |
-| 0.9.8 | ⚠️ Upgrade | Migration recommended |
-| 0.9.x | ⚠️ Upgrade | Use this guide |
+| 1.1.0 | ✅ Current | Pure UI library, build config in apps, TailwindCSS v4 native modules fixed |
+| 1.0.8 | ⚠️ Upgrade | Fixed cookie@1.0.2 ESM export error in Deno (deprecated) |
+| 1.0.7 | ⚠️ Upgrade | Fixed wrapper rendering, wrapper inside ContextProvider (deprecated) |
+| 1.0.6 | ⚠️ Upgrade | Added wrapper parameter support (deprecated) |
+| 1.0.5 | ⚠️ Upgrade | Fixed internal context imports (deprecated) |
+| 1.0.4 | ⚠️ Upgrade | Removed initializeUtilities (deprecated) |
+| 1.0.0 | ⚠️ Upgrade | Application Shell Architecture base (deprecated) |
+| 0.9.8 | ⚠️ Upgrade | Migration recommended (deprecated) |
+| 0.9.x | ⚠️ Upgrade | Use this guide (deprecated) |
 | 0.8.x | ❌ Upgrade to 0.9.8 first | Use MIGRATION_GUIDE-0.9.8.md |
 
-## Update from 1.0.7 to 1.0.8
+## Update from 1.0.x to 1.1.0
 
-**Quick update - bug fix only, no code changes required.**
+**Major architectural change**: Build configuration moved from skateboard-ui to individual apps.
 
-skateboard-ui@1.0.8 fixes a critical bug where `cookie` and `set-cookie-parser` were included in Vite's `optimizeDeps`, causing ESM export errors with cookie@1.0.2 in Deno environments.
+### Why the change?
 
-**Error fixed:**
-```
-The requested module 'cookie' does not provide an export named 'parse'
-```
+TailwindCSS v4 uses Rust-based native bindings (.node files) that cannot be bundled for browser runtime. skateboard-ui v1.1.0 is now a pure component and utility library without build tools.
+
+**Result:**
+- ✅ No more binary bundling issues
+- ✅ Simpler skateboard-ui package
+- ✅ Each app owns its build configuration
+- ✅ Full control over Vite settings per app
 
 ### Update Steps
 
+#### 1. Update package.json
+
 ```bash
-deno install npm:@stevederico/skateboard-ui@1.0.8
-deno install
+npm install @stevederico/skateboard-ui@1.1.0
+npm install
 ```
 
-**Update package.json:**
+**Update dependencies:**
 ```json
 {
   "dependencies": {
-    "@stevederico/skateboard-ui": "^1.0.8"
+    "@stevederico/skateboard-ui": "1.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.4",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react-swc": "^4.1.0",
+    "tailwindcss": "4.1.14",
+    "vite": "^7.1.10"
   }
 }
 ```
 
-**What changed:**
-- Removed unused `cookie` and `set-cookie-parser` from Vite pre-bundling
-- No functional changes - packages were never imported
-- Fixes Deno/Vite ESM conversion issues
+#### 2. Update vite.config.js
 
-**Test:**
-```bash
-deno run start  # Should work without cookie export errors
+**Old (1.0.7):**
+```javascript
+import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
+export default getSkateboardViteConfig();
 ```
 
-That's it! If you were experiencing cookie export errors, they're now resolved.
+**New (1.1.0):** Copy full config from [skateboard reference](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
+
+```javascript
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'path';
+import fs from 'fs';
+
+// All plugins now defined in your app
+const customLoggerPlugin = () => {
+  return {
+    name: 'custom-logger',
+    configureServer(server) {
+      server.printUrls = () => {
+        console.log(`🖥️  React is running on http://localhost:${server.config.server.port || 5173}`);
+      };
+    }
+  };
+};
+
+// ... other plugins
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    customLoggerPlugin(),
+    htmlReplacePlugin(),
+    dynamicRobotsPlugin(),
+    dynamicSitemapPlugin(),
+    dynamicManifestPlugin()
+  ],
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      '@radix-ui/react-slot',
+      'cookie',
+      'set-cookie-parser'
+    ],
+    exclude: [
+      '@swc/core',
+      '@tailwindcss/oxide',
+      'lightningcss',
+      'fsevents'
+    ]
+  },
+  // ... rest of config
+});
+```
+
+#### 3. Remove unused dependencies
+
+If you were only importing `getSkateboardViteConfig`, there are no other code changes needed.
+
+#### 4. Test
+
+```bash
+npm run start    # Dev server
+npm run build    # Production build
+```
+
+**Expected result:**
+- ✅ Dev server starts on http://localhost:5173
+- ✅ No TailwindCSS native module errors
+- ✅ Build completes without errors
+- ✅ All functionality works identically
+
+### Key Differences from 1.0.7
+
+| Feature | 1.0.7 | 1.1.0 |
+|---------|-------|-------|
+| Vite config | Imported from skateboard-ui | In your app |
+| Build plugins | From skateboard-ui | Copy to app |
+| skateboard-ui size | Larger (includes build utils) | Smaller (pure runtime) |
+| TailwindCSS v4 support | Limited | Full ✅ |
+| Native modules | Bundled (breaks) | Excluded ✅ |
+| Cookie handling | Pre-bundled (ESM errors) | Manual inclusion ✅ |
+
+### Migration Complete!
+
+Your app is now on v1.1.0 with full control over Vite configuration and no more native module issues.
 
 ---
 
@@ -1018,18 +1115,40 @@ deno run prod
 
 ## Summary
 
-skateboard-ui 1.0.7 transforms your apps from traditional React projects with hundreds of lines of boilerplate into clean, minimal applications that focus on your unique features.
+skateboard-ui 1.1.0 transforms your apps from traditional React projects with hundreds of lines of boilerplate into clean, minimal applications that focus on your unique features.
 
-**Migration time**: ~15 minutes per app
+**Migration time**: ~15 minutes per app (from 0.9.x) or ~5 minutes (from 1.0.x)
 **Benefit**: Update once, fix everywhere
 **Result**: 95% less boilerplate, 100% more focus on features
 
-**Key improvements in 1.0.7:**
-- ✅ Fixed wrapper rendering order (wrapper now inside ContextProvider)
-- ✅ Custom context providers can access skateboard's getState()
-- ✅ Fixed internal context imports in skateboard-ui components
-- ✅ Full support for apps with custom providers (FavoritesProvider, etc.)
+**Key improvements in 1.1.0:**
+- ✅ Fully compatible with TailwindCSS v4 native bindings
+- ✅ Build configuration in each app (no more binary bundling issues)
+- ✅ Pure component and utility library (smaller skateboard-ui package)
+- ✅ Better control over app-specific build settings
+- ✅ Resolved cookie/set-cookie-parser ESM issues
+- ✅ Cleaner architecture: UI library + app configuration
+
+**Architecture (v1.1.0):**
+```
+skateboard-ui (pure runtime library)
+├── Components (Layout, SignIn, etc.)
+├── Context (ContextProvider, getState)
+├── Utilities (apiRequest, useListData, etc.)
+└── styles.css (base theme)
+
+skateboard (or your app)
+├── vite.config.js (build configuration)
+├── src/main.jsx (app routing)
+├── src/constants.json (app config)
+└── src/components (app features)
+```
 
 ---
 
-**Ready to migrate?** Follow this guide step-by-step. Start with one app, verify it works, then migrate the rest. The skateboard boilerplate in the repo demonstrates the complete 1.0.7 pattern.
+**Ready to migrate?**
+
+- **From 0.9.x?** Follow the full migration guide from the top
+- **From 1.0.x?** Jump to "Update from 1.0.x to 1.1.0"
+
+The [skateboard reference implementation](https://github.com/stevederico/skateboard) demonstrates the complete v1.1.0 pattern. Start with one app, verify it works, then migrate the rest.
