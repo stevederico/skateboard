@@ -144,6 +144,20 @@ deno install
 - Override only your brand color
 - All other CSS variables inherited
 
+**App Brand Color Override:**
+Each app should override `--color-app` to match its brand identity:
+```css
+@import "@stevederico/skateboard-ui/styles.css";
+
+@source '../../node_modules/@stevederico/skateboard-ui';
+
+@theme {
+  --color-app: var(--color-green-500);  /* Your app's brand color */
+}
+```
+
+**Available colors:** `--color-red-500`, `--color-orange-500`, `--color-yellow-500`, `--color-green-500`, `--color-blue-500`, `--color-purple-500`, `--color-pink-500`, `--color-cyan-500`, `--color-teal-500`
+
 **To override other variables (optional):**
 ```css
 @import "@stevederico/skateboard-ui/styles.css";
@@ -151,6 +165,7 @@ deno install
 @theme {
   --color-app: var(--color-purple-500);
   --background: oklch(0.99 0 0);  /* Custom background */
+  --radius: 0.5rem;               /* Custom border radius */
 }
 ```
 
