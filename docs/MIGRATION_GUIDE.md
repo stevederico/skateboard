@@ -1,8 +1,8 @@
-# Migration Guide: skateboard-ui 1.1.1
+# Migration Guide: skateboard-ui 1.1.2
 
 ## Overview
 
-This guide covers migrating from skateboard-ui **0.9.x** to **1.1.1**, which introduces the **Application Shell Architecture**—a paradigm shift that eliminates nearly all boilerplate from your apps.
+This guide covers migrating from skateboard-ui **0.9.x** to **1.1.2**, which introduces the **Application Shell Architecture**—a paradigm shift that eliminates nearly all boilerplate from your apps.
 
 **Migration Time**: ~15 minutes per app
 
@@ -79,21 +79,21 @@ Total: 26 lines
 ### 1. Update Dependencies
 
 ```bash
-# Update skateboard-ui to 1.0.7
-deno install npm:@stevederico/skateboard-ui@1.0.7
+# Update skateboard-ui to 1.1.2 (latest)
+npm install @stevederico/skateboard-ui@1.1.2
 
 # Add tailwindcss-animate if not present
-deno install npm:tailwindcss-animate@^1.0.7
+npm install tailwindcss-animate@^1.0.7
 
 # Install all dependencies
-deno install
+npm install
 ```
 
 **Update package.json:**
 ```json
 {
   "dependencies": {
-    "@stevederico/skateboard-ui": "^1.0.7",
+    "@stevederico/skateboard-ui": "1.1.2",
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
@@ -642,13 +642,13 @@ export default defineConfig({
 ### Commands to Run
 ```bash
 # Install dependencies
-deno install
+npm install
 
 # Test dev server
-deno run start
+npm run start
 
 # Test production build
-deno run prod
+npm run build
 ```
 
 ## Troubleshooting
@@ -659,13 +659,13 @@ deno run prod
 
 **Fix**: Update package.json and reinstall:
 ```bash
-deno install npm:@stevederico/skateboard-ui@1.0.0
-deno install
+npm install @stevederico/skateboard-ui@1.1.2
+npm install
 ```
 
 ### "Cannot find module '@stevederico/skateboard-ui/App'"
 
-Same as above - update to 1.0.0
+Same as above - update to 1.1.2
 
 ### "getSkateboardViteConfig is not a function"
 
@@ -751,7 +751,7 @@ mv package.json.tmp package.json
 # "lucide-react": "^0.537.0"
 
 # Reinstall
-deno install
+npm install
 ```
 
 ## Advanced Usage
@@ -844,8 +844,9 @@ Override specific theme variables:
 
 | skateboard-ui | Status | Notes |
 |--------------|--------|-------|
-| 1.1.1 | ✅ Current | Added Error Boundary, automatic constants validation, improved error handling |
-| 1.1.0 | ⚠️ Upgrade | Pure UI library, build config in apps, TailwindCSS v4 native modules fixed |
+| 1.1.2 | ✅ Current | Critical security fixes: safe localStorage, ErrorBoundary, CSRF cleanup, JSON.parse error handling |
+| 1.1.1 | ⚠️ Upgrade | Added Error Boundary, automatic constants validation, improved error handling (deprecated) |
+| 1.1.0 | ⚠️ Upgrade | Pure UI library, build config in apps, TailwindCSS v4 native modules fixed (deprecated) |
 | 1.0.8 | ⚠️ Upgrade | Fixed cookie@1.0.2 ESM export error in Deno (deprecated) |
 | 1.0.7 | ⚠️ Upgrade | Fixed wrapper rendering, wrapper inside ContextProvider (deprecated) |
 | 1.0.6 | ⚠️ Upgrade | Added wrapper parameter support (deprecated) |
@@ -855,6 +856,60 @@ Override specific theme variables:
 | 0.9.8 | ⚠️ Upgrade | Migration recommended (deprecated) |
 | 0.9.x | ⚠️ Upgrade | Use this guide (deprecated) |
 | 0.8.x | ❌ Upgrade to 0.9.8 first | Use MIGRATION_GUIDE-0.9.8.md |
+
+## Update from 1.1.1 to 1.1.2
+
+**Security and reliability update**: This release contains critical security fixes. Upgrade is strongly recommended.
+
+### What's Fixed in 1.1.2?
+
+**8 Critical Security & Reliability Issues:**
+1. **localStorage QuotaExceededError** - Safe wrappers prevent crashes in private browsing/incognito mode
+2. **JSON.parse crashes** - Error handling for corrupted localStorage data
+3. **Stale CSRF tokens** - Automatic cleanup on authentication failure prevents token reuse attacks
+4. **Network error handling** - Enhanced API request error handling with specific error messages
+5. **Async error crashes** - ErrorBoundary catches unhandled promise rejections and async errors
+6. **Invalid constants** - Strengthened validation checks for empty strings/arrays
+7. **Theme storage failures** - Graceful degradation when localStorage unavailable
+8. **White-screen crashes** - Global error boundary prevents app-wide crashes
+
+### Update Steps
+
+**Simple package update - no code changes required!**
+
+```bash
+# Update to 1.1.2
+npm install @stevederico/skateboard-ui@1.1.2
+npm install
+```
+
+**Update package.json:**
+```json
+{
+  "dependencies": {
+    "@stevederico/skateboard-ui": "1.1.2"
+  }
+}
+```
+
+**That's it!** All security fixes are internal to skateboard-ui. Your app automatically inherits all improvements.
+
+### Test
+
+```bash
+npm run start    # Dev server
+npm run build    # Production build
+```
+
+**Expected improvements:**
+- ✅ No more localStorage crashes in private browsing mode
+- ✅ No more white-screen-of-death from async errors
+- ✅ No more crashes from corrupted localStorage data
+- ✅ Better error messages for network failures
+- ✅ Invalid constants caught at startup
+- ✅ CSRF token security improved
+
+---
 
 ## Update from 1.0.x to 1.1.0
 
@@ -1000,15 +1055,15 @@ If you're already on skateboard-ui 1.0.0+, follow these quick steps to update to
 ### 1. Update package.json
 
 ```bash
-deno install npm:@stevederico/skateboard-ui@1.0.7
-deno install
+npm install @stevederico/skateboard-ui@1.1.2
+npm install
 ```
 
 **Update package.json:**
 ```json
 {
   "dependencies": {
-    "@stevederico/skateboard-ui": "^1.0.7"
+    "@stevederico/skateboard-ui": "1.1.2"
   }
 }
 ```
@@ -1116,15 +1171,23 @@ deno run prod
 
 ## Summary
 
-skateboard-ui 1.1.1 transforms your apps from traditional React projects with hundreds of lines of boilerplate into clean, minimal applications that focus on your unique features.
+skateboard-ui 1.1.2 transforms your apps from traditional React projects with hundreds of lines of boilerplate into clean, minimal applications that focus on your unique features.
 
-**Migration time**: ~15 minutes per app (from 0.9.x) or ~5 minutes (from 1.0.x)
+**Migration time**: ~15 minutes per app (from 0.9.x), ~5 minutes (from 1.0.x), or ~2 minutes (from 1.1.1)
 **Benefit**: Update once, fix everywhere
-**Result**: 95% less boilerplate, 100% more focus on features
+**Result**: 95% less boilerplate, 100% more focus on features, critical security improvements
 
-**Key improvements in 1.1.1:**
-- ✅ Error boundary component for robust error handling
-- ✅ Automatic constants validation on app initialization
+**Key improvements in 1.1.2:**
+- ✅ **CRITICAL SECURITY FIXES**: Safe localStorage wrappers prevent QuotaExceededError crashes
+- ✅ **CRITICAL SECURITY FIXES**: JSON.parse error handling prevents corrupted data crashes
+- ✅ **CRITICAL SECURITY FIXES**: CSRF token cleanup on auth failure prevents stale token reuse
+- ✅ **CRITICAL SECURITY FIXES**: Enhanced API error handling (network errors, JSON parse failures)
+- ✅ **CRITICAL**: ErrorBoundary with global error/promise rejection handling prevents white-screen crashes
+- ✅ Strengthened constants validation (type checking, non-empty values)
+- ✅ Safe theme persistence with graceful degradation
+- ✅ ErrorBoundary component exported for external use
+
+**Previous improvements (1.1.0-1.1.1):**
 - ✅ Fully compatible with TailwindCSS v4 native bindings
 - ✅ Build configuration in each app (no more binary bundling issues)
 - ✅ Pure component and utility library (smaller skateboard-ui package)
@@ -1132,18 +1195,18 @@ skateboard-ui 1.1.1 transforms your apps from traditional React projects with hu
 - ✅ Resolved cookie/set-cookie-parser ESM issues
 - ✅ Cleaner architecture: UI library + app configuration
 
-**Architecture (v1.1.1):**
+**Architecture (v1.1.2):**
 ```
 skateboard-ui (pure runtime library)
-├── Components (Layout, SignIn, etc.)
-├── Context (ContextProvider, getState)
-├── Utilities (apiRequest, useListData, etc.)
+├── Components (Layout, SignIn, ErrorBoundary, etc.)
+├── Context (ContextProvider, getState with safe storage)
+├── Utilities (apiRequest with error handling, useListData, etc.)
 └── styles.css (base theme)
 
 skateboard (or your app)
 ├── vite.config.js (build configuration)
-├── src/main.jsx (app routing)
-├── src/constants.json (app config)
+├── src/main.jsx (app routing with ErrorBoundary)
+├── src/constants.json (app config with validation)
 └── src/components (app features)
 ```
 
@@ -1151,7 +1214,8 @@ skateboard (or your app)
 
 **Ready to migrate?**
 
-- **From 0.9.x?** Follow the full migration guide from the top
+- **From 1.1.1?** Jump to "Update from 1.1.1 to 1.1.2" (2 minutes - simple package update)
 - **From 1.0.x?** Jump to "Update from 1.0.x to 1.1.0"
+- **From 0.9.x?** Follow the full migration guide from the top
 
-The [skateboard reference implementation](https://github.com/stevederico/skateboard) demonstrates the complete v1.1.0 pattern. Start with one app, verify it works, then migrate the rest.
+The [skateboard reference implementation](https://github.com/stevederico/skateboard) demonstrates the complete v1.1.2 pattern. Start with one app, verify it works, then migrate the rest.
