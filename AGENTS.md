@@ -394,7 +394,8 @@ When switching database types, ensure proper schema translation:
 
 **Architecture & Migration:**
 - [Architecture Documentation](docs/ARCHITECTURE.md) - Deep dive into Application Shell Architecture
-- [Migration Guide 1.0.0](docs/MIGRATION_GUIDE.md) - Upgrade from 0.9.x to 1.0.0
+- [Migration Guide](docs/MIGRATION_GUIDE.md) - Upgrade to latest
+- [Migration Guide 1.0.0](docs/MIGRATION_GUIDE-1.0.0.md) - Upgrade from 0.9.x to 1.0.0
 - [Migration Guide 0.9.8](docs/MIGRATION_GUIDE-OLD-0.9.8.md) - Legacy migration guide
 
 **Key Concepts:**

@@ -23,16 +23,6 @@ import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/ViteConfig';
 
 The `Utilities` export now only contains runtime utilities. All Vite-related plugins and build configuration have been moved to the new `ViteConfig` export.
 
-### 3. Ensure initializeUtilities is called in main.jsx
-The `initializeUtilities` function is still required in `src/main.jsx` to properly initialize runtime utilities before creating the app:
-
-```javascript
-import { initializeUtilities } from '@stevederico/skateboard-ui/Utilities';
-
-// Initialize utilities before creating app
-initializeUtilities(constants);
-```
-
 ## Migration Steps
 
 ### Step 1: Update skateboard-ui
@@ -51,37 +41,7 @@ import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
 import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/ViteConfig';
 ```
 
-### Step 3: Ensure initializeUtilities in main.jsx
-Make sure `src/main.jsx` includes the `initializeUtilities` call before `createSkateboardApp`.
-
-### Step 4: Update styles.css for Tailwind v4
-Update `src/assets/styles.css` to use Tailwind CSS v4 syntax:
-
-```css
-@import "tailwindcss";
-@import "@stevederico/skateboard-ui/styles.css";
-
-@theme {
-  --color-app: var(--color-blue-500);  /* Use your app's brand color */
-}
-```
-
-Replace `var(--color-blue-500)` with your app's specific brand color from the constants.json or existing theme.
-
-### Step 5: Update Build Scripts
-Remove any `deno run --allow-all` prefixes from package.json scripts. Use direct commands:
-
-```json
-{
-  "scripts": {
-    "start": "vite --force --mode development",
-    "build": "vite build --mode production",
-    "prod": "vite build --mode production && cp -r ./dist/* ../path/to/deploy"
-  }
-}
-```
-
-### Step 6: Rebuild Your Project
+### Step 3: Rebuild Your Project
 ```bash
 npm run build
 ```
