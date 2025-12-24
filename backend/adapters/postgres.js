@@ -9,7 +9,7 @@ export class PostgreSQLProvider {
     console.log('PostgreSQL provider initialized');
   }
 
-  getDatabase(dbName, connectionString) {
+  async getDatabase(dbName, connectionString) {
     if (!this.pools.has(dbName)) {
       if (!connectionString) {
         throw new Error(`Connection string required for PostgreSQL database: ${dbName}`);
@@ -17,14 +17,14 @@ export class PostgreSQLProvider {
 
       const pool = new pg.Pool({
         connectionString,
-        ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+        ssl: connectionString.includes('localhost') ? false : true,
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,
       });
 
       this.pools.set(dbName, pool);
-      this.ensurePostgreSQLSchema(pool);
+      await this.ensurePostgreSQLSchema(pool);
     }
     return this.pools.get(dbName);
   }
@@ -39,9 +39,11 @@ export class PostgreSQLProvider {
           email TEXT UNIQUE NOT NULL,
           name TEXT NOT NULL,
           created_at BIGINT NOT NULL,
-          subscription_stripeid TEXT,
+          "subscription_stripeID" TEXT,
           subscription_expires BIGINT,
-          subscription_status TEXT
+          subscription_status TEXT,
+          usage_count INTEGER DEFAULT 0,
+          usage_reset_at BIGINT
         )
       `);
 
@@ -50,15 +52,15 @@ export class PostgreSQLProvider {
         CREATE TABLE IF NOT EXISTS auths (
           email TEXT PRIMARY KEY,
           password TEXT NOT NULL,
-          userid TEXT NOT NULL,
-          FOREIGN KEY (userid) REFERENCES users(_id)
+          "userID" TEXT NOT NULL,
+          FOREIGN KEY ("userID") REFERENCES users(_id)
         )
       `);
 
       // Create indexes
       await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
       await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_auths_email ON auths(email)`);
-      
+
     } finally {
       client.release();
     }
@@ -68,7 +70,7 @@ export class PostgreSQLProvider {
     const { _id, email } = query;
     let sql = "SELECT * FROM users WHERE ";
     let params = [];
-    
+
     if (_id) {
       sql += "_id = $1";
       params.push(_id);
@@ -85,15 +87,25 @@ export class PostgreSQLProvider {
       if (result.rows.length === 0) return null;
 
       const user = result.rows[0];
-      if (user.subscription_stripeid) {
+      // Transform subscription fields
+      if (user.subscription_stripeID) {
         user.subscription = {
-          stripeID: user.subscription_stripeid,
+          stripeID: user.subscription_stripeID,
           expires: user.subscription_expires,
           status: user.subscription_status
         };
-        delete user.subscription_stripeid;
+        delete user.subscription_stripeID;
         delete user.subscription_expires;
         delete user.subscription_status;
+      }
+      // Transform usage fields
+      if (user.usage_count !== undefined) {
+        user.usage = {
+          count: user.usage_count || 0,
+          reset_at: user.usage_reset_at || null
+        };
+        delete user.usage_count;
+        delete user.usage_reset_at;
       }
       return user;
     } finally {
@@ -119,18 +131,26 @@ export class PostgreSQLProvider {
     const updateData = update.$set;
 
     // Whitelist of allowed fields to prevent SQL injection
-    const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeid', 'subscription_expires', 'subscription_status'];
+    const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeID', 'subscription_expires', 'subscription_status', 'usage_count', 'usage_reset_at'];
 
     const client = await pool.connect();
     try {
       if (updateData.subscription) {
         const { stripeID, expires, status } = updateData.subscription;
         const sql = `UPDATE users SET
-          subscription_stripeid = $1,
+          "subscription_stripeID" = $1,
           subscription_expires = $2,
           subscription_status = $3
           WHERE _id = $4`;
         const result = await client.query(sql, [stripeID, expires, status, _id]);
+        return { modifiedCount: result.rowCount };
+      } else if (updateData.usage) {
+        const { count, reset_at } = updateData.usage;
+        const sql = `UPDATE users SET
+          usage_count = $1,
+          usage_reset_at = $2
+          WHERE _id = $3`;
+        const result = await client.query(sql, [count, reset_at, _id]);
         return { modifiedCount: result.rowCount };
       } else {
         // Handle other updates with field validation
@@ -165,7 +185,7 @@ export class PostgreSQLProvider {
 
   async insertAuth(pool, authData) {
     const { email, password, userID } = authData;
-    const sql = "INSERT INTO auths (email, password, userid) VALUES ($1, $2, $3)";
+    const sql = 'INSERT INTO auths (email, password, "userID") VALUES ($1, $2, $3)';
     
     const client = await pool.connect();
     try {

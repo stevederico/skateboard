@@ -1,5 +1,27 @@
 ## CHANGELOG
 
+1.0.9
+
+  Fix PostgreSQL usage tracking
+  Add usage columns schema
+  Add usage transformation findUser
+  Fix async schema creation
+  Fix column name consistency
+  Add CSRF cookie clearing
+  Use timing-safe CSRF comparison
+  Add X-Forwarded-For rate limiting
+  Add secure cookies production
+  Change sameSite to strict
+  Remove CSRF from response body
+  Remove emails from logs
+  Tighten CSP data URIs
+  Add webhook payload limit
+  Add payment rate limits
+  Fix 404 to 401 signin
+  Fix token expiry comment
+  Add PostgreSQL SSL validation
+  Add node prefix vite imports
+
 1.0.8
 
   Remove duplicate initializeUtilities call (now automatic)
