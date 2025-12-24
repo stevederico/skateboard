@@ -15,9 +15,20 @@ export class PostgreSQLProvider {
         throw new Error(`Connection string required for PostgreSQL database: ${dbName}`);
       }
 
+      // Parse URL to determine if SSL should be disabled (localhost/127.0.0.1)
+      let sslEnabled = true;
+      try {
+        const url = new URL(connectionString);
+        const host = url.hostname.toLowerCase();
+        sslEnabled = !(host === 'localhost' || host === '127.0.0.1' || host === '::1');
+      } catch {
+        // If URL parsing fails, default to SSL enabled for safety
+        sslEnabled = true;
+      }
+
       const pool = new pg.Pool({
         connectionString,
-        ssl: connectionString.includes('localhost') ? false : true,
+        ssl: sslEnabled,
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000,

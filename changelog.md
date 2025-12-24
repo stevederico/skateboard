@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+1.0.12
+
+  Add STRIPE_ENDPOINT_SECRET validation
+  Improve PostgreSQL SSL detection
+  Update skateboard-ui to 1.2.5
+
 1.0.9
 
   Fix PostgreSQL usage tracking
