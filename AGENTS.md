@@ -443,15 +443,10 @@ When switching database types, ensure proper schema translation:
 - skateboard@1.0.12
 - skateboard-ui@1.2.6
 
-## Updating Skateboard
+## Skateboard Reference
 
-Projects should be kept up to date with the latest skateboard boilerplate. Check the `skateboardVersion` field in package.json to see which version this project was created from.
+This project was created from the skateboard boilerplate. The `skateboardVersion` field in package.json indicates which version was used.
 
-**Latest version:** https://github.com/stevederico/skateboard
+**Reference repo:** https://github.com/stevederico/skateboard
 
-**Update steps:**
-1. Compare `skateboardVersion` in package.json with latest release
-2. Review CHANGELOG.md and MIGRATION_GUIDE.md for breaking changes
-3. Update `@stevederico/skateboard-ui` to latest: `npm install @stevederico/skateboard-ui@latest`
-4. Apply any boilerplate changes from the skateboard repo (backend, vite.config.js, etc.)
-5. Update `skateboardVersion` field to reflect the new version
+Use the reference repo to check for new patterns, fixes, or features. Do NOT automatically update or apply changes - consult the user first if updates seem relevant.
