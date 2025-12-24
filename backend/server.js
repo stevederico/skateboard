@@ -190,6 +190,7 @@ function validateEnvironmentVariables() {
   const missing = [];
 
   if (!STRIPE_KEY) missing.push('STRIPE_KEY');
+  if (!process.env.STRIPE_ENDPOINT_SECRET) missing.push('STRIPE_ENDPOINT_SECRET');
   if (!JWT_SECRET) missing.push('JWT_SECRET');
 
   // Check for database environment variables that are referenced but not defined
