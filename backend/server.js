@@ -37,7 +37,14 @@ function csrfProtection(req, res, next) {
   }
 
   const storedData = csrfTokenStore.get(userID);
-  if (!storedData || storedData.token !== csrfToken) {
+  if (!storedData) {
+    return res.status(403).json({ error: 'Invalid CSRF token' });
+  }
+
+  // Use timing-safe comparison to prevent timing attacks
+  const tokenBuffer = Buffer.from(csrfToken);
+  const storedBuffer = Buffer.from(storedData.token);
+  if (tokenBuffer.length !== storedBuffer.length || !crypto.timingSafeEqual(tokenBuffer, storedBuffer)) {
     return res.status(403).json({ error: 'Invalid CSRF token' });
   }
 
@@ -52,7 +59,8 @@ function csrfProtection(req, res, next) {
 
 const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
   return (req, res, next) => {
-    const key = req.ip;
+    // Use X-Forwarded-For when behind proxy, fallback to req.ip
+    const key = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
     const now = Date.now();
     const windowStart = now - windowMs;
     
@@ -81,6 +89,7 @@ const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
 // Define limiters
 const authLimiter = rateLimiter(10, 15 * 60 * 1000, 'auth routes'); // 10 requests per 15 minutes
 const globalLimiter = rateLimiter(300, 15 * 60 * 1000, 'global'); // 300 requests per 15 minutes
+const paymentLimiter = rateLimiter(5, 15 * 60 * 1000, 'payment routes'); // 5 requests per 15 minutes
 
 // Cleanup old rate limit entries every hour to prevent memory leak
 setInterval(() => {
@@ -294,7 +303,7 @@ const currentDbConfig = dbConfig;
 const app = express();
 const allowedOrigin = config.client;
 
-app.post("/payment", express.raw({ type: "application/json" }), async (req, res) => {
+app.post("/payment", express.raw({ type: "application/json", limit: '10kb' }), async (req, res) => {
   console.log("Payment webhook received");
 
   const signature = req.headers["stripe-signature"];
@@ -371,12 +380,13 @@ app.use((req, res, next) => {
   });
   
   // Content Security Policy
-  res.setHeader('Content-Security-Policy', 
+  // Note: 'unsafe-inline' for scripts/styles needed for React. Consider nonce-based CSP for stricter security.
+  res.setHeader('Content-Security-Policy',
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; " +
-    "font-src 'self' data:; " +
+    "img-src 'self' https:; " +
+    "font-src 'self'; " +
     "connect-src 'self'; " +
     "frame-ancestors 'none';"
   );
@@ -447,7 +457,7 @@ async function verifyPassword(password, hash) {
 
 // ==== JWT HELPERS ====
 function tokenExpireTimestamp(){
-  return Math.floor(Date.now() / 1000) + tokenExpirationDays * 24 * 60 * 60; // 1 week from now
+  return Math.floor(Date.now() / 1000) + tokenExpirationDays * 24 * 60 * 60; // 30 days from now
 }
 
 // Remove the encoder and importKey since we'll use JWT_SECRET directly with jsonwebtoken
@@ -627,25 +637,33 @@ app.post("/signup", validateSignup, async (req, res) => {
       // Set HttpOnly cookie
       res.cookie('token', token, {
         httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
+        secure: !isDevelopment,
+        sameSite: 'strict',
         path: '/',
         maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
       });
 
-      console.log(`[${new Date().toISOString()}] Signup success for email: ${email}, userID: ${insertID}`);
+      // Set CSRF token cookie (readable by frontend)
+      res.cookie('csrf_token', csrfToken, {
+        httpOnly: false,
+        secure: !isDevelopment,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: CSRF_TOKEN_EXPIRY
+      });
+
+      console.log(`[${new Date().toISOString()}] Signup success`);
 
       res.status(201).json({
         id: insertID.toString(),
         email: email,
         name: name.trim(),
-        tokenExpires: tokenExpireTimestamp(),
-        csrfToken: csrfToken
+        tokenExpires: tokenExpireTimestamp()
       });
     } catch (e) {
       if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('duplicate key') || e.code === 11000) {
         // Generic message to prevent user enumeration
-        console.log(`[${new Date().toISOString()}] Signup failed for email: ${email} - duplicate account`);
+        console.log(`[${new Date().toISOString()}] Signup failed - duplicate account`);
         return res.status(400).json({ error: "Unable to create account with provided credentials" });
       }
       throw e;
@@ -664,26 +682,26 @@ app.post("/signin", validateSignin, async (req, res) => {
 
     var { email, password } = req.body;
     email = email.toLowerCase().trim();
-    console.log(`[${new Date().toISOString()}] Attempting signin for email:`, email);
+    console.log(`[${new Date().toISOString()}] Attempting signin`);
 
     // Check if auth exists
     const auth = await databaseManager.findAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
     if (!auth) {
-      console.log(`[${new Date().toISOString()}] Auth record not found for:`, email);
+      console.log(`[${new Date().toISOString()}] Auth record not found`);
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     //verify
     if (!(await verifyPassword(password, auth.password))) {
-      console.log(`[${new Date().toISOString()}] Password verification failed for:`, email);
+      console.log(`[${new Date().toISOString()}] Password verification failed`);
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     // get user
     const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
     if (!user) {
-      console.error("User not found for auth record:", auth);
-      return res.status(404).json({ error: "User not found" });
+      console.error("User not found for auth record");
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
     // generate token
@@ -696,13 +714,22 @@ app.post("/signin", validateSignin, async (req, res) => {
     // Set HttpOnly cookie
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
+      secure: !isDevelopment,
+      sameSite: 'strict',
       path: '/',
       maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
     });
 
-    console.log(`[${new Date().toISOString()}] Signin success for email: ${user.email}, userID: ${user._id}`);
+    // Set CSRF token cookie (readable by frontend)
+    res.cookie('csrf_token', csrfToken, {
+      httpOnly: false,
+      secure: !isDevelopment,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: CSRF_TOKEN_EXPIRY
+    });
+
+    console.log(`[${new Date().toISOString()}] Signin success`);
 
     res.json({
       id: user._id.toString(),
@@ -715,8 +742,7 @@ app.post("/signin", validateSignin, async (req, res) => {
           status: user.subscription.status,
         },
       }),
-      tokenExpires: tokenExpireTimestamp(),
-      csrfToken: csrfToken
+      tokenExpires: tokenExpireTimestamp()
     });
   } catch (e) {
     console.error(`[${new Date().toISOString()}] Signin error:`, e);
@@ -734,7 +760,16 @@ app.post("/signout", authMiddleware, async (req, res) => {
     // Clear the HttpOnly cookie
     res.cookie('token', '', {
       httpOnly: true,
-      secure: false,
+      secure: !isDevelopment,
+      sameSite: 'strict',
+      path: '/',
+      expires: new Date(0) // Expire immediately
+    });
+
+    // Clear the CSRF token cookie
+    res.cookie('csrf_token', '', {
+      httpOnly: false,
+      secure: !isDevelopment,
       sameSite: 'lax',
       path: '/',
       expires: new Date(0) // Expire immediately
@@ -880,7 +915,7 @@ app.post("/usage", authMiddleware, async (req, res) => {
 });
 
 // ==== PAYMENT ROUTES ====
-app.post("/checkout", authMiddleware, csrfProtection, async (req, res) => {
+app.post("/checkout", paymentLimiter, authMiddleware, csrfProtection, async (req, res) => {
   try {
     const { email, lookup_key } = req.body;
     if (!email || !lookup_key) return res.status(400).json({ error: "Missing email or lookup_key" });
@@ -914,7 +949,7 @@ app.post("/checkout", authMiddleware, csrfProtection, async (req, res) => {
   }
 });
 
-app.post("/portal", authMiddleware, csrfProtection, async (req, res) => {
+app.post("/portal", paymentLimiter, authMiddleware, csrfProtection, async (req, res) => {
   try {
     const { customerID } = req.body;
     if (!customerID) return res.status(400).json({ error: "Missing customerID" });
