@@ -2,6 +2,7 @@
   "name": "skateboard",
   "private": false,
   "version": "1.0.12",
+  "skateboardVersion": "1.0.12",
   "type": "module",
   "workspaces": [
     "backend"
