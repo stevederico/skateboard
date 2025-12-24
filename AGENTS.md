@@ -440,13 +440,36 @@ When switching database types, ensure proper schema translation:
 - **95% Boilerplate Reduction** - Focus on features, not infrastructure
 
 **Version:**
-- skateboard@1.0.12
-- skateboard-ui@1.2.6
+- skateboard@1.0.13
+- skateboard-ui@1.2.10
 
-## Skateboard Reference
+## Updating from Skateboard Boilerplate
 
 This project was created from the skateboard boilerplate. The `skateboardVersion` field in package.json indicates which version was used.
 
 **Reference repo:** https://github.com/stevederico/skateboard
 
-Use the reference repo to check for new patterns, fixes, or features. Do NOT automatically update or apply changes - consult the user first if updates seem relevant.
+### Update Workflow
+
+1. Check `skateboardVersion` in package.json against latest release
+2. Review CHANGELOG.md in the reference repo for changes
+3. Update skateboard-ui: `npm install @stevederico/skateboard-ui@latest`
+4. Compare and update boilerplate files (see below)
+5. Update `skateboardVersion` field after applying changes
+
+### Safe to Update (review and apply)
+These files are boilerplate infrastructure - compare against latest and apply changes:
+- `backend/server.js` - Server logic, security updates
+- `backend/adapters/*` - Database adapters
+- `vite.config.js` - Build configuration
+- `src/assets/styles.css` - Theme variables (merge carefully)
+- `src/main.jsx` - Boilerplate setup (preserve custom routes in `appRoutes` array)
+
+### Never Auto-Update (app-specific)
+These files contain app-specific customizations - do NOT overwrite:
+- `constants.json` - App configuration
+- `src/components/*` - Custom components
+- `backend/config.json` - Database/environment config
+
+### Important
+Do NOT automatically apply boilerplate updates. Always consult the user first and show what changes would be made.
