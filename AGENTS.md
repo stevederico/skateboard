@@ -114,6 +114,7 @@ Standard variables: `DATABASE_URL`, `MONGODB_URL`, `POSTGRES_URL`
 **Constants-Driven UI** (`src/constants.json`):
 - App branding, navigation, features, Stripe products
 - Legal content with placeholder replacement (e.g., `_COMPANY_`, `_EMAIL_`)
+- `hideSidebar`, `hideTabBar` - Control navigation visibility
 - Dynamic generation of robots.txt, sitemap.xml, manifest.json via Vite plugins
 
 **Context Management** (from skateboard-ui):
@@ -292,6 +293,40 @@ function MyComponent() {
 }
 ```
 
+### UI Visibility Control
+
+**Static Configuration** (`src/constants.json`):
+```json
+{
+  "hideSidebar": true,
+  "hideTabBar": true
+}
+```
+
+**Programmatic Control** (from skateboard-ui):
+```javascript
+import {
+  showSidebar, hideSidebar,
+  showTabBar, hideTabBar,
+  setUIVisibility
+} from '@stevederico/skateboard-ui/Utilities';
+
+// Individual controls
+hideSidebar();
+showTabBar();
+
+// Batch control
+setUIVisibility({ sidebar: false, tabBar: false });
+```
+
+**Context State Access**:
+```javascript
+const { state } = getState();
+const { sidebarVisible, tabBarVisible } = state.ui;
+```
+
+**Logic:** Static config (constants) takes priority. If `hideSidebar: true`, sidebar is always hidden regardless of programmatic control.
+
 ## Legacy Patterns (Pre-1.0)
 
 ### Database Query Examples
@@ -405,5 +440,5 @@ When switching database types, ensure proper schema translation:
 - **95% Boilerplate Reduction** - Focus on features, not infrastructure
 
 **Version:**
-- skateboard@1.0.0
-- skateboard-ui@1.0.0
+- skateboard@1.0.12
+- skateboard-ui@1.2.6

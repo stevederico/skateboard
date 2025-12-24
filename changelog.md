@@ -4,7 +4,8 @@
 
   Add STRIPE_ENDPOINT_SECRET validation
   Improve PostgreSQL SSL detection
-  Update skateboard-ui to 1.2.5
+  Add UI visibility control documentation
+  Update skateboard-ui to 1.2.6
 
 1.0.9
 
