@@ -1,5 +1,5 @@
 # Multi-stage build for smaller production image
-FROM node:22-alpine AS builder
+FROM denoland/deno:alpine-2.3.2 AS builder
 
 WORKDIR /app
 
@@ -7,19 +7,22 @@ WORKDIR /app
 COPY package*.json ./
 COPY backend/package*.json ./backend/
 
-# Install all dependencies
-RUN npm install && npm install --workspace=backend
+# Install dependencies with deno
+RUN deno install && cd backend && deno install
 
 # Copy source code
 COPY . .
 
 # Build frontend
-RUN npm run build
+RUN deno run build
 
 # Production stage
-FROM node:22-alpine
+FROM denoland/deno:alpine-2.3.2
 
 WORKDIR /app
+
+# Set production environment
+ENV NODE_ENV=production
 
 # Copy built frontend
 COPY --from=builder /app/dist ./dist
@@ -29,11 +32,15 @@ COPY --from=builder /app/backend ./backend
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/backend/node_modules ./backend/node_modules
 
-# Copy package files for npm start
+# Copy package files
 COPY package*.json ./
 
 # Expose port
 EXPOSE 8000
 
-# Run Hono server
-CMD ["npm", "start"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD deno eval "const r = await fetch('http://localhost:8000/api/health'); if (!r.ok) Deno.exit(1);" || exit 1
+
+# Run server
+CMD ["deno", "run", "start"]
