@@ -77,7 +77,7 @@ const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
     const validRequests = requests.filter(time => time > windowStart);
 
     if (validRequests.length >= maxRequests) {
-      console.error(`[${new Date().toISOString()}] RATE LIMIT EXCEEDED: IP ${key} blocked on ${routeName} (${validRequests.length}/${maxRequests} requests in ${windowMs/1000}s window)`);
+      logger.warn('Rate limit exceeded', { route: routeName, requests: validRequests.length, limit: maxRequests });
       return c.json({
         error: 'Too many requests, please try again later.',
         retryAfter: Math.ceil((windowStart + windowMs - now) / 1000)
@@ -403,7 +403,7 @@ async function generateToken(userID) {
       header: { alg: "HS256", typ: "JWT" }
     });
   } catch (error) {
-    console.error("Token generation error:", error);
+    logger.error('Token generation error', { error: error.message });
     throw error;
   }
 }
@@ -425,10 +425,10 @@ async function authMiddleware(c, next) {
     await next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      console.error(`[${new Date().toISOString()}] Token expired:`, error.message);
+      logger.debug('Token expired');
       return c.json({ error: "Token expired" }, 401);
     }
-    console.error(`[${new Date().toISOString()}] Token verification error:`, error);
+    logger.error('Token verification error', { error: error.message });
     return c.json({ error: "Invalid token" }, 401);
   }
 }
@@ -471,7 +471,7 @@ const validateName = (name) => {
 
 // ==== STRIPE WEBHOOK (raw body needed) ====
 app.post("/api/payment", async (c) => {
-  console.log("Payment webhook received");
+  logger.info('Payment webhook received');
 
   const signature = c.req.header("stripe-signature");
   const rawBody = await c.req.arrayBuffer();
@@ -480,9 +480,9 @@ app.post("/api/payment", async (c) => {
   let event;
   try {
     event = await stripe.webhooks.constructEventAsync(body, signature, process.env.STRIPE_ENDPOINT_SECRET);
-    console.log("Webhook event:", event);
+    logger.debug('Webhook event received', { type: event.type });
   } catch (e) {
-    console.error("Webhook signature verification failed:", e.message);
+    logger.error('Webhook signature verification failed', { error: e.message });
     return c.body(null, 400);
   }
 
@@ -493,14 +493,14 @@ app.post("/api/payment", async (c) => {
   const customerEmail = customer.email.toLowerCase();
 
   if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
-    console.log(`Webhook: ${event.type} for ${customerEmail}`);
+    logger.info('Webhook processed', { type: event.type });
     const user = await databaseManager.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
     if (user) {
       await databaseManager.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, {
         $set: { subscription: { stripeID, expires: current_period_end, status } }
       });
     } else {
-      console.warn(`Webhook: No user found for email ${customerEmail}`);
+      logger.warn('Webhook: No user found for email');
     }
   }
   return c.body(null, 200);
@@ -565,7 +565,7 @@ app.post("/api/signup", authLimiter, async (c) => {
         maxAge: CSRF_TOKEN_EXPIRY / 1000
       });
 
-      console.log(`[${new Date().toISOString()}] Signup success`);
+      logger.info('Signup success');
 
       return c.json({
         id: insertID.toString(),
@@ -575,13 +575,13 @@ app.post("/api/signup", authLimiter, async (c) => {
       }, 201);
     } catch (e) {
       if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('duplicate key') || e.code === 11000) {
-        console.log(`[${new Date().toISOString()}] Signup failed - duplicate account`);
+        logger.warn('Signup failed - duplicate account');
         return c.json({ error: "Unable to create account with provided credentials" }, 400);
       }
       throw e;
     }
   } catch (e) {
-    console.error(`[${new Date().toISOString()}] Signup error:`, e.message);
+    logger.error('Signup error', { error: e.message });
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -600,25 +600,25 @@ app.post("/api/signin", authLimiter, async (c) => {
     }
 
     email = email.toLowerCase().trim();
-    console.log(`[${new Date().toISOString()}] Attempting signin`);
+    logger.debug('Attempting signin');
 
     // Check if auth exists
     const auth = await databaseManager.findAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
     if (!auth) {
-      console.log(`[${new Date().toISOString()}] Auth record not found`);
+      logger.debug('Auth record not found');
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
     //verify
     if (!(await verifyPassword(password, auth.password))) {
-      console.log(`[${new Date().toISOString()}] Password verification failed`);
+      logger.debug('Password verification failed');
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
     // get user
     const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
     if (!user) {
-      console.error("User not found for auth record");
+      logger.error('User not found for auth record');
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
@@ -647,7 +647,7 @@ app.post("/api/signin", authLimiter, async (c) => {
       maxAge: CSRF_TOKEN_EXPIRY / 1000
     });
 
-    console.log(`[${new Date().toISOString()}] Signin success`);
+    logger.info('Signin success');
 
     return c.json({
       id: user._id.toString(),
@@ -663,7 +663,7 @@ app.post("/api/signin", authLimiter, async (c) => {
       tokenExpires: tokenExpireTimestamp()
     });
   } catch (e) {
-    console.error(`[${new Date().toISOString()}] Signin error:`, e);
+    logger.error('Signin error', { error: e.message });
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -691,10 +691,10 @@ app.post("/api/signout", authMiddleware, async (c) => {
       path: '/'
     });
 
-    console.log(`[${new Date().toISOString()}] Signout success for userID: ${userID}`);
+    logger.info('Signout success');
     return c.json({ message: "Signed out successfully" });
   } catch (e) {
-    console.error(`[${new Date().toISOString()}] Signout error:`, e);
+    logger.error('Signout error', { error: e.message });
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -703,7 +703,7 @@ app.post("/api/signout", authMiddleware, async (c) => {
 app.get("/api/me", authMiddleware, async (c) => {
   const userID = c.get('userID');
   const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
-  console.log("/me checking for user with ID:", userID);
+  logger.debug('/me checking for user');
   if (!user) return c.json({ error: "User not found" }, 404);
   return c.json(user);
 });
@@ -750,7 +750,7 @@ app.put("/api/me", authMiddleware, csrfProtection, async (c) => {
     const updatedUser = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
     return c.json(updatedUser);
   } catch (err) {
-    console.error("Update user error:", err);
+    logger.error('Update user error', { error: err.message });
     return c.json({ error: "Failed to update user" }, 500);
   }
 });
@@ -795,14 +795,13 @@ app.post("/api/usage", authMiddleware, async (c) => {
 
     // Check if we need to reset (30 days = 2592000 seconds)
     if (!usage.reset_at || now > usage.reset_at) {
-      usage = {
-        count: 0,
-        reset_at: now + (30 * 24 * 60 * 60) // 30 days from now
-      };
+      const newResetAt = now + (30 * 24 * 60 * 60); // 30 days from now
+      // Reset usage - atomic set operation
       await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
         { _id: userID },
-        { $set: { usage } }
+        { $set: { usage: { count: 0, reset_at: newResetAt } } }
       );
+      usage = { count: 0, reset_at: newResetAt };
     }
 
     if (operation === 'track') {
@@ -816,12 +815,12 @@ app.post("/api/usage", authMiddleware, async (c) => {
         }, 429);
       }
 
-      // Increment count
-      usage.count += 1;
+      // Atomic increment to prevent race conditions
       await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
         { _id: userID },
-        { $set: { usage } }
+        { $inc: { 'usage.count': 1 } }
       );
+      usage.count += 1; // Update local copy for response
     }
 
     // Return usage info (with subscription details for free users too)
@@ -837,7 +836,7 @@ app.post("/api/usage", authMiddleware, async (c) => {
     });
 
   } catch (error) {
-    console.error('Usage tracking error:', error);
+    logger.error('Usage tracking error', { error: error.message });
     return c.json({ error: "Server error" }, 500);
   }
 });
@@ -876,7 +875,7 @@ app.post("/api/checkout", paymentLimiter, authMiddleware, csrfProtection, async 
     });
     return c.json({ url: session.url, id: session.id, customerID: session.customer });
   } catch (e) {
-    console.error("Checkout session error:", e.message);
+    logger.error('Checkout session error', { error: e.message });
     return c.json({ error: "Stripe session failed" }, 500);
   }
 });
@@ -903,7 +902,7 @@ app.post("/api/portal", paymentLimiter, authMiddleware, csrfProtection, async (c
     });
     return c.json({ url: portalSession.url, id: portalSession.id });
   } catch (e) {
-    console.error("Portal session error:", e.message);
+    logger.error('Portal session error', { error: e.message });
     return c.json({ error: "Stripe portal failed" }, 500);
   }
 });
