@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+1.0.13
+
+  Update skateboard-ui to 1.2.10
+  AppSidebar redesign (taller items, configurable header)
+  Dark mode color improvements (sidebar/main contrast)
+  System font stack
+
 1.0.12
 
   Add STRIPE_ENDPOINT_SECRET validation
