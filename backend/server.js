@@ -113,6 +113,7 @@ const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
 
 // Define limiters
 const authLimiter = rateLimiter(10, 15 * 60 * 1000, 'auth routes'); // 10 requests per 15 minutes
+const userLimiter = rateLimiter(120, 15 * 60 * 1000, 'user routes'); // 120 requests per 15 minutes
 const globalLimiter = rateLimiter(300, 15 * 60 * 1000, 'global'); // 300 requests per 15 minutes
 const paymentLimiter = rateLimiter(5, 15 * 60 * 1000, 'payment routes'); // 5 requests per 15 minutes
 
@@ -752,7 +753,7 @@ app.post("/api/signout", authMiddleware, async (c) => {
 });
 
 // ==== USER DATA ROUTES ====
-app.get("/api/me", authLimiter, authMiddleware, async (c) => {
+app.get("/api/me", userLimiter, authMiddleware, async (c) => {
   const userID = c.get('userID');
   const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
   logger.debug('/me checking for user');

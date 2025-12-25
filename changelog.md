@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+1.1.7
+
+  Add user rate limiter
+  Add scaling documentation
+  Update ARCHITECTURE.md
+
 1.1.6
 
   Fix port variable scope
