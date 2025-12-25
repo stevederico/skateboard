@@ -1,5 +1,16 @@
 ## CHANGELOG
 
+1.1.0
+
+  Replace Express with Hono
+  Add monolithic architecture
+  Add /api route prefix
+  Add Dockerfile
+  Add .dockerignore
+  Add CORS middleware
+  Simplify static serving
+  Reduce memory footprint
+
 1.0.13
 
   Update skateboard-ui to 1.2.10
