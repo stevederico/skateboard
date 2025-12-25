@@ -14,7 +14,7 @@ const customLoggerPlugin = () => {
         name: 'custom-logger',
         configureServer(server) {
             server.printUrls = () => {
-                console.log(`🖥️  React is running on http://localhost:${server.config.server.port || 5173}`);
+                console.log(`React is running on http://localhost:${server.config.server.port || 5173}`);
             };
         }
     };

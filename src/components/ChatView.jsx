@@ -2,7 +2,7 @@ import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 import { useState, useEffect, useRef } from "react";
-import { getRemainingUsage, trackUsage, showCheckout, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
+import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '@stevederico/skateboard-ui/Context';
 
 export default function ChatView() {
@@ -17,6 +17,7 @@ export default function ChatView() {
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
+  const [isLoading, setIsLoading] = useState(true);
   const isUserSubscriber = usageInfo.isSubscriber
   const upgradeSheetRef = useRef();
 
@@ -28,6 +29,8 @@ export default function ChatView() {
         setUsageInfo(usage);
       } catch (error) {
         console.error('Error updating usage:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -35,6 +38,9 @@ export default function ChatView() {
   }, [messages]);
 
   const handleSend = async () => {
+    // Prevent sending while still loading usage info
+    if (isLoading) return;
+
     if (newMessage.trim()) {
       // Check usage limit from current state
       if (!usageInfo.isSubscriber && usageInfo.remaining <= 0) {
@@ -43,7 +49,7 @@ export default function ChatView() {
       }
 
       const userMessage = {
-        id: Date.now(),
+        id: crypto.randomUUID(),
         text: newMessage,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isMe: true
@@ -56,12 +62,13 @@ export default function ChatView() {
       // Track usage and update state with response
       const updatedUsage = await trackUsage('messages');
       setUsageInfo(updatedUsage);
-      
+
       // Auto-response after 200ms
+      // TODO: Replace with actual LLM API call
       setTimeout(() => {
         const aiResponse = {
-          id: Date.now() + 1,
-          text: "replace me with your favorite llm's response",
+          id: crypto.randomUUID(),
+          text: "This is a demo response. Connect your LLM API here.",
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           isMe: false
         };
@@ -119,10 +126,11 @@ export default function ChatView() {
           />
           <button
             onClick={handleSend}
+            disabled={isLoading}
             className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-              newMessage.trim()
+              newMessage.trim() && !isLoading
                 ? 'bg-app text-white'
-                : 'bg-accent text-foreground'
+                : 'bg-accent text-foreground opacity-50'
             }`}
           >
             <DynamicIcon name="arrow-up" size={20} />
