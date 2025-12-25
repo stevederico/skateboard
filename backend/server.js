@@ -1,6 +1,10 @@
 // ==== IMPORTS ====
-import express from "express";
-import cookieParser from "cookie-parser";
+import { Hono } from 'hono'
+import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
+import { secureHeaders } from 'hono/secure-headers'
+import { cors } from 'hono/cors'
 import Stripe from "stripe";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
@@ -23,66 +27,66 @@ function generateCSRFToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function csrfProtection(req, res, next) {
+async function csrfProtection(c, next) {
   // Skip CSRF for GET requests and auth routes (signup/signin set the token)
-  if (req.method === 'GET' || req.path === '/signup' || req.path === '/signin') {
+  if (c.req.method === 'GET' || c.req.path === '/api/signup' || c.req.path === '/api/signin') {
     return next();
   }
 
-  const csrfToken = req.headers['x-csrf-token'];
-  const userID = req.userID; // Set by authMiddleware
+  const csrfToken = c.req.header('x-csrf-token');
+  const userID = c.get('userID'); // Set by authMiddleware
 
   if (!csrfToken || !userID) {
-    return res.status(403).json({ error: 'Invalid CSRF token' });
+    return c.json({ error: 'Invalid CSRF token' }, 403);
   }
 
   const storedData = csrfTokenStore.get(userID);
   if (!storedData) {
-    return res.status(403).json({ error: 'Invalid CSRF token' });
+    return c.json({ error: 'Invalid CSRF token' }, 403);
   }
 
   // Use timing-safe comparison to prevent timing attacks
   const tokenBuffer = Buffer.from(csrfToken);
   const storedBuffer = Buffer.from(storedData.token);
   if (tokenBuffer.length !== storedBuffer.length || !crypto.timingSafeEqual(tokenBuffer, storedBuffer)) {
-    return res.status(403).json({ error: 'Invalid CSRF token' });
+    return c.json({ error: 'Invalid CSRF token' }, 403);
   }
 
   // Check if token is expired
   if (Date.now() - storedData.timestamp > CSRF_TOKEN_EXPIRY) {
     csrfTokenStore.delete(userID);
-    return res.status(403).json({ error: 'CSRF token expired' });
+    return c.json({ error: 'CSRF token expired' }, 403);
   }
 
-  next();
+  await next();
 }
 
 const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
-  return (req, res, next) => {
-    // Use X-Forwarded-For when behind proxy, fallback to req.ip
-    const key = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  return async (c, next) => {
+    // Use X-Forwarded-For when behind proxy, fallback to remote address
+    const key = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     const now = Date.now();
     const windowStart = now - windowMs;
-    
+
     if (!rateLimitStore.has(key)) {
       rateLimitStore.set(key, []);
     }
-    
+
     const requests = rateLimitStore.get(key);
     // Remove old requests outside the window
     const validRequests = requests.filter(time => time > windowStart);
-    
+
     if (validRequests.length >= maxRequests) {
       console.error(`[${new Date().toISOString()}] RATE LIMIT EXCEEDED: IP ${key} blocked on ${routeName} (${validRequests.length}/${maxRequests} requests in ${windowMs/1000}s window)`);
-      return res.status(429).json({
+      return c.json({
         error: 'Too many requests, please try again later.',
         retryAfter: Math.ceil((windowStart + windowMs - now) / 1000)
-      });
+      }, 429);
     }
-    
+
     validRequests.push(now);
     rateLimitStore.set(key, validRequests);
-    next();
+    await next();
   };
 };
 
@@ -164,7 +168,7 @@ try {
 
   // Resolve environment variables in configuration
   config = {
-    client: rawConfig.client,
+    staticDir: rawConfig.staticDir || '../dist',
     database: {
       ...rawConfig.database,
       connectionString: resolveEnvironmentVariables(rawConfig.database.connectionString)
@@ -173,7 +177,7 @@ try {
 } catch (err) {
   console.error('Failed to load config:', err);
   config = {
-    client: "http://localhost:5173",
+    staticDir: '../dist',
     database: {
       db: "MyApp",
       dbType: "sqlite",
@@ -246,27 +250,27 @@ const logger = {
     };
     console.error(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
   },
-  
+
   warn: (message, meta = {}) => {
     const logEntry = {
-      level: 'WARN', 
+      level: 'WARN',
       timestamp: new Date().toISOString(),
       message,
       ...meta
     };
     console.warn(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
   },
-  
+
   info: (message, meta = {}) => {
     const logEntry = {
       level: 'INFO',
-      timestamp: new Date().toISOString(), 
+      timestamp: new Date().toISOString(),
       message,
       ...meta
     };
     console.log(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
   },
-  
+
   debug: (message, meta = {}) => {
     if (!isDevelopment) return;
     const logEntry = {
@@ -280,7 +284,7 @@ const logger = {
 };
 
 // Log server initialization
-logger.info('Server initialization started', { 
+logger.info('Server initialization started', {
   environment: isDevelopment ? 'development' : 'production'
 });
 
@@ -300,148 +304,67 @@ if (STRIPE_KEY) {
 // Single database config - always use the same one
 const currentDbConfig = dbConfig;
 
-// ==== EXPRESS SETUP ====
-const app = express();
-const allowedOrigin = config.client;
+// ==== HONO SETUP ====
+const app = new Hono();
 
-app.post("/payment", express.raw({ type: "application/json", limit: '10kb' }), async (req, res) => {
-  console.log("Payment webhook received");
+// Get __dirname for static file serving
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-  const signature = req.headers["stripe-signature"];
-  let event;
-  try {
-    // req.body is a Buffer here, as required by Stripe
-    event = await stripe.webhooks.constructEventAsync(req.body, signature, process.env.STRIPE_ENDPOINT_SECRET);
-    console.log("Webhook event:", event);
-  } catch (e) {
-    console.error("Webhook signature verification failed:", e.message);
-    return res.status(400).send();
-  }
-
-  // Use the single database config for webhooks
-  const webhookConfig = currentDbConfig;
-  const { customer: stripeID, current_period_end, status } = event.data.object;
-  const customer = await stripe.customers.retrieve(stripeID);
-  const customerEmail = customer.email.toLowerCase();
-  
-  if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
-    console.log(`Webhook: ${event.type} for ${customerEmail}`);
-    const user = await databaseManager.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
-    if (user) {
-      await databaseManager.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, { 
-        $set: { subscription: { stripeID, expires: current_period_end, status } } 
-      });
-    } else {
-      console.warn(`Webhook: No user found for email ${customerEmail}`);
-    }
-  }
-  res.status(200).send();
-});
+// CORS middleware (needed for development when frontend is on different port)
+app.use('*', cors({
+  origin: ['http://localhost:5173', 'http://localhost:8000'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  credentials: true
+}));
 
 // Apache Common Log Format middleware
-app.use((req, res, next) => {
-  res.on('finish', () => {
-    const timestamp = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
-    const method = req.method;
-    const url = req.originalUrl;
-    const httpVersion = `HTTP/${req.httpVersion}`;
-    const status = res.statusCode;
-    const contentLength = res.get('content-length') || '-';
-    
-    console.log(`[${timestamp}] "${method} ${url} ${httpVersion}" ${status} ${contentLength}`);
-  });
+app.use('*', async (c, next) => {
+  const start = Date.now();
+  await next();
+  const timestamp = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+  const method = c.req.method;
+  const url = c.req.path;
+  const status = c.res.status;
+  const duration = Date.now() - start;
 
-  next();
+  console.log(`[${timestamp}] "${method} ${url}" ${status} (${duration}ms)`);
 });
 
-// CORS middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin === allowedOrigin) {
-    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
+// Security headers middleware
+app.use('*', secureHeaders({
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", "'unsafe-inline'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "https:"],
+    fontSrc: ["'self'"],
+    connectSrc: ["'self'"],
+    frameAncestors: ["'none'"]
+  },
+  strictTransportSecurity: isDevelopment ? false : 'max-age=31536000; includeSubDomains; preload',
+  xFrameOptions: 'DENY',
+  xContentTypeOptions: 'nosniff',
+  referrerPolicy: 'strict-origin-when-cross-origin',
+  permissionsPolicy: {
+    camera: [],
+    microphone: [],
+    geolocation: [],
+    payment: []
   }
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-csrf-token");
+}));
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
-  next();
-});
-
-// Security headers middleware (no external dependencies)
-app.use((req, res, next) => {
-  const requestId = Math.random().toString(36).substr(2, 9);
-  
-  logger.debug('Applying security headers', { 
-    path: req.path, 
-    method: req.method,
-    requestId 
-  });
-  
-  // Content Security Policy
-  // Note: 'unsafe-inline' for scripts/styles needed for React. Consider nonce-based CSP for stricter security.
-  res.setHeader('Content-Security-Policy',
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline'; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' https:; " +
-    "font-src 'self'; " +
-    "connect-src 'self'; " +
-    "frame-ancestors 'none';"
-  );
-  
-  // HTTP Strict Transport Security (only in production)
-  if (!isDevelopment) {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
-    logger.debug('HSTS header applied (production only)', { requestId });
-  }
-  
-  // Prevent clickjacking
-  res.setHeader('X-Frame-Options', 'DENY');
-  
-  // Prevent MIME type sniffing
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  
-  // Referrer Policy
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
-  // Permissions Policy
-  res.setHeader('Permissions-Policy', 
-    'camera=(), microphone=(), geolocation=(), payment=()'
-  );
-  
-  logger.debug('Security headers applied successfully', { requestId });
-  next();
-});
-
-// Apply rate limiting
-app.use('/auth/', authLimiter);
-app.use(globalLimiter);
-
-app.use(express.json({ limit: '10kb' }));
-app.use(cookieParser());
-
-// CSRF protection will be applied per-route after authMiddleware
-// Not globally, to avoid chicken-egg problem with req.userID
+// Global rate limiter
+app.use('*', globalLimiter);
 
 // Request logging middleware (dev only)
-app.use((req, res, next) => {
-  const start = Date.now();
-  const requestId = Math.random().toString(36).substr(2, 9);
-  
+app.use('*', async (c, next) => {
   if (isDevelopment) {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - ID: ${requestId}`);
+    const requestId = Math.random().toString(36).substr(2, 9);
+    console.log(`[${new Date().toISOString()}] ${c.req.method} ${c.req.path} - ID: ${requestId}`);
   }
-  
-  res.on('finish', () => {
-    if (isDevelopment) {
-      console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - ${res.statusCode} (${Date.now() - start}ms) - ID: ${requestId}`);
-    }
-  });
-  
-  next();
+  await next();
 });
 
 const tokenExpirationDays = 30;
@@ -461,7 +384,6 @@ function tokenExpireTimestamp(){
   return Math.floor(Date.now() / 1000) + tokenExpirationDays * 24 * 60 * 60; // 30 days from now
 }
 
-// Remove the encoder and importKey since we'll use JWT_SECRET directly with jsonwebtoken
 async function generateToken(userID) {
   try {
     if (!JWT_SECRET) {
@@ -469,11 +391,8 @@ async function generateToken(userID) {
     }
 
     const exp = tokenExpireTimestamp();
-    // SECURITY FIX: Remove database config from JWT payload
-    // We don't need it since we always use the same database now
-    const payload = { userID, exp }; // Clean, minimal payload
+    const payload = { userID, exp };
 
-    // Use jsonwebtoken with exact same config as djwt
     return jwt.sign(payload, JWT_SECRET, {
       algorithm: 'HS256',
       header: { alg: "HS256", typ: "JWT" }
@@ -484,48 +403,30 @@ async function generateToken(userID) {
   }
 }
 
-async function authMiddleware(req, res, next) {
+async function authMiddleware(c, next) {
   if (!JWT_SECRET) {
-    return res.status(503).json({ error: "Authentication service unavailable" });
+    return c.json({ error: "Authentication service unavailable" }, 503);
   }
 
-  // Read token from HttpOnly cookie (use simple 'token' name)
-  const token = req.cookies.token;
+  // Read token from HttpOnly cookie
+  const token = getCookie(c, 'token');
   if (!token) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return c.json({ error: "Unauthorized" }, 401);
   }
 
   try {
-    // Use jsonwebtoken with exact same config as djwt
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
-
-    req.userID = payload.userID;
-
-    next();
+    c.set('userID', payload.userID);
+    await next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
       console.error(`[${new Date().toISOString()}] Token expired:`, error.message);
-      return res.status(401).json({ error: "Token expired" });
+      return c.json({ error: "Token expired" }, 401);
     }
     console.error(`[${new Date().toISOString()}] Token verification error:`, error);
-    return res.status(401).json({ error: "Invalid token" });
+    return c.json({ error: "Invalid token" }, 401);
   }
 }
-
-// ==== STATIC ROUTES ====
-app.use("/public", express.static("./public"));
-
-app.get("/", async (req, res) => {
-  try {
-    const file = await promisify(readFile)("./public/index.html");
-    res.setHeader("Content-Type", "text/html");
-    res.send(new TextDecoder().decode(file));
-  } catch {
-    res.status(200).send("Welcome to Skateboard API");
-  }
-});
-
-app.get("/health", (req, res) => res.json({ status: "ok", timestamp: Date.now() }));
 
 function generateUUID() {
   return crypto.randomUUID();
@@ -563,57 +464,63 @@ const validateName = (name) => {
   return true;
 };
 
-const validateSignup = (req, res, next) => {
-  const { email, password, name } = req.body;
+// ==== STRIPE WEBHOOK (raw body needed) ====
+app.post("/api/payment", async (c) => {
+  console.log("Payment webhook received");
 
-  if (!validateEmail(email)) {
-    return res.status(400).json({ error: 'Invalid email format or length' });
+  const signature = c.req.header("stripe-signature");
+  const rawBody = await c.req.arrayBuffer();
+  const body = Buffer.from(rawBody);
+
+  let event;
+  try {
+    event = await stripe.webhooks.constructEventAsync(body, signature, process.env.STRIPE_ENDPOINT_SECRET);
+    console.log("Webhook event:", event);
+  } catch (e) {
+    console.error("Webhook signature verification failed:", e.message);
+    return c.body(null, 400);
   }
 
-  if (!validatePassword(password)) {
-    return res.status(400).json({ error: 'Password must be 6-72 characters' });
+  // Use the single database config for webhooks
+  const webhookConfig = currentDbConfig;
+  const { customer: stripeID, current_period_end, status } = event.data.object;
+  const customer = await stripe.customers.retrieve(stripeID);
+  const customerEmail = customer.email.toLowerCase();
+
+  if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
+    console.log(`Webhook: ${event.type} for ${customerEmail}`);
+    const user = await databaseManager.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
+    if (user) {
+      await databaseManager.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, {
+        $set: { subscription: { stripeID, expires: current_period_end, status } }
+      });
+    } else {
+      console.warn(`Webhook: No user found for email ${customerEmail}`);
+    }
   }
+  return c.body(null, 200);
+});
 
-  if (!validateName(name)) {
-    return res.status(400).json({ error: 'Name required (max 100 characters)' });
-  }
-
-  next();
-};
-
-const validateSignin = (req, res, next) => {
-  const { email, password } = req.body;
-
-  if (!validateEmail(email)) {
-    return res.status(400).json({ error: 'Invalid credentials' });
-  }
-
-  if (!password || typeof password !== 'string') {
-    return res.status(400).json({ error: 'Invalid credentials' });
-  }
-
-  next();
-};
-
-const validateUserUpdate = (req, res, next) => {
-  const { name } = req.body;
-
-  // Only validate if name is being updated
-  if (name !== undefined && !validateName(name)) {
-    return res.status(400).json({ error: 'Name must be 1-100 characters' });
-  }
-
-  next();
-};
+// ==== STATIC ROUTES ====
+app.get("/api/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
 
 // ==== AUTH ROUTES ====
-app.post("/signup", validateSignup, async (req, res) => {
+app.post("/api/signup", authLimiter, async (c) => {
   try {
-    const origin = req.headers.origin;
-    // No need to get database config - we always use the same one
-    // const dbConfig = getDBConfig(origin);
+    const body = await c.req.json();
+    let { email, password, name } = body;
 
-    var { email, password, name } = req.body;
+    // Validation
+    if (!validateEmail(email)) {
+      return c.json({ error: 'Invalid email format or length' }, 400);
+    }
+    if (!validatePassword(password)) {
+      return c.json({ error: 'Password must be 6-72 characters' }, 400);
+    }
+    if (!validateName(name)) {
+      return c.json({ error: 'Name required (max 100 characters)' }, 400);
+    }
+
     email = email.toLowerCase().trim();
     name = escapeHtml(name.trim());
 
@@ -636,52 +543,57 @@ app.post("/signup", validateSignup, async (req, res) => {
       csrfTokenStore.set(insertID.toString(), { token: csrfToken, timestamp: Date.now() });
 
       // Set HttpOnly cookie
-      res.cookie('token', token, {
+      setCookie(c, 'token', token, {
         httpOnly: true,
         secure: !isDevelopment,
-        sameSite: 'strict',
+        sameSite: 'Strict',
         path: '/',
-        maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
+        maxAge: tokenExpirationDays * 24 * 60 * 60
       });
 
       // Set CSRF token cookie (readable by frontend)
-      res.cookie('csrf_token', csrfToken, {
+      setCookie(c, 'csrf_token', csrfToken, {
         httpOnly: false,
         secure: !isDevelopment,
-        sameSite: 'lax',
+        sameSite: 'Lax',
         path: '/',
-        maxAge: CSRF_TOKEN_EXPIRY
+        maxAge: CSRF_TOKEN_EXPIRY / 1000
       });
 
       console.log(`[${new Date().toISOString()}] Signup success`);
 
-      res.status(201).json({
+      return c.json({
         id: insertID.toString(),
         email: email,
         name: name.trim(),
         tokenExpires: tokenExpireTimestamp()
-      });
+      }, 201);
     } catch (e) {
       if (e.message?.includes('UNIQUE constraint failed') || e.message?.includes('duplicate key') || e.code === 11000) {
-        // Generic message to prevent user enumeration
         console.log(`[${new Date().toISOString()}] Signup failed - duplicate account`);
-        return res.status(400).json({ error: "Unable to create account with provided credentials" });
+        return c.json({ error: "Unable to create account with provided credentials" }, 400);
       }
       throw e;
     }
   } catch (e) {
     console.error(`[${new Date().toISOString()}] Signup error:`, e.message);
-    res.status(500).json({ error: "Server error" });
+    return c.json({ error: "Server error" }, 500);
   }
 });
 
-app.post("/signin", validateSignin, async (req, res) => {
+app.post("/api/signin", authLimiter, async (c) => {
   try {
-    const origin = req.headers.origin;
-    // No need to get database config - we always use the same one
-    // const dbConfig = getDBConfig(origin);
+    const body = await c.req.json();
+    let { email, password } = body;
 
-    var { email, password } = req.body;
+    // Validation
+    if (!validateEmail(email)) {
+      return c.json({ error: 'Invalid credentials' }, 400);
+    }
+    if (!password || typeof password !== 'string') {
+      return c.json({ error: 'Invalid credentials' }, 400);
+    }
+
     email = email.toLowerCase().trim();
     console.log(`[${new Date().toISOString()}] Attempting signin`);
 
@@ -689,20 +601,20 @@ app.post("/signin", validateSignin, async (req, res) => {
     const auth = await databaseManager.findAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
     if (!auth) {
       console.log(`[${new Date().toISOString()}] Auth record not found`);
-      return res.status(401).json({ error: "Invalid credentials" });
+      return c.json({ error: "Invalid credentials" }, 401);
     }
 
     //verify
     if (!(await verifyPassword(password, auth.password))) {
       console.log(`[${new Date().toISOString()}] Password verification failed`);
-      return res.status(401).json({ error: "Invalid credentials" });
+      return c.json({ error: "Invalid credentials" }, 401);
     }
 
     // get user
     const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
     if (!user) {
       console.error("User not found for auth record");
-      return res.status(401).json({ error: "Invalid credentials" });
+      return c.json({ error: "Invalid credentials" }, 401);
     }
 
     // generate token
@@ -713,26 +625,26 @@ app.post("/signin", validateSignin, async (req, res) => {
     csrfTokenStore.set(user._id.toString(), { token: csrfToken, timestamp: Date.now() });
 
     // Set HttpOnly cookie
-    res.cookie('token', token, {
+    setCookie(c, 'token', token, {
       httpOnly: true,
       secure: !isDevelopment,
-      sameSite: 'strict',
+      sameSite: 'Strict',
       path: '/',
-      maxAge: tokenExpirationDays * 24 * 60 * 60 * 1000
+      maxAge: tokenExpirationDays * 24 * 60 * 60
     });
 
     // Set CSRF token cookie (readable by frontend)
-    res.cookie('csrf_token', csrfToken, {
+    setCookie(c, 'csrf_token', csrfToken, {
       httpOnly: false,
       secure: !isDevelopment,
-      sameSite: 'lax',
+      sameSite: 'Lax',
       path: '/',
-      maxAge: CSRF_TOKEN_EXPIRY
+      maxAge: CSRF_TOKEN_EXPIRY / 1000
     });
 
     console.log(`[${new Date().toISOString()}] Signin success`);
 
-    res.json({
+    return c.json({
       id: user._id.toString(),
       email: user.email,
       name: user.name,
@@ -747,63 +659,71 @@ app.post("/signin", validateSignin, async (req, res) => {
     });
   } catch (e) {
     console.error(`[${new Date().toISOString()}] Signin error:`, e);
-    res.status(500).json({ error: "Server error" });
+    return c.json({ error: "Server error" }, 500);
   }
 });
 
-app.post("/signout", authMiddleware, async (req, res) => {
+app.post("/api/signout", authMiddleware, async (c) => {
   try {
-    const userID = req.userID;
+    const userID = c.get('userID');
 
     // Clear CSRF token from store
     csrfTokenStore.delete(userID);
 
     // Clear the HttpOnly cookie
-    res.cookie('token', '', {
+    deleteCookie(c, 'token', {
       httpOnly: true,
       secure: !isDevelopment,
-      sameSite: 'strict',
-      path: '/',
-      expires: new Date(0) // Expire immediately
+      sameSite: 'Strict',
+      path: '/'
     });
 
     // Clear the CSRF token cookie
-    res.cookie('csrf_token', '', {
+    deleteCookie(c, 'csrf_token', {
       httpOnly: false,
       secure: !isDevelopment,
-      sameSite: 'lax',
-      path: '/',
-      expires: new Date(0) // Expire immediately
+      sameSite: 'Lax',
+      path: '/'
     });
 
     console.log(`[${new Date().toISOString()}] Signout success for userID: ${userID}`);
-    res.json({ message: "Signed out successfully" });
+    return c.json({ message: "Signed out successfully" });
   } catch (e) {
     console.error(`[${new Date().toISOString()}] Signout error:`, e);
-    res.status(500).json({ error: "Server error" });
+    return c.json({ error: "Server error" }, 500);
   }
 });
 
 // ==== USER DATA ROUTES ====
-app.get("/me", authMiddleware, async (req, res) => {
-  const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
-  console.log("/me checking for user with ID:", req.userID);
-  if (!user) return res.status(404).json({ error: "User not found" });
-  return res.json(user);
+app.get("/api/me", authMiddleware, async (c) => {
+  const userID = c.get('userID');
+  const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+  console.log("/me checking for user with ID:", userID);
+  if (!user) return c.json({ error: "User not found" }, 404);
+  return c.json(user);
 });
 
-app.put("/me", authMiddleware, csrfProtection, validateUserUpdate, async (req, res) => {
+app.put("/api/me", authMiddleware, csrfProtection, async (c) => {
   try {
+    const userID = c.get('userID');
+    const body = await c.req.json();
+    const { name } = body;
+
+    // Validation
+    if (name !== undefined && !validateName(name)) {
+      return c.json({ error: 'Name must be 1-100 characters' }, 400);
+    }
+
     // Whitelist of fields users are allowed to update
     const UPDATEABLE_USER_FIELDS = ['name'];
 
     // Find user first to verify existence
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
-    if (!user) return res.status(404).json({ error: "User not found" });
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    if (!user) return c.json({ error: "User not found" }, 404);
 
     // Whitelist approach - only allow specific fields
     const update = {};
-    for (const [key, value] of Object.entries(req.body)) {
+    for (const [key, value] of Object.entries(body)) {
       if (UPDATEABLE_USER_FIELDS.includes(key)) {
         // Sanitize string values to prevent XSS
         update[key] = typeof value === 'string' ? escapeHtml(value.trim()) : value;
@@ -811,44 +731,46 @@ app.put("/me", authMiddleware, csrfProtection, validateUserUpdate, async (req, r
     }
 
     if (Object.keys(update).length === 0) {
-      return res.status(400).json({ error: "No valid fields to update" });
+      return c.json({ error: "No valid fields to update" }, 400);
     }
 
     // Update user document
-    const result = await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID }, { $set: update });
+    const result = await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID }, { $set: update });
 
     if (result.modifiedCount === 0) {
-      return res.status(400).json({ error: "No changes made" });
+      return c.json({ error: "No changes made" }, 400);
     }
 
     // Return updated user
-    const updatedUser = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
-    return res.json(updatedUser);
+    const updatedUser = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    return c.json(updatedUser);
   } catch (err) {
     console.error("Update user error:", err);
-    return res.status(500).json({ error: "Failed to update user" });
+    return c.json({ error: "Failed to update user" }, 500);
   }
 });
 
 // ==== USAGE TRACKING ====
-app.post("/usage", authMiddleware, async (req, res) => {
+app.post("/api/usage", authMiddleware, async (c) => {
   try {
-    const { operation } = req.body; // "check" or "track"
+    const userID = c.get('userID');
+    const body = await c.req.json();
+    const { operation } = body; // "check" or "track"
 
     if (!operation || !['check', 'track'].includes(operation)) {
-      return res.status(400).json({ error: "Invalid operation. Must be 'check' or 'track'" });
+      return c.json({ error: "Invalid operation. Must be 'check' or 'track'" }, 400);
     }
 
     // Get user
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
-    if (!user) return res.status(404).json({ error: "User not found" });
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    if (!user) return c.json({ error: "User not found" }, 404);
 
     // Check if user is a subscriber - subscribers get unlimited
     const isSubscriber = user.subscription?.status === 'active' &&
       (!user.subscription?.expires || user.subscription.expires > Math.floor(Date.now() / 1000));
 
     if (isSubscriber) {
-      return res.json({
+      return c.json({
         remaining: -1,
         total: -1,
         isSubscriber: true,
@@ -873,7 +795,7 @@ app.post("/usage", authMiddleware, async (req, res) => {
         reset_at: now + (30 * 24 * 60 * 60) // 30 days from now
       };
       await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
-        { _id: req.userID },
+        { _id: userID },
         { $set: { usage } }
       );
     }
@@ -881,24 +803,24 @@ app.post("/usage", authMiddleware, async (req, res) => {
     if (operation === 'track') {
       // Check if at limit
       if (usage.count >= limit) {
-        return res.status(429).json({
+        return c.json({
           error: "Usage limit reached",
           remaining: 0,
           total: limit,
           isSubscriber: false
-        });
+        }, 429);
       }
 
       // Increment count
       usage.count += 1;
       await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
-        { _id: req.userID },
+        { _id: userID },
         { $set: { usage } }
       );
     }
 
     // Return usage info (with subscription details for free users too)
-    return res.json({
+    return c.json({
       remaining: Math.max(0, limit - usage.count),
       total: limit,
       isSubscriber: false,
@@ -911,27 +833,31 @@ app.post("/usage", authMiddleware, async (req, res) => {
 
   } catch (error) {
     console.error('Usage tracking error:', error);
-    return res.status(500).json({ error: "Server error" });
+    return c.json({ error: "Server error" }, 500);
   }
 });
 
 // ==== PAYMENT ROUTES ====
-app.post("/checkout", paymentLimiter, authMiddleware, csrfProtection, async (req, res) => {
+app.post("/api/checkout", paymentLimiter, authMiddleware, csrfProtection, async (c) => {
   try {
-    const { email, lookup_key } = req.body;
-    if (!email || !lookup_key) return res.status(400).json({ error: "Missing email or lookup_key" });
+    const userID = c.get('userID');
+    const body = await c.req.json();
+    const { email, lookup_key } = body;
+
+    if (!email || !lookup_key) return c.json({ error: "Missing email or lookup_key" }, 400);
 
     // Verify the email matches the authenticated user
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
-    if (!user || user.email !== email) return res.status(403).json({ error: "Email mismatch" });
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    if (!user || user.email !== email) return c.json({ error: "Email mismatch" }, 403);
 
     const prices = await stripe.prices.list({ lookup_keys: [lookup_key], expand: ["data.product"] });
-    
+
     if (!prices.data || prices.data.length === 0) {
-      return res.status(400).json({ error: `No price found for lookup_key: ${lookup_key}` });
+      return c.json({ error: `No price found for lookup_key: ${lookup_key}` }, 400);
     }
-    
-    const origin = req.headers.origin || config.client;
+
+    // In production, use the same origin since we're serving frontend
+    const origin = c.req.header('origin') || `http://localhost:${port}`;
 
     const session = await stripe.checkout.sessions.create({
       customer_email: email,
@@ -943,52 +869,87 @@ app.post("/checkout", paymentLimiter, authMiddleware, csrfProtection, async (req
       cancel_url: `${origin}/app/payment?canceled=true`,
       subscription_data: { metadata: { email } },
     });
-    res.json({ url: session.url, id: session.id, customerID: session.customer });
+    return c.json({ url: session.url, id: session.id, customerID: session.customer });
   } catch (e) {
     console.error("Checkout session error:", e.message);
-    res.status(500).json({ error: "Stripe session failed" });
+    return c.json({ error: "Stripe session failed" }, 500);
   }
 });
 
-app.post("/portal", paymentLimiter, authMiddleware, csrfProtection, async (req, res) => {
+app.post("/api/portal", paymentLimiter, authMiddleware, csrfProtection, async (c) => {
   try {
-    const { customerID } = req.body;
-    if (!customerID) return res.status(400).json({ error: "Missing customerID" });
+    const userID = c.get('userID');
+    const body = await c.req.json();
+    const { customerID } = body;
+
+    if (!customerID) return c.json({ error: "Missing customerID" }, 400);
 
     // Verify the customerID matches the authenticated user's subscription
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: req.userID });
+    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
     if (!user || (user.subscription?.stripeID && user.subscription.stripeID !== customerID)) {
-      return res.status(403).json({ error: "Unauthorized customerID" });
+      return c.json({ error: "Unauthorized customerID" }, 403);
     }
 
-    const origin = req.headers.origin || config.client;
+    const origin = c.req.header('origin') || `http://localhost:${port}`;
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerID,
       return_url: `${origin}/app/payment?portal=return`,
     });
-    res.json({ url: portalSession.url, id: portalSession.id });
+    return c.json({ url: portalSession.url, id: portalSession.id });
   } catch (e) {
     console.error("Portal session error:", e.message);
-    res.status(500).json({ error: "Stripe portal failed" });
+    return c.json({ error: "Stripe portal failed" }, 500);
   }
 });
 
-// Enhanced error handling
-app.use((err, req, res, next) => {
+// ==== STATIC FILE SERVING (Production) ====
+// All /api/* routes are handled above. Everything else is static/SPA.
+const staticDir = resolve(__dirname, config.staticDir);
+
+// Serve static assets - skip /api/* paths
+app.use('*', async (c, next) => {
+  // Skip API routes - they're handled by route handlers above
+  if (c.req.path.startsWith('/api/')) {
+    return next();
+  }
+
+  // Try to serve static file
+  const staticMiddleware = serveStatic({ root: config.staticDir });
+  return staticMiddleware(c, next);
+});
+
+// SPA fallback - serve index.html for client-side routing
+app.get('*', async (c) => {
+  // Skip API routes
+  if (c.req.path.startsWith('/api/')) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+
+  try {
+    const indexPath = resolve(staticDir, 'index.html');
+    const file = await promisify(readFile)(indexPath);
+    return c.html(new TextDecoder().decode(file));
+  } catch {
+    return c.text("Welcome to Skateboard API", 200);
+  }
+});
+
+// ==== ERROR HANDLER ====
+app.onError((err, c) => {
   const requestId = Math.random().toString(36).substr(2, 9);
-  
+
   logger.error('Unhandled error occurred', {
     message: err.message,
     stack: isDevelopment ? err.stack : undefined,
-    path: req.path,
-    method: req.method,
+    path: c.req.path,
+    method: c.req.method,
     requestId
   });
-  
-  res.status(500).json({
+
+  return c.json({
     error: isDevelopment ? err.message : 'Internal server error',
     ...(isDevelopment && { stack: err.stack })
-  });
+  }, 500);
 });
 
 // ==== UTILITY FUNCTIONS ====
@@ -1007,7 +968,7 @@ function loadLocalENV() {
   const __dirname = dirname(__filename);
   const envFilePath = resolve(__dirname, './.env');
   const envExamplePath = resolve(__dirname, './.env.example');
-  
+
   // Check if .env exists, if not create it from .env.example
   try {
     statSync(envFilePath);
@@ -1048,10 +1009,13 @@ function loadLocalENV() {
 // ==== SERVER STARTUP ====
 const port = parseInt(process.env.PORT || "8000");
 
-//'::' is very important you need it to listen on ipv6!
-let server = app.listen(port, '::', () => {
-  logger.info('Server started successfully', { 
-    port, 
+const server = serve({
+  fetch: app.fetch,
+  port,
+  hostname: '::'  // Listen on both IPv4 and IPv6
+}, (info) => {
+  logger.info('Server started successfully', {
+    port: info.port,
     environment: isDevelopment ? 'development' : 'production'
   });
 });
