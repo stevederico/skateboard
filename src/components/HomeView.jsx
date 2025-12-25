@@ -2,7 +2,7 @@ import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 import { useEffect, useState, useRef } from "react";
-import { getBackendURL, getCookie, timestampToString, showCheckout, getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
+import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '@stevederico/skateboard-ui/Context';
 import constants from '../constants.json';
 

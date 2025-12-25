@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+1.1.1
+
+  Update Dockerfile Deno
+  Update README deno commands
+  Update PRODUCTION.md env vars
+  Add SCHEMA.md documentation
+  Remove .dockerignore
+
 1.1.0
 
   Replace Express with Hono

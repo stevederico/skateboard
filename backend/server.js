@@ -312,8 +312,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // CORS middleware (needed for development when frontend is on different port)
+// Use CORS_ORIGINS env var in production, fallback to localhost for development
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:5173', 'http://localhost:8000'];
+
 app.use('*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:8000'],
+  origin: corsOrigins,
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
   credentials: true
@@ -856,8 +861,8 @@ app.post("/api/checkout", paymentLimiter, authMiddleware, csrfProtection, async 
       return c.json({ error: `No price found for lookup_key: ${lookup_key}` }, 400);
     }
 
-    // In production, use the same origin since we're serving frontend
-    const origin = c.req.header('origin') || `http://localhost:${port}`;
+    // Use FRONTEND_URL env var or origin header, fallback to localhost for dev
+    const origin = process.env.FRONTEND_URL || c.req.header('origin') || `http://localhost:${port}`;
 
     const session = await stripe.checkout.sessions.create({
       customer_email: email,
@@ -890,7 +895,8 @@ app.post("/api/portal", paymentLimiter, authMiddleware, csrfProtection, async (c
       return c.json({ error: "Unauthorized customerID" }, 403);
     }
 
-    const origin = c.req.header('origin') || `http://localhost:${port}`;
+    // Use FRONTEND_URL env var or origin header, fallback to localhost for dev
+    const origin = process.env.FRONTEND_URL || c.req.header('origin') || `http://localhost:${port}`;
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerID,
       return_url: `${origin}/app/payment?portal=return`,

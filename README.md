@@ -186,12 +186,13 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v1.0+ | Application Shell Framework |
+| **skateboard-ui** | v1.2+ | Application Shell Framework |
 | **Vite** | v7.1+ | Build Tool & Dev Server |
 | **Tailwind CSS** | v4.1+ | Styling |
 | **Shadcn/ui** | Latest | Component Library |
 | **React Router** | v7.8+ | Routing |
-| **Express** | v5 | Backend Server |
+| **Hono** | v4+ | Backend Server |
+| **Deno** | v2.3+ | Runtime |
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
 | **Stripe** | Latest | Payments |
 | **JWT** | Latest | Authentication |
@@ -248,8 +249,8 @@ We love contributions!
 # Fork the repo, then:
 git clone https://github.com/YOUR_USERNAME/skateboard
 cd skateboard
-npm install
-npm run start
+deno install
+deno run start
 ```
 
 <br />
