@@ -1,5 +1,5 @@
 # Multi-stage build for smaller production image
-FROM denoland/deno:alpine-2.3.2 AS builder
+FROM denoland/deno:alpine-2.6.3 AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY . .
 RUN deno run build
 
 # Production stage
-FROM denoland/deno:alpine-2.3.2
+FROM denoland/deno:alpine-2.6.3
 
 WORKDIR /app
 
