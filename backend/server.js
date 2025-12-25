@@ -16,12 +16,33 @@ import { fileURLToPath } from 'node:url';
 import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { promisify } from 'node:util';
 
+// ==== SERVER CONFIG ====
+const port = parseInt(process.env.PORT || "8000");
+
 // ==== RATE LIMITING ====
 const rateLimitStore = new Map();
+const RATE_LIMIT_MAX_ENTRIES = 10000; // LRU eviction threshold
 
 // ==== CSRF PROTECTION ====
 const csrfTokenStore = new Map(); // userID -> { token, timestamp }
 const CSRF_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+const CSRF_MAX_ENTRIES = 50000; // LRU eviction threshold
+
+// LRU eviction helper - removes oldest entries when over limit
+function evictOldestEntries(store, maxEntries, getTimestamp) {
+  if (store.size <= maxEntries) return;
+
+  // Convert to array and sort by timestamp
+  const entries = Array.from(store.entries())
+    .map(([key, value]) => ({ key, timestamp: getTimestamp(value) }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  // Remove oldest entries until under limit
+  const toRemove = store.size - maxEntries;
+  for (let i = 0; i < toRemove; i++) {
+    store.delete(entries[i].key);
+  }
+}
 
 function generateCSRFToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -111,6 +132,9 @@ setInterval(() => {
     }
   }
 
+  // LRU eviction if still over limit
+  evictOldestEntries(rateLimitStore, RATE_LIMIT_MAX_ENTRIES, (requests) => Math.max(...requests));
+
   if (cleaned > 0) {
     console.log(`[${new Date().toISOString()}] Rate limit cleanup: removed ${cleaned} inactive IPs`);
   }
@@ -127,6 +151,9 @@ setInterval(() => {
       cleaned++;
     }
   }
+
+  // LRU eviction if still over limit
+  evictOldestEntries(csrfTokenStore, CSRF_MAX_ENTRIES, (data) => data.timestamp);
 
   if (cleaned > 0) {
     console.log(`[${new Date().toISOString()}] CSRF cleanup: removed ${cleaned} expired tokens`);
@@ -454,7 +481,13 @@ const escapeHtml = (text) => {
 const validateEmail = (email) => {
   if (!email || typeof email !== 'string') return false;
   if (email.length > 254) return false; // RFC 5321
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  // More robust email validation:
+  // - Local part: letters, numbers, and common special chars (no consecutive dots)
+  // - Domain: letters, numbers, hyphens (no consecutive dots or leading/trailing hyphens)
+  // - TLD: 2-63 characters
+  const emailRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,63}$/;
+  return emailRegex.test(email);
 };
 
 const validatePassword = (password) => {
@@ -486,24 +519,43 @@ app.post("/api/payment", async (c) => {
     return c.body(null, 400);
   }
 
-  // Use the single database config for webhooks
-  const webhookConfig = currentDbConfig;
-  const { customer: stripeID, current_period_end, status } = event.data.object;
-  const customer = await stripe.customers.retrieve(stripeID);
-  const customerEmail = customer.email.toLowerCase();
+  try {
+    // Use the single database config for webhooks
+    const webhookConfig = currentDbConfig;
+    const { customer: stripeID, current_period_end, status } = event.data.object;
 
-  if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
-    logger.info('Webhook processed', { type: event.type });
-    const user = await databaseManager.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
-    if (user) {
-      await databaseManager.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, {
-        $set: { subscription: { stripeID, expires: current_period_end, status } }
-      });
-    } else {
-      logger.warn('Webhook: No user found for email');
+    // Validate required fields exist
+    if (!stripeID) {
+      logger.error('Webhook missing customer ID');
+      return c.body(null, 400);
     }
+
+    const customer = await stripe.customers.retrieve(stripeID);
+
+    // Null check for customer email
+    if (!customer || !customer.email) {
+      logger.error('Webhook: Customer has no email', { stripeID });
+      return c.body(null, 400);
+    }
+
+    const customerEmail = customer.email.toLowerCase();
+
+    if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
+      logger.info('Webhook processed', { type: event.type });
+      const user = await databaseManager.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
+      if (user) {
+        await databaseManager.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, {
+          $set: { subscription: { stripeID, expires: current_period_end, status } }
+        });
+      } else {
+        logger.warn('Webhook: No user found for email');
+      }
+    }
+    return c.body(null, 200);
+  } catch (e) {
+    logger.error('Webhook processing error', { error: e.message });
+    return c.body(null, 500);
   }
-  return c.body(null, 200);
 });
 
 // ==== STATIC ROUTES ====
@@ -700,7 +752,7 @@ app.post("/api/signout", authMiddleware, async (c) => {
 });
 
 // ==== USER DATA ROUTES ====
-app.get("/api/me", authMiddleware, async (c) => {
+app.get("/api/me", authLimiter, authMiddleware, async (c) => {
   const userID = c.get('userID');
   const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
   logger.debug('/me checking for user');
@@ -805,8 +857,23 @@ app.post("/api/usage", authMiddleware, async (c) => {
     }
 
     if (operation === 'track') {
-      // Check if at limit
-      if (usage.count >= limit) {
+      // Atomic increment first to prevent race conditions
+      // Then verify we haven't exceeded the limit
+      await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
+        { _id: userID },
+        { $inc: { 'usage.count': 1 } }
+      );
+
+      // Re-read user to get actual count after atomic increment
+      const updatedUser = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+      const actualCount = updatedUser?.usage?.count || 1;
+
+      // If we exceeded the limit, rollback the increment and return 429
+      if (actualCount > limit) {
+        await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
+          { _id: userID },
+          { $inc: { 'usage.count': -1 } }
+        );
         return c.json({
           error: "Usage limit reached",
           remaining: 0,
@@ -815,12 +882,7 @@ app.post("/api/usage", authMiddleware, async (c) => {
         }, 429);
       }
 
-      // Atomic increment to prevent race conditions
-      await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
-        { _id: userID },
-        { $inc: { 'usage.count': 1 } }
-      );
-      usage.count += 1; // Update local copy for response
+      usage.count = actualCount;
     }
 
     // Return usage info (with subscription details for free users too)
@@ -1012,8 +1074,6 @@ function loadLocalENV() {
 }
 
 // ==== SERVER STARTUP ====
-const port = parseInt(process.env.PORT || "8000");
-
 const server = serve({
   fetch: app.fetch,
   port,
@@ -1034,9 +1094,13 @@ if (typeof process !== 'undefined') {
     server.close(async () => {
       console.log('Server closed');
 
-      // Close all database connections
-      await databaseManager.closeAll();
-      console.log('Database connections closed');
+      // Close all database connections with error handling
+      try {
+        await databaseManager.closeAll();
+        console.log('Database connections closed');
+      } catch (err) {
+        console.error('Error closing database connections:', err);
+      }
 
       process.exit(0);
     });

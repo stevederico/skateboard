@@ -18,12 +18,18 @@ export default function HomeView() {
   };
 
   const [todos, setTodos] = useState(() => {
-    const savedTodos = localStorage.getItem(getTodosKey());
-    return savedTodos ? JSON.parse(savedTodos) : [
-      { id: 1, text: 'Complete the weekly report', completed: false, createdAt: new Date() },
-      { id: 2, text: 'Call the client about the project update', completed: false, createdAt: new Date() },
-      { id: 3, text: 'Review the team proposals', completed: false, createdAt: new Date() }
+    const defaultTodos = [
+      { id: crypto.randomUUID(), text: 'Complete the weekly report', completed: false, createdAt: new Date() },
+      { id: crypto.randomUUID(), text: 'Call the client about the project update', completed: false, createdAt: new Date() },
+      { id: crypto.randomUUID(), text: 'Review the team proposals', completed: false, createdAt: new Date() }
     ];
+    try {
+      const savedTodos = localStorage.getItem(getTodosKey());
+      return savedTodos ? JSON.parse(savedTodos) : defaultTodos;
+    } catch (error) {
+      console.error('Error parsing saved todos:', error);
+      return defaultTodos;
+    }
   });
   const [newTodo, setNewTodo] = useState('');
   const [draggedItem, setDraggedItem] = useState(null);
@@ -60,7 +66,7 @@ export default function HomeView() {
       }
 
       const todo = {
-        id: Date.now(),
+        id: crypto.randomUUID(),
         text: newTodo.trim(),
         completed: false,
         createdAt: new Date()

@@ -1,5 +1,21 @@
 ## CHANGELOG
 
+1.1.6
+
+  Fix port variable scope
+  Add webhook null checks
+  Add webhook try-catch
+  Fix usage race condition
+  Add shutdown error handling
+  Add rate limit /api/me
+  Add LRU eviction stores
+  Improve email validation
+  Remove unused imports
+  Fix message ID collisions
+  Add loading state check
+  Add JSON parse handling
+  Remove config emoji
+
 1.1.5
 
   Add .claude to gitignore
