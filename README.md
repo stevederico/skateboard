@@ -179,6 +179,17 @@ To enable payments, configure your Stripe products:
    ```
 
 
+## 📈 Scaling Notes
+
+The default configuration uses in-memory stores for rate limiting and CSRF tokens. This works great for single-instance deployments.
+
+**For horizontal scaling** (multiple server instances):
+- Replace in-memory rate limiter with Redis
+- Move CSRF tokens to database or Redis
+- Use sticky sessions or shared session store
+
+See [Architecture Documentation](docs/ARCHITECTURE.md#scaling) for details.
+
 ## 🏗️ Tech Stack
 
 Built with the latest and greatest:

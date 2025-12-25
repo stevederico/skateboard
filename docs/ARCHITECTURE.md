@@ -1032,6 +1032,60 @@ deno install npm:@stevederico/skateboard-ui@latest
 
 ---
 
+## Scaling
+
+### Single Instance (Default)
+
+The default configuration uses in-memory stores:
+
+```javascript
+const rateLimitStore = new Map();  // Rate limiting
+const csrfTokenStore = new Map();  // CSRF tokens
+```
+
+**Works great for:**
+- Single server deployments
+- Development environments
+- Small to medium traffic apps
+
+### Horizontal Scaling (Multiple Instances)
+
+For multiple server instances behind a load balancer:
+
+**Option 1: Redis (Recommended)**
+```javascript
+// Replace in-memory stores with Redis
+import Redis from 'ioredis';
+const redis = new Redis(process.env.REDIS_URL);
+
+// Rate limiting
+await redis.incr(`ratelimit:${ip}`);
+await redis.expire(`ratelimit:${ip}`, 900); // 15 min
+
+// CSRF tokens
+await redis.set(`csrf:${userID}`, token, 'EX', 86400); // 24 hours
+```
+
+**Option 2: Sticky Sessions**
+- Configure load balancer for session affinity
+- Users always hit the same server
+- In-memory stores work as-is
+
+**Option 3: Database Storage**
+- Store CSRF tokens in user table
+- Use database for rate limiting (slower)
+
+### Current Limits
+
+| Store | Max Entries | Cleanup |
+|-------|-------------|---------|
+| Rate Limit | 10,000 IPs | Hourly LRU |
+| CSRF Tokens | 50,000 users | Hourly expiry |
+
+These limits handle significant traffic on a single instance.
+
+---
+
 For migration instructions, see `MIGRATION.md`
 
 For the reference implementation, see [github.com/stevederico/skateboard](https://github.com/stevederico/skateboard)
