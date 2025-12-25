@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+1.1.3
+
+  Fix usage tracking race condition
+  Add atomic $inc operator
+  Consolidate structured logging
+  Update skateboard-ui 1.2.11
+
 1.1.2
 
   Consolidate docs folder

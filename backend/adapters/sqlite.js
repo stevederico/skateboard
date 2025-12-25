@@ -120,10 +120,25 @@ export class SQLiteProvider {
 
   async updateUser(db, query, update) {
     const { _id } = query;
-    const updateData = update.$set;
 
     // Whitelist of allowed fields to prevent SQL injection
     const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeID', 'subscription_expires', 'subscription_status', 'usage_count', 'usage_reset_at'];
+
+    // Handle $inc operator for atomic increments
+    if (update.$inc) {
+      const incField = Object.keys(update.$inc)[0];
+      const incValue = update.$inc[incField];
+      // Map nested fields to flat column names
+      const columnMap = { 'usage.count': 'usage_count' };
+      const column = columnMap[incField] || incField;
+      if (!ALLOWED_FIELDS.includes(column)) return { modifiedCount: 0 };
+      const sql = `UPDATE Users SET ${column} = COALESCE(${column}, 0) + ? WHERE _id = ?`;
+      const result = db.prepare(sql).run(incValue, _id);
+      return { modifiedCount: result.changes };
+    }
+
+    const updateData = update.$set;
+    if (!updateData) return { modifiedCount: 0 };
 
     if (updateData.subscription) {
       const { stripeID, expires, status } = updateData.subscription;
