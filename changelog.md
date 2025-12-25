@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+1.1.5
+
+  Add .claude to gitignore
+  Consolidate CLAUDE.md
+
 1.1.4
 
   Update skateboardVersion field
