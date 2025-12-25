@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+1.1.4
+
+  Update skateboardVersion field
+
 1.1.3
 
   Fix usage tracking race condition
