@@ -356,81 +356,26 @@ function MyComponent() {
 }
 ```
 
-### 4. Build Configuration (v1.1.0+)
+### 4. Build Configuration
 
-**Important Change**: In skateboard-ui v1.1.0+, build configuration moved from the package to individual apps.
+Apps own their `vite.config.js` directly. skateboard-ui is a pure component library.
 
-**Why?** TailwindCSS v4 uses native Rust bindings (.node files) that cannot be bundled for browser runtime. skateboard-ui is now a pure component library.
+**Why?** TailwindCSS v4 uses native Rust bindings that cannot be bundled. Separating build config from runtime code keeps things clean.
 
-**App owns vite.config.js** (v1.1.0+):
+**App owns vite.config.js**:
 ```javascript
 // vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite';
-import path from 'path';
-import fs from 'fs';
-
-// All build plugins now defined in your app
-const customLoggerPlugin = () => { /* ... */ };
-const htmlReplacePlugin = () => { /* ... */ };
-const dynamicRobotsPlugin = () => { /* ... */ };
-const dynamicSitemapPlugin = () => { /* ... */ };
-const dynamicManifestPlugin = () => { /* ... */ };
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    customLoggerPlugin(),
-    htmlReplacePlugin(),
-    dynamicRobotsPlugin(),
-    dynamicSitemapPlugin(),
-    dynamicManifestPlugin()
-  ],
-  optimizeDeps: {
-    include: [
-      'react',
-      'react-dom',
-      'react-dom/client',
-      '@radix-ui/react-slot',
-      'cookie',
-      'set-cookie-parser'
-    ],
-    exclude: [
-      '@swc/core',
-      '@tailwindcss/oxide',
-      'lightningcss',
-      'fsevents'
-    ]
-  },
-  server: {
-    host: 'localhost',
-    port: 5173
-  }
+  plugins: [react(), tailwindcss()],
+  server: { port: 5173 }
 });
 ```
 
-**App can customize** any part:
-```javascript
-export default defineConfig({
-  plugins: [...],
-  server: {
-    port: 3000,
-    proxy: { '/api': 'http://localhost:8080' }
-  },
-  build: {
-    sourcemap: true
-  }
-});
-```
-
-**For v1.0.7 and earlier** (deprecated):
-```javascript
-// Old pattern - no longer used
-import { getSkateboardViteConfig } from '@stevederico/skateboard-ui/Utilities';
-export default getSkateboardViteConfig();
-```
+See the reference implementation for full config with SEO plugins: [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
 
 ## API Reference
 
@@ -473,18 +418,11 @@ createSkateboardApp({
 - `/app/payment` - Payment page
 - `/terms`, `/privacy`, `/eula`, `/subs` - Legal pages
 
-### Vite Configuration (v1.1.0+)
+### Vite Configuration
 
-**Note**: `getSkateboardViteConfig()` was removed in v1.1.0+. Build configuration is now in your app.
+Apps own their `vite.config.js`. Copy from the reference implementation and customize as needed.
 
-**Available build plugins** (copy to your vite.config.js):
-- `customLoggerPlugin()` - Clean console output
-- `htmlReplacePlugin()` - Replace {{APP_NAME}} etc in index.html
-- `dynamicRobotsPlugin()` - Generate robots.txt
-- `dynamicSitemapPlugin()` - Generate sitemap.xml
-- `dynamicManifestPlugin()` - Generate manifest.json
-
-See the reference implementation: [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
+See: [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
 
 ### Context API
 
@@ -650,34 +588,20 @@ Every part of the shell can be overridden:
 
 ### 1. Vite Configuration
 
-**Default**:
-```javascript
-export default getSkateboardViteConfig();
-```
+Apps own their `vite.config.js` - customize directly:
 
-**Override specific settings**:
-```javascript
-export default getSkateboardViteConfig({
-  server: {
-    port: 3000,
-    proxy: {
-      '/api': 'http://localhost:8080'
-    }
-  },
-  plugins: [customPlugin()],
-  build: {
-    sourcemap: true
-  }
-});
-```
-
-**Completely custom** (don't use utility):
 ```javascript
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  // Your complete custom config
+  plugins: [react(), tailwindcss()],
+  server: {
+    port: 3000,
+    proxy: { '/api': 'http://localhost:8080' }
+  },
+  build: { sourcemap: true }
 });
 ```
 
@@ -1020,6 +944,58 @@ export default defineConfig({
 }
 ```
 
+## Production Configuration
+
+For production deployments, override the default config using environment variables.
+
+### Environment Variables
+
+```bash
+# Database (overrides config.json database settings)
+DATABASE_URL=postgresql://user:pass@host:5432/prod_db
+# or
+MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/prod_db
+
+# CORS - Comma-separated list of allowed origins
+CORS_ORIGINS=https://yourapp.com,https://www.yourapp.com
+
+# Frontend URL - Used for Stripe redirects (success/cancel URLs)
+FRONTEND_URL=https://yourapp.com
+
+# Application
+NODE_ENV=production
+PORT=8000
+
+# Required for all environments
+STRIPE_KEY=sk_live_your_stripe_key
+STRIPE_ENDPOINT_SECRET=whsec_your_webhook_secret
+JWT_SECRET=your_secure_jwt_secret
+
+# Usage limits (optional)
+FREE_USAGE_LIMIT=20
+```
+
+### Development vs Production
+
+| Setting | Development | Production |
+|---------|-------------|------------|
+| Database | SQLite (local config) | PostgreSQL/MongoDB (env vars) |
+| CORS | localhost | CORS_ORIGINS env var |
+| Redirects | localhost:5173 | FRONTEND_URL env var |
+
+### Docker Deployment
+
+The included Dockerfile uses Deno runtime:
+
+```bash
+docker build -t skateboard .
+docker run -p 8000:8000 --env-file .env skateboard
+```
+
+The multi-stage build produces a minimal production image with only the compiled frontend and backend.
+
+---
+
 ## Summary
 
 Skateboard's Application Shell Architecture (v1.1.1+) transforms React apps from 500+ lines of boilerplate to 20 lines of routes and components. The framework handles infrastructure, you focus on features.
@@ -1039,7 +1015,7 @@ Skateboard's Application Shell Architecture (v1.1.1+) transforms React apps from
 **Update Pattern**:
 ```bash
 # Update package
-npm install @stevederico/skateboard-ui@1.1.1
+deno install npm:@stevederico/skateboard-ui@latest
 
 # Copy vite.config.js from reference if upgrading from 1.0.x
 # All other code works as-is
@@ -1056,6 +1032,6 @@ npm install @stevederico/skateboard-ui@1.1.1
 
 ---
 
-For migration instructions, see `MIGRATION_GUIDE.md`
+For migration instructions, see `MIGRATION.md`
 
 For the reference implementation, see [github.com/stevederico/skateboard](https://github.com/stevederico/skateboard)

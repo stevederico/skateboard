@@ -225,19 +225,18 @@ That's it! The shell handles routing, auth, layout, landing page, sign in/up, se
 
 **Learn more:**
 - [Architecture Documentation](docs/ARCHITECTURE.md) - Deep dive into the shell pattern
-- [Migration Guide](docs/MIGRATION_GUIDE-1.0.0.md) - Upgrade from 0.9.x to 1.0.0
+- [Migration Guide](docs/MIGRATION.md) - Upgrade from any version
 
 <br />
 
 ## 🚀 Deployment
 
-Choose your preferred deployment platform:
+See the [Deployment Guide](docs/DEPLOY.md) for step-by-step instructions:
 
-- **[Vercel](docs/vercel.md)** - Deploy both frontend and backend together (recommended)
-- **[Render](docs/render.md)** - Separate frontend and backend services  
-- **[Netlify + Railway](docs/netlify.md)** - Netlify frontend with Railway backend
-
-Each guide includes complete step-by-step instructions, environment setup, and Stripe configuration.
+- **Vercel** - Deploy both frontend and backend together (recommended)
+- **Render** - Separate frontend and backend services
+- **Netlify + Railway** - Netlify frontend with Railway backend
+- **Docker** - Container deployment with included Dockerfile
 
 <br />
 
