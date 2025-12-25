@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+1.1.2
+
+  Consolidate docs folder
+  Merge deployment guides DEPLOY.md
+  Merge migration guides MIGRATION.md
+  Merge PRODUCTION.md ARCHITECTURE.md
+  Update README doc links
+
 1.1.1
 
   Update Dockerfile Deno
