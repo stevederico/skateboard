@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+1.1.8
+
+  Update Dockerfile Deno 2.6.3
+
 1.1.7
 
   Add user rate limiter
