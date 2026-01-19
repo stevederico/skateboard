@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+1.2.1
+
+  Add comprehensive JSDoc documentation
+  Add documentation sync requirements
+
 1.2.0
 
   Update skateboard-ui 1.2.18

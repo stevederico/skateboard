@@ -5,6 +5,26 @@ import { useState, useEffect, useRef } from "react";
 import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '@stevederico/skateboard-ui/Context';
 
+/**
+ * Chat view component with usage tracking and typing indicator
+ *
+ * Demo chat interface with:
+ * - Usage tracking per message sent
+ * - Upgrade prompts for non-subscribers at usage limit
+ * - Typing indicator animation
+ * - Auto-response after 200ms (placeholder for LLM API)
+ * - Real-time usage counter in header
+ *
+ * State Management:
+ * - messages: Array of { id, text, time, isMe }
+ * - usageInfo: { remaining, isSubscriber } from getRemainingUsage
+ * - newMessage: Input field state
+ * - isTyping: Boolean for typing animation
+ * - isLoading: Boolean to prevent sends during usage check
+ *
+ * @component
+ * @returns {JSX.Element} Chat view with message interface
+ */
 export default function ChatView() {
   const { state } = getState();
   const [messages, setMessages] = useState([
@@ -37,8 +57,16 @@ export default function ChatView() {
     updateUsage();
   }, [messages]);
 
+  /**
+   * Handle send message with usage tracking
+   *
+   * Prevents sending if loading or usage limit reached. Adds user message,
+   * tracks usage, shows typing indicator, and simulates AI response after 200ms.
+   * Replace setTimeout with actual LLM API call.
+   *
+   * @async
+   */
   const handleSend = async () => {
-    // Prevent sending while still loading usage info
     if (isLoading) return;
 
     if (newMessage.trim()) {

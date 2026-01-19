@@ -28,7 +28,17 @@ const csrfTokenStore = new Map(); // userID -> { token, timestamp }
 const CSRF_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 const CSRF_MAX_ENTRIES = 50000; // LRU eviction threshold
 
-// LRU eviction helper - removes oldest entries when over limit
+/**
+ * LRU eviction helper that removes oldest entries when over limit
+ *
+ * Prevents memory leaks in rate limiter and CSRF stores by removing oldest
+ * entries based on timestamp when store exceeds maxEntries threshold.
+ *
+ * @param {Map} store - Map to evict entries from
+ * @param {number} maxEntries - Maximum entries before eviction
+ * @param {Function} getTimestamp - Function to extract timestamp from value
+ * @returns {void}
+ */
 function evictOldestEntries(store, maxEntries, getTimestamp) {
   if (store.size <= maxEntries) return;
 
@@ -44,12 +54,30 @@ function evictOldestEntries(store, maxEntries, getTimestamp) {
   }
 }
 
+/**
+ * Generate cryptographically secure CSRF token
+ *
+ * Uses crypto.randomBytes to generate 64-character hex token.
+ *
+ * @returns {string} Hex-encoded CSRF token
+ */
 function generateCSRFToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+/**
+ * CSRF protection middleware using timing-safe comparison
+ *
+ * Validates CSRF token from x-csrf-token header against stored token for userID.
+ * Skips validation for GET requests and signup/signin routes. Uses timing-safe
+ * comparison to prevent timing attacks. Enforces 24-hour token expiry.
+ *
+ * @async
+ * @param {Context} c - Hono context
+ * @param {Function} next - Next middleware function
+ * @returns {Promise<Response|void>} 403 error or continues to next middleware
+ */
 async function csrfProtection(c, next) {
-  // Skip CSRF for GET requests and auth routes (signup/signin set the token)
   if (c.req.method === 'GET' || c.req.path === '/api/signup' || c.req.path === '/api/signin') {
     return next();
   }
@@ -82,6 +110,18 @@ async function csrfProtection(c, next) {
   await next();
 }
 
+/**
+ * Rate limiter middleware factory with sliding window algorithm
+ *
+ * Tracks requests per IP within time window using in-memory Map. Uses
+ * X-Forwarded-For header when behind proxy. Returns 429 with retryAfter
+ * when limit exceeded. Automatic cleanup via setInterval.
+ *
+ * @param {number} maxRequests - Maximum requests allowed in window
+ * @param {number} windowMs - Time window in milliseconds
+ * @param {string} [routeName='unknown'] - Route name for logging
+ * @returns {Function} Hono middleware function
+ */
 const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
   return async (c, next) => {
     // Use X-Forwarded-For when behind proxy, fallback to remote address
@@ -171,7 +211,15 @@ if (!isProd()) {
   }, 60 * 60 * 1000); // Every hour
 }
 
-// Environment variable resolution function
+/**
+ * Resolve environment variable placeholders in configuration strings
+ *
+ * Replaces ${VAR_NAME} patterns with process.env values. Logs warning
+ * and preserves placeholder if environment variable is undefined.
+ *
+ * @param {string} str - String with ${VAR_NAME} placeholders
+ * @returns {string} String with placeholders replaced
+ */
 function resolveEnvironmentVariables(str) {
   if (typeof str !== 'string') return str;
 
@@ -402,21 +450,54 @@ app.use('*', async (c, next) => {
 
 const tokenExpirationDays = 30;
 
-// ==== BCRYPT HELPERS ====
+/**
+ * Hash password using bcrypt with 10 salt rounds
+ *
+ * Generates salt and hashes password for secure storage. Uses bcrypt's
+ * automatic salt generation.
+ *
+ * @async
+ * @param {string} password - Plain text password to hash
+ * @returns {Promise<string>} Bcrypt hashed password
+ * @throws {Error} If bcrypt hashing fails
+ */
 async function hashPassword(password) {
   const salt = await bcrypt.genSalt(10);
   return await bcrypt.hash(password, salt);
 }
 
+/**
+ * Verify password against bcrypt hash using timing-safe comparison
+ *
+ * @async
+ * @param {string} password - Plain text password to verify
+ * @param {string} hash - Bcrypt hash to compare against
+ * @returns {Promise<boolean>} True if password matches hash
+ */
 async function verifyPassword(password, hash) {
   return await bcrypt.compare(password, hash);
 }
 
-// ==== JWT HELPERS ====
+/**
+ * Calculate JWT expiration timestamp
+ *
+ * @returns {number} Unix timestamp 30 days in the future
+ */
 function tokenExpireTimestamp(){
   return Math.floor(Date.now() / 1000) + tokenExpirationDays * 24 * 60 * 60; // 30 days from now
 }
 
+/**
+ * Generate JWT token for user authentication
+ *
+ * Creates HS256-signed JWT with 30-day expiration. Requires JWT_SECRET
+ * environment variable.
+ *
+ * @async
+ * @param {string} userID - User ID to encode in token
+ * @returns {Promise<string>} Signed JWT token
+ * @throws {Error} If JWT_SECRET not configured or signing fails
+ */
 async function generateToken(userID) {
   try {
     if (!JWT_SECRET) {
@@ -436,6 +517,18 @@ async function generateToken(userID) {
   }
 }
 
+/**
+ * Authentication middleware using JWT from HttpOnly cookie
+ *
+ * Verifies JWT token from 'token' cookie. Sets userID in context on success.
+ * Returns 401 for missing, expired, or invalid tokens. Returns 503 if
+ * JWT_SECRET not configured.
+ *
+ * @async
+ * @param {Context} c - Hono context
+ * @param {Function} next - Next middleware function
+ * @returns {Promise<Response|void>} 401/503 error or continues to next middleware
+ */
 async function authMiddleware(c, next) {
   if (!JWT_SECRET) {
     return c.json({ error: "Authentication service unavailable" }, 503);
@@ -461,11 +554,26 @@ async function authMiddleware(c, next) {
   }
 }
 
+/**
+ * Generate RFC 4122 compliant UUID v4
+ *
+ * Uses crypto.randomUUID() for cryptographically secure unique identifiers.
+ *
+ * @returns {string} UUID string
+ */
 function generateUUID() {
   return crypto.randomUUID();
 }
 
-// ==== VALIDATION & SANITIZATION ====
+/**
+ * Escape HTML special characters to prevent XSS attacks
+ *
+ * Replaces &, <, >, ", ', / with HTML entities. Returns original value
+ * if not a string.
+ *
+ * @param {string} text - Text to escape
+ * @returns {string} HTML-escaped text
+ */
 const escapeHtml = (text) => {
   if (typeof text !== 'string') return text;
   const map = {
@@ -479,6 +587,16 @@ const escapeHtml = (text) => {
   return text.replace(/[&<>"'/]/g, (char) => map[char]);
 };
 
+/**
+ * Validate email address format and length
+ *
+ * RFC 5321 compliant validation with robust regex checking local part,
+ * domain, and TLD. Max length 254 characters. Prevents consecutive dots
+ * and leading/trailing hyphens.
+ *
+ * @param {string} email - Email address to validate
+ * @returns {boolean} True if valid email format
+ */
 const validateEmail = (email) => {
   if (!email || typeof email !== 'string') return false;
   if (email.length > 254) return false; // RFC 5321
@@ -491,12 +609,28 @@ const validateEmail = (email) => {
   return emailRegex.test(email);
 };
 
+/**
+ * Validate password length within bcrypt limits
+ *
+ * Enforces 6-72 character range (bcrypt's maximum is 72 bytes).
+ *
+ * @param {string} password - Password to validate
+ * @returns {boolean} True if valid password length
+ */
 const validatePassword = (password) => {
   if (!password || typeof password !== 'string') return false;
   if (password.length < 6 || password.length > 72) return false; // bcrypt limit
   return true;
 };
 
+/**
+ * Validate name length and non-empty after trim
+ *
+ * Enforces 1-100 character range after trimming whitespace.
+ *
+ * @param {string} name - Name to validate
+ * @returns {boolean} True if valid name
+ */
 const validateName = (name) => {
   if (!name || typeof name !== 'string') return false;
   if (name.trim().length === 0 || name.length > 100) return false;

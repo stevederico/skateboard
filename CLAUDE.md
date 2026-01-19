@@ -18,6 +18,44 @@ npm run prod           # Production build
 npm install-all        # Install all dependencies (root + workspace)
 ```
 
+## Code Standards
+
+### Documentation Requirements
+
+**CRITICAL: Documentation must always match code.**
+
+When making ANY code changes, you MUST update:
+- JSDoc comments on modified functions/classes/components
+- Inline comments explaining complex logic
+- README.md if user-facing behavior changes
+- CLAUDE.md if architecture/patterns change
+- API docs if endpoints change
+- CHANGELOG.md for all changes (see commit protocol)
+
+**Before committing:**
+1. Review all modified functions - do JSDoc comments match current implementation?
+2. Check inline comments - do they explain current logic accurately?
+3. Verify examples in docs still work with changes
+4. Update version references if applicable
+
+**Example - Function Signature Change:**
+```javascript
+// WRONG: Changed function but not JSDoc
+/**
+ * @param {string} email - User email
+ */
+async function updateUser(userId, email) { ... }
+
+// CORRECT: Updated both code and JSDoc
+/**
+ * @param {string} userId - User ID
+ * @param {string} email - User email
+ */
+async function updateUser(userId, email) { ... }
+```
+
+**Out-of-date documentation is worse than no documentation** - it misleads developers and wastes debugging time. Always keep docs in sync with code.
+
 ## Architecture Overview
 
 ### Application Shell Architecture (v1.1)

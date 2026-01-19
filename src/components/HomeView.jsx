@@ -6,12 +6,34 @@ import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/sk
 import { getState } from '@stevederico/skateboard-ui/Context';
 import constants from '../constants.json';
 
+/**
+ * Home view component with todo list management and drag-drop reordering
+ *
+ * Features:
+ * - Local storage persistence per app instance (using appName from constants.json)
+ * - Usage tracking with upgrade prompts for non-subscribers
+ * - Drag-and-drop todo reordering
+ * - Auto-sort completed todos to bottom
+ * - Real-time usage counter in header
+ *
+ * State Management:
+ * - todos: Todo list with id, text, completed, createdAt
+ * - usageInfo: { remaining, isSubscriber } from getRemainingUsage
+ * - newTodo: Input field state
+ * - draggedItem/dragOverItem: Drag-drop state
+ *
+ * @component
+ * @returns {JSX.Element} Home view with todo list interface
+ */
 export default function HomeView() {
   const { state } = getState();
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
   const isUserSubscriber = usageInfo.isSubscriber
 
-  // Get app-specific localStorage key
+  /**
+   * Generate app-specific localStorage key from constants.json appName
+   * @returns {string} Storage key like "my-app_todos_v2"
+   */
   const getTodosKey = () => {
     const appName = constants.appName || 'skateboard';
     return `${appName.toLowerCase().replace(/\s+/g, '-')}_todos_v2`;
@@ -57,6 +79,11 @@ export default function HomeView() {
     updateUsage();
   }, [todos]);
 
+  /**
+   * Add new todo with usage tracking
+   * Shows upgrade sheet if non-subscriber reaches usage limit
+   * @async
+   */
   const addTodo = async () => {
     if (newTodo.trim()) {
       // Check usage limit from current state
@@ -80,6 +107,10 @@ export default function HomeView() {
     }
   };
 
+  /**
+   * Toggle todo completed status and auto-sort (completed to bottom)
+   * @param {string} id - Todo UUID
+   */
   const toggleTodo = (id) => {
     const updatedTodos = todos.map(todo =>
       todo.id === id ? { ...todo, completed: !todo.completed } : todo
@@ -94,27 +125,50 @@ export default function HomeView() {
     setTodos(sortedTodos);
   };
 
+  /**
+   * Delete todo by ID
+   * @param {string} id - Todo UUID
+   */
   const deleteTodo = (id) => {
     setTodos(todos.filter(todo => todo.id !== id));
   };
 
+  /**
+   * Handle Enter key to add todo
+   * @param {KeyboardEvent} e - Keyboard event
+   */
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       addTodo();
     }
   };
 
+  /**
+   * Handle drag start event
+   * @param {DragEvent} e - Drag event
+   * @param {Object} todo - Todo being dragged
+   */
   const handleDragStart = (e, todo) => {
     setDraggedItem(todo);
     e.dataTransfer.effectAllowed = 'move';
   };
 
+  /**
+   * Handle drag over event and visual feedback
+   * @param {DragEvent} e - Drag event
+   * @param {Object} todo - Todo being dragged over
+   */
   const handleDragOver = (e, todo) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverItem(todo.id);
   };
 
+  /**
+   * Handle drop event and reorder todos
+   * @param {DragEvent} e - Drag event
+   * @param {Object} targetTodo - Todo being dropped onto
+   */
   const handleDrop = (e, targetTodo) => {
     e.preventDefault();
     
@@ -135,6 +189,9 @@ export default function HomeView() {
     setDragOverItem(null);
   };
 
+  /**
+   * Handle drag end event and cleanup drag state
+   */
   const handleDragEnd = () => {
     setDraggedItem(null);
     setDragOverItem(null);

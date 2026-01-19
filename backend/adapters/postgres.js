@@ -1,21 +1,60 @@
 import pg from 'pg';
 
+/**
+ * PostgreSQL database provider with connection pooling
+ *
+ * Manages multiple PostgreSQL connection pools with automatic SSL detection.
+ * Disables SSL for localhost connections, enables for remote connections.
+ *
+ * Features:
+ * - Connection pooling (max 20 connections)
+ * - Automatic SSL detection based on hostname
+ * - Parameterized queries with $1, $2 syntax
+ * - Nested object transformation (subscription, usage)
+ * - Transaction support with BEGIN/COMMIT/ROLLBACK
+ *
+ * @class
+ */
 export class PostgreSQLProvider {
+  /**
+   * Create PostgreSQL provider with empty pool cache
+   */
   constructor() {
     this.pools = new Map();
   }
 
+  /**
+   * Initialize PostgreSQL provider
+   *
+   * No-op initialization for interface compatibility.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
   async initialize() {
     console.log('PostgreSQL provider initialized');
   }
 
+  /**
+   * Get or create PostgreSQL connection pool with caching
+   *
+   * Creates pg.Pool with automatic SSL detection. Disables SSL for localhost
+   * (localhost, 127.0.0.1, ::1), enables for remote hosts. Pool configuration:
+   * - max: 20 connections
+   * - idleTimeoutMillis: 30000
+   * - connectionTimeoutMillis: 2000
+   *
+   * @async
+   * @param {string} dbName - Database name for cache key
+   * @param {string} connectionString - PostgreSQL connection URL (required)
+   * @returns {Promise<pg.Pool>} PostgreSQL connection pool
+   * @throws {Error} If connectionString is not provided
+   */
   async getDatabase(dbName, connectionString) {
     if (!this.pools.has(dbName)) {
       if (!connectionString) {
         throw new Error(`Connection string required for PostgreSQL database: ${dbName}`);
       }
-
-      // Parse URL to determine if SSL should be disabled (localhost/127.0.0.1)
       let sslEnabled = true;
       try {
         const url = new URL(connectionString);
@@ -40,10 +79,20 @@ export class PostgreSQLProvider {
     return this.pools.get(dbName);
   }
 
+  /**
+   * Create database schema if tables don't exist
+   *
+   * Creates users and auths tables (lowercase names) with indexes.
+   * Flattens nested subscription and usage objects into columns.
+   * Uses quoted identifiers for camelCase columns (subscription_stripeID, userID).
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @returns {Promise<void>}
+   */
   async ensurePostgreSQLSchema(pool) {
     const client = await pool.connect();
     try {
-      // Create Users table
       await client.query(`
         CREATE TABLE IF NOT EXISTS users (
           _id TEXT PRIMARY KEY,
@@ -77,6 +126,21 @@ export class PostgreSQLProvider {
     }
   }
 
+  /**
+   * Find user by ID or email with optional field projection
+   *
+   * Transforms flat columns to nested subscription and usage objects.
+   * Uses parameterized query ($1) to prevent SQL injection.
+   * Projection parameter is accepted for API compatibility but not implemented.
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {Object} query - Query object with _id or email
+   * @param {string} [query._id] - User ID to search
+   * @param {string} [query.email] - Email to search
+   * @param {Object} [projection={}] - Field projection (compatibility only)
+   * @returns {Promise<Object|null>} User object with subscription and usage nested, or null
+   */
   async findUser(pool, query, projection = {}) {
     const { _id, email } = query;
     let sql = "SELECT * FROM users WHERE ";
@@ -124,6 +188,22 @@ export class PostgreSQLProvider {
     }
   }
 
+  /**
+   * Insert new user with default values
+   *
+   * Creates user record with parameterized query. Subscription and usage
+   * fields are nullable/default.
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {Object} userData - User data to insert
+   * @param {string} userData._id - User ID (UUID)
+   * @param {string} userData.email - User email (unique)
+   * @param {string} userData.name - User name
+   * @param {number} userData.created_at - Unix timestamp
+   * @returns {Promise<{insertedId: string}>} Inserted user ID
+   * @throws {Error} If email already exists
+   */
   async insertUser(pool, userData) {
     const { _id, email, name, created_at } = userData;
     const sql = "INSERT INTO users (_id, email, name, created_at) VALUES ($1, $2, $3, $4)";
@@ -137,10 +217,28 @@ export class PostgreSQLProvider {
     }
   }
 
+  /**
+   * Update user fields by ID
+   *
+   * Supports three update patterns:
+   * - $inc operator for atomic increments (e.g., usage.count)
+   * - $set with subscription object (maps to subscription_* columns)
+   * - $set with usage object (maps to usage_* columns)
+   * - $set with flat fields (direct column updates)
+   *
+   * Uses parameterized queries ($1, $2, ...) and whitelists allowed fields.
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {Object} query - Query object with _id
+   * @param {string} query._id - User ID to update
+   * @param {Object} update - Update object with $inc or $set
+   * @param {Object} [update.$inc] - Atomic increment operations
+   * @param {Object} [update.$set] - Field updates
+   * @returns {Promise<{modifiedCount: number}>} Number of modified rows
+   */
   async updateUser(pool, query, update) {
     const { _id } = query;
-
-    // Whitelist of allowed fields to prevent SQL injection
     const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeID', 'subscription_expires', 'subscription_status', 'usage_count', 'usage_reset_at'];
 
     const client = await pool.connect();
@@ -196,6 +294,17 @@ export class PostgreSQLProvider {
     }
   }
 
+  /**
+   * Find authentication record by email
+   *
+   * Uses parameterized query to prevent SQL injection.
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {Object} query - Query object with email
+   * @param {string} query.email - Email to search
+   * @returns {Promise<Object|null>} Auth record with password hash, or null
+   */
   async findAuth(pool, query) {
     const { email } = query;
     const sql = "SELECT * FROM auths WHERE email = $1";
@@ -209,6 +318,20 @@ export class PostgreSQLProvider {
     }
   }
 
+  /**
+   * Insert authentication record with hashed password
+   *
+   * Uses parameterized query and quoted identifier for userID.
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {Object} authData - Auth data to insert
+   * @param {string} authData.email - User email (primary key)
+   * @param {string} authData.password - Bcrypt hashed password
+   * @param {string} authData.userID - User ID foreign key
+   * @returns {Promise<{insertedId: string}>} Inserted email
+   * @throws {Error} If email already exists
+   */
   async insertAuth(pool, authData) {
     const { email, password, userID } = authData;
     const sql = 'INSERT INTO auths (email, password, "userID") VALUES ($1, $2, $3)';
@@ -222,13 +345,27 @@ export class PostgreSQLProvider {
     }
   }
 
+  /**
+   * Execute custom SQL query with unified response format
+   *
+   * Handles both SELECT and modification queries using result.rows detection.
+   * Supports transactions via transaction array. Uses parameterized queries.
+   *
+   * Response format includes success flag, data, rowCount, and metadata with timing.
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {Object} queryObject - Query configuration
+   * @param {string} [queryObject.query] - SQL query string
+   * @param {Array} [queryObject.params=[]] - Query parameters for prepared statements
+   * @param {Array<{query: string, params: Array}>} [queryObject.transaction] - Transaction operations
+   * @returns {Promise<{success: boolean, data: any, rowCount: number, metadata: Object}>} Query result
+   */
   async execute(pool, queryObject) {
     const startTime = Date.now();
-    
+
     try {
       const { query, params = [], transaction } = queryObject;
-      
-      // Handle transactions
       if (transaction && Array.isArray(transaction)) {
         return this.executeTransaction(pool, transaction, startTime);
       }
@@ -288,13 +425,24 @@ export class PostgreSQLProvider {
     }
   }
 
+  /**
+   * Execute multiple SQL operations in a transaction
+   *
+   * Wraps operations in BEGIN/COMMIT with automatic ROLLBACK on error.
+   * All operations succeed or all fail atomically. Ensures client release.
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {Array<{query: string, params: Array}>} operations - Operations to execute
+   * @param {number} startTime - Transaction start timestamp for metadata
+   * @returns {Promise<{success: boolean, data: Array, rowCount: number, metadata: Object}>} Transaction results
+   * @throws {Error} Rolls back and throws on any operation failure
+   */
   async executeTransaction(pool, operations, startTime) {
     const client = await pool.connect();
-    
+
     try {
       const results = [];
-      
-      // PostgreSQL transaction
       await client.query('BEGIN');
       
       for (const operation of operations) {
@@ -327,6 +475,14 @@ export class PostgreSQLProvider {
     }
   }
 
+  /**
+   * Close all connection pools and clear cache
+   *
+   * Ends all PostgreSQL pools gracefully. Call on application shutdown.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
   async closeAll() {
     for (const [dbName, pool] of this.pools) {
       await pool.end();

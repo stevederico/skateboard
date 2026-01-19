@@ -4,10 +4,13 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 import fs from 'node:fs';
 
-// ===== CUSTOM VITE PLUGINS =====
-
 /**
- * Custom logger plugin for Vite
+ * Custom logger plugin to simplify Vite server startup output
+ *
+ * Overrides default Vite URL printer to show single clean message.
+ * Suppresses verbose network address output.
+ *
+ * @returns {import('vite').Plugin} Vite plugin object
  */
 const customLoggerPlugin = () => {
     return {
@@ -21,8 +24,13 @@ const customLoggerPlugin = () => {
 };
 
 /**
- * HTML replacement plugin
- * Replaces {{APP_NAME}}, {{TAGLINE}}, {{COMPANY_WEBSITE}} in index.html
+ * HTML template variable replacement plugin
+ *
+ * Replaces {{APP_NAME}}, {{TAGLINE}}, {{COMPANY_WEBSITE}} placeholders
+ * in index.html with values from constants.json at build time. Enables
+ * dynamic metadata without build script complexity.
+ *
+ * @returns {import('vite').Plugin} Vite plugin object
  */
 const htmlReplacePlugin = () => {
     return {
@@ -39,7 +47,15 @@ const htmlReplacePlugin = () => {
 };
 
 /**
- * Dynamic robots.txt plugin
+ * Dynamic robots.txt generation plugin
+ *
+ * Generates robots.txt at build time with:
+ * - Bot-specific rules (Googlebot, Bingbot, Applebot, social crawlers)
+ * - Protected routes (/app/, /console/, /signin/, /signup/)
+ * - Sitemap reference from constants.json
+ * - Disallows all other bots from entire site
+ *
+ * @returns {import('vite').Plugin} Vite plugin object
  */
 const dynamicRobotsPlugin = () => {
     return {
@@ -102,7 +118,18 @@ Sitemap: ${website}/sitemap.xml
 };
 
 /**
- * Dynamic sitemap.xml plugin
+ * Dynamic sitemap.xml generation plugin
+ *
+ * Generates sitemap.xml at build time with static pages:
+ * - / (priority 1.0, weekly)
+ * - /terms (priority 0.8, monthly)
+ * - /privacy (priority 0.8, monthly)
+ * - /subs (priority 0.7, monthly)
+ * - /eula (priority 0.7, monthly)
+ *
+ * Uses current build date for lastmod. Reads website URL from constants.json.
+ *
+ * @returns {import('vite').Plugin} Vite plugin object
  */
 const dynamicSitemapPlugin = () => {
     return {
@@ -159,7 +186,18 @@ const dynamicSitemapPlugin = () => {
 };
 
 /**
- * Dynamic manifest.json plugin
+ * Dynamic PWA manifest.json generation plugin
+ *
+ * Generates Web App Manifest at build time with:
+ * - App name and description from constants.json
+ * - Icon configuration (192x192 SVG)
+ * - Standalone display mode
+ * - Start URL pointing to /app
+ * - Black theme color, white background
+ *
+ * Enables Add to Home Screen and PWA functionality.
+ *
+ * @returns {import('vite').Plugin} Vite plugin object
  */
 const dynamicManifestPlugin = () => {
     return {

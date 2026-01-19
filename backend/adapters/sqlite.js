@@ -2,17 +2,49 @@ import { DatabaseSync as Database } from "node:sqlite";
 import { mkdir } from 'node:fs';
 import { promisify } from 'node:util';
 
+/**
+ * SQLite database provider using Node.js built-in DatabaseSync
+ *
+ * Manages multiple SQLite connections with WAL mode for concurrency.
+ * Automatically creates schema on first connection. Stores databases
+ * in ./databases directory by default.
+ *
+ * Features:
+ * - WAL journal mode for better concurrency
+ * - Automatic schema creation
+ * - Connection caching per database name
+ * - Nested object transformation (subscription, usage)
+ * - Transaction support
+ *
+ * @class
+ */
 export class SQLiteProvider {
+  /**
+   * Create SQLite provider with empty database cache
+   */
   constructor() {
     this.databases = new Map();
   }
 
+  /**
+   * Initialize SQLite provider by creating databases directory
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
   async initialize() {
     await this.initializeSQLite();
   }
 
+  /**
+   * Create ./databases directory if it doesn't exist
+   *
+   * Uses recursive option to create parent directories. Ignores EEXIST errors.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
   async initializeSQLite() {
-    // Create databases directory if it doesn't exist
     try {
       await promisify(mkdir)('./databases', { recursive: true });
     } catch (err) {
@@ -22,8 +54,17 @@ export class SQLiteProvider {
     }
   }
 
+  /**
+   * Create database schema if tables don't exist
+   *
+   * Creates Users and Auths tables with indexes. Flattens nested subscription
+   * and usage objects into columns (subscription_stripeID, usage_count, etc).
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @returns {void}
+   */
   async ensureSQLiteSchema(db) {
-    // Create Users table
     db.exec(`
       CREATE TABLE IF NOT EXISTS Users (
         _id TEXT PRIMARY KEY,
@@ -53,6 +94,16 @@ export class SQLiteProvider {
     db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_auths_email ON Auths(email)`);
   }
 
+  /**
+   * Get or create SQLite database connection with caching
+   *
+   * Opens database with WAL mode, NORMAL synchronous, and memory temp store
+   * for optimal performance. Creates schema on first connection.
+   *
+   * @param {string} dbName - Database name for cache key
+   * @param {string|null} [connectionString=null] - File path, defaults to ./databases/{dbName}.db
+   * @returns {Database} SQLite DatabaseSync instance
+   */
   getDatabase(dbName, connectionString = null) {
     if (!this.databases.has(dbName)) {
       const dbPath = connectionString || `./databases/${dbName}.db`;
@@ -70,6 +121,20 @@ export class SQLiteProvider {
     return this.databases.get(dbName);
   }
 
+  /**
+   * Find user by ID or email with optional field projection
+   *
+   * Transforms flat columns to nested subscription and usage objects.
+   * Projection parameter is accepted for API compatibility but not implemented.
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @param {Object} query - Query object with _id or email
+   * @param {string} [query._id] - User ID to search
+   * @param {string} [query.email] - Email to search
+   * @param {Object} [projection={}] - Field projection (compatibility only)
+   * @returns {Promise<Object|null>} User object with subscription and usage nested, or null
+   */
   async findUser(db, query, projection = {}) {
     const { _id, email } = query;
     let sql = "SELECT * FROM Users WHERE ";
@@ -111,6 +176,21 @@ export class SQLiteProvider {
     return result;
   }
 
+  /**
+   * Insert new user with default values
+   *
+   * Creates user record. Subscription and usage fields are nullable/default.
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @param {Object} userData - User data to insert
+   * @param {string} userData._id - User ID (UUID)
+   * @param {string} userData.email - User email (unique)
+   * @param {string} userData.name - User name
+   * @param {number} userData.created_at - Unix timestamp
+   * @returns {Promise<{insertedId: string}>} Inserted user ID
+   * @throws {Error} If email already exists
+   */
   async insertUser(db, userData) {
     const { _id, email, name, created_at } = userData;
     const sql = "INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)";
@@ -118,10 +198,28 @@ export class SQLiteProvider {
     return { insertedId: _id };
   }
 
+  /**
+   * Update user fields by ID
+   *
+   * Supports three update patterns:
+   * - $inc operator for atomic increments (e.g., usage.count)
+   * - $set with subscription object (maps to subscription_* columns)
+   * - $set with usage object (maps to usage_* columns)
+   * - $set with flat fields (direct column updates)
+   *
+   * Whitelists allowed fields to prevent SQL injection.
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @param {Object} query - Query object with _id
+   * @param {string} query._id - User ID to update
+   * @param {Object} update - Update object with $inc or $set
+   * @param {Object} [update.$inc] - Atomic increment operations
+   * @param {Object} [update.$set] - Field updates
+   * @returns {Promise<{modifiedCount: number}>} Number of modified rows
+   */
   async updateUser(db, query, update) {
     const { _id } = query;
-
-    // Whitelist of allowed fields to prevent SQL injection
     const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeID', 'subscription_expires', 'subscription_status', 'usage_count', 'usage_reset_at'];
 
     // Handle $inc operator for atomic increments
@@ -172,12 +270,33 @@ export class SQLiteProvider {
     }
   }
 
+  /**
+   * Find authentication record by email
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @param {Object} query - Query object with email
+   * @param {string} query.email - Email to search
+   * @returns {Promise<Object|null>} Auth record with password hash, or null
+   */
   async findAuth(db, query) {
     const { email } = query;
     const sql = "SELECT * FROM Auths WHERE email = ?";
     return db.prepare(sql).get(email);
   }
 
+  /**
+   * Insert authentication record with hashed password
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @param {Object} authData - Auth data to insert
+   * @param {string} authData.email - User email (primary key)
+   * @param {string} authData.password - Bcrypt hashed password
+   * @param {string} authData.userID - User ID foreign key
+   * @returns {Promise<{insertedId: string}>} Inserted email
+   * @throws {Error} If email already exists
+   */
   async insertAuth(db, authData) {
     const { email, password, userID } = authData;
     const sql = "INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)";
@@ -185,13 +304,27 @@ export class SQLiteProvider {
     return { insertedId: email };
   }
 
+  /**
+   * Execute custom SQL query with unified response format
+   *
+   * Handles both SELECT (uses .all()) and modification queries (uses .run()).
+   * Automatically detects query type. Supports transactions via transaction array.
+   *
+   * Response format includes success flag, data, rowCount, and metadata with timing.
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @param {Object} queryObject - Query configuration
+   * @param {string} [queryObject.query] - SQL query string
+   * @param {Array} [queryObject.params=[]] - Query parameters for prepared statements
+   * @param {Array<{query: string, params: Array}>} [queryObject.transaction] - Transaction operations
+   * @returns {Promise<{success: boolean, data: any, rowCount: number, metadata: Object}>} Query result
+   */
   async execute(db, queryObject) {
     const startTime = Date.now();
-    
+
     try {
       const { query, params = [], transaction } = queryObject;
-      
-      // Handle transactions
       if (transaction && Array.isArray(transaction)) {
         return this.executeTransaction(db, transaction, startTime);
       }
@@ -254,11 +387,22 @@ export class SQLiteProvider {
     }
   }
 
+  /**
+   * Execute multiple SQL operations in a transaction
+   *
+   * Wraps operations in BEGIN/COMMIT with automatic ROLLBACK on error.
+   * All operations succeed or all fail atomically.
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @param {Array<{query: string, params: Array}>} operations - Operations to execute
+   * @param {number} startTime - Transaction start timestamp for metadata
+   * @returns {Promise<{success: boolean, data: Array, rowCount: number, metadata: Object}>} Transaction results
+   * @throws {Error} Rolls back and throws on any operation failure
+   */
   async executeTransaction(db, operations, startTime) {
     try {
       const results = [];
-      
-      // SQLite transaction
       db.exec('BEGIN TRANSACTION');
       
       for (const operation of operations) {
@@ -290,6 +434,13 @@ export class SQLiteProvider {
     }
   }
 
+  /**
+   * Close all database connections and clear cache
+   *
+   * Call on application shutdown to properly close all SQLite databases.
+   *
+   * @returns {void}
+   */
   closeAll() {
     for (const [dbName, db] of this.databases) {
       db.close();
