@@ -211,3 +211,5 @@ This project was created from the skateboard boilerplate. The `skateboardVersion
 
 ### Important
 Do NOT automatically apply boilerplate updates. Always consult the user first and show what changes would be made.
+
+make sure you read the readme in the @stevederico/skateboard-ui package

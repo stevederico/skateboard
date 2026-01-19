@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+1.2.0
+
+  Update skateboard-ui 1.2.18
+  Update CLAUDE.md documentation
+
 1.1.9
 
   Add 127.0.0.1 CORS origins
