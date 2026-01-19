@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+1.1.9
+
+  Add 127.0.0.1 CORS origins
+
 1.1.8
 
   Update Dockerfile Deno 2.6.3
