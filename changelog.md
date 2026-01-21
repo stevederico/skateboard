@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+1.2.4
+
+  Update skateboard-ui 1.2.19
+
 1.2.3
 
   Add .dockerignore
