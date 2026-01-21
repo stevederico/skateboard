@@ -1,5 +1,5 @@
 # Multi-stage build for smaller production image
-FROM denoland/deno:alpine-2.6.3 AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -7,17 +7,17 @@ WORKDIR /app
 COPY package*.json ./
 COPY backend/package*.json ./backend/
 
-# Install dependencies with deno
-RUN deno install && cd backend && deno install
+# Install dependencies
+RUN npm install && cd backend && npm install
 
 # Copy source code
 COPY . .
 
 # Build frontend
-RUN deno run build
+RUN npm run build
 
 # Production stage
-FROM denoland/deno:alpine-2.6.3
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -29,7 +29,6 @@ COPY --from=builder /app/dist ./dist
 
 # Copy backend
 COPY --from=builder /app/backend ./backend
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/backend/node_modules ./backend/node_modules
 
 # Copy package files
@@ -40,7 +39,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD deno eval "const r = await fetch('http://localhost:8000/api/health'); if (!r.ok) Deno.exit(1);" || exit 1
+  CMD node -e "fetch('http://localhost:8000/api/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
 
 # Run server
-CMD ["deno", "run", "start"]
+CMD ["node", "--experimental-sqlite", "backend/server.js"]

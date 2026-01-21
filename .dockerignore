@@ -1,0 +1,30 @@
+# Deno
+deno.lock
+deno.json
+deno.jsonc
+.deno/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.*
+
+# Build artifacts
+dist/
+build/
+
+# Misc
+*.md
+*.log
+.DS_Store

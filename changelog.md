@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+1.2.3
+
+  Add .dockerignore
+  Update Dockerfile Node.js
+  Remove backend Dockerfile
+
 1.2.2
 
   Switch bcrypt to bcryptjs
