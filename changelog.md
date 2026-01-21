@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+1.2.2
+
+  Switch bcrypt to bcryptjs
+  Add Node Dockerfile
+
 1.2.1
 
   Add comprehensive JSDoc documentation
