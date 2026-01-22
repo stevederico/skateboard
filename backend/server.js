@@ -71,6 +71,7 @@ function generateCSRFToken() {
  * Validates CSRF token from x-csrf-token header against stored token for userID.
  * Skips validation for GET requests and signup/signin routes. Uses timing-safe
  * comparison to prevent timing attacks. Enforces 24-hour token expiry.
+ * Auto-regenerates token if missing (e.g., server restart) for authenticated users.
  *
  * @async
  * @param {Context} c - Hono context
@@ -86,27 +87,57 @@ async function csrfProtection(c, next) {
   const userID = c.get('userID'); // Set by authMiddleware
 
   if (!csrfToken || !userID) {
+    logger.info('CSRF validation failed - missing token or userID', {
+      hasToken: !!csrfToken,
+      hasUserID: !!userID,
+      path: c.req.path
+    });
     return c.json({ error: 'Invalid CSRF token' }, 403);
   }
 
-  const storedData = csrfTokenStore.get(userID);
+  let storedData = csrfTokenStore.get(userID);
   if (!storedData) {
-    return c.json({ error: 'Invalid CSRF token' }, 403);
+    // Auto-regenerate token for authenticated users (e.g., after server restart)
+    // Security: This block only runs if authMiddleware passed (JWT valid)
+    const newToken = generateCSRFToken();
+    storedData = { token: newToken, timestamp: Date.now() };
+    csrfTokenStore.set(userID, storedData);
+
+    setCookie(c, 'csrf_token', newToken, {
+      httpOnly: false,
+      secure: !isDevelopment,
+      sameSite: 'Lax',
+      path: '/',
+      maxAge: CSRF_TOKEN_EXPIRY / 1000
+    });
+
+    logger.info('CSRF token auto-regenerated after store miss', { userID });
+    await next();
+    return;
   }
 
   // Use timing-safe comparison to prevent timing attacks
   const tokenBuffer = Buffer.from(csrfToken);
   const storedBuffer = Buffer.from(storedData.token);
   if (tokenBuffer.length !== storedBuffer.length || !crypto.timingSafeEqual(tokenBuffer, storedBuffer)) {
+    logger.info('CSRF validation failed - token mismatch', {
+      userID,
+      path: c.req.path
+    });
     return c.json({ error: 'Invalid CSRF token' }, 403);
   }
 
   // Check if token is expired
   if (Date.now() - storedData.timestamp > CSRF_TOKEN_EXPIRY) {
     csrfTokenStore.delete(userID);
+    logger.info('CSRF validation failed - token expired', {
+      userID,
+      age: Math.floor((Date.now() - storedData.timestamp) / 1000) + 's'
+    });
     return c.json({ error: 'CSRF token expired' }, 403);
   }
 
+  logger.debug('CSRF validation passed', { userID });
   await next();
 }
 
@@ -520,7 +551,8 @@ async function generateToken(userID) {
 /**
  * Authentication middleware using JWT from HttpOnly cookie
  *
- * Verifies JWT token from 'token' cookie. Sets userID in context on success.
+ * Verifies JWT token from 'token' cookie. Sets userID in context on success,
+ * normalized to string for consistent Map key usage across middleware (CSRF, sessions).
  * Returns 401 for missing, expired, or invalid tokens. Returns 503 if
  * JWT_SECRET not configured.
  *
@@ -542,7 +574,9 @@ async function authMiddleware(c, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
-    c.set('userID', payload.userID);
+    // Normalize userID to string for consistent Map key usage (CSRF, sessions)
+    const normalizedUserID = String(payload.userID);
+    c.set('userID', normalizedUserID);
     await next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

@@ -1,5 +1,26 @@
 ## CHANGELOG
 
+1.2.7
+
+  Auto-regenerate CSRF tokens
+  Add CSRF diagnostic logging
+  Normalize userID to string
+
+## [1.2.6] - 2026-01-22
+
+### Changed
+- Update skateboard-ui to 1.2.21 (CSRF fixes)
+
+## [1.2.5] - 2026-01-22
+
+### Fixed
+- **CSRF Protection**: Fixed type mismatch where JWT userID (number/ObjectId) didn't match Map string keys, causing validation failures
+- **CSRF Resilience**: Auto-regenerate CSRF tokens for authenticated users after server restart instead of returning 403
+- **CSRF Logging**: Added diagnostic logging for CSRF validation failures to improve debugging
+
+### Changed
+- authMiddleware now normalizes userID to string for consistent Map key usage across middleware
+
 1.2.5
 
   Update skateboard-ui 1.2.20
