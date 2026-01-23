@@ -5,6 +5,7 @@
   Auto-regenerate CSRF tokens
   Add CSRF diagnostic logging
   Normalize userID to string
+  Update skateboard-ui 1.2.22
 
 ## [1.2.6] - 2026-01-22
 
