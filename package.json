@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "1.3.0",
-  "skateboardVersion": "1.3.0",
+  "version": "1.3.4",
+  "skateboardVersion": "1.3.4",
   "type": "module",
   "workspaces": [
     "backend"
@@ -16,7 +16,7 @@
     "install-all": "npm install && npm install --workspace=backend"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "1.3.3",
+    "@stevederico/skateboard-ui": "1.3.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.4",
