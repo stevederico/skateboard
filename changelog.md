@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+1.3.7
+
+  Update skateboard-ui 1.3.7
+  Add dark mode sidebar styles
+  Add React dedupe aliases
+
 1.2.7
 
   Auto-regenerate CSRF tokens
