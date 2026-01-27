@@ -276,10 +276,13 @@ export default defineConfig({
     drop: []
   },
   resolve: {
+    dedupe: ['react', 'react-dom'],
     alias: {
       '@': path.resolve(process.cwd(), './src'),
       '@package': path.resolve(process.cwd(), 'package.json'),
       '@root': path.resolve(process.cwd()),
+      'react': path.resolve(process.cwd(), 'node_modules/react'),
+      'react-dom': path.resolve(process.cwd(), 'node_modules/react-dom'),
       'react/jsx-runtime': path.resolve(process.cwd(), 'node_modules/react/jsx-runtime.js'),
       'use-sync-external-store/shim/with-selector': path.resolve(process.cwd(), 'src/shims/use-sync-external-store-with-selector.js'),
       'use-sync-external-store/shim': path.resolve(process.cwd(), 'src/shims/use-sync-external-store-shim.js')
