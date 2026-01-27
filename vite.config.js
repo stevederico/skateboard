@@ -251,7 +251,9 @@ export default defineConfig({
       '@': path.resolve(process.cwd(), './src'),
       '@package': path.resolve(process.cwd(), 'package.json'),
       '@root': path.resolve(process.cwd()),
-      'react/jsx-runtime': path.resolve(process.cwd(), 'node_modules/react/jsx-runtime.js')
+      'react/jsx-runtime': path.resolve(process.cwd(), 'node_modules/react/jsx-runtime.js'),
+      'use-sync-external-store/shim/with-selector': path.resolve(process.cwd(), 'src/shims/use-sync-external-store-with-selector.js'),
+      'use-sync-external-store/shim': path.resolve(process.cwd(), 'src/shims/use-sync-external-store-shim.js')
     }
   },
   optimizeDeps: {
