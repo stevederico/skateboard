@@ -5,6 +5,7 @@
     "tagline": "Try Something New",
     "cta": "Get Started",
     "noLogin": false,
+    "authOverlay": true,
     "features": {
         "title": "Everything You Need",
         "items": [

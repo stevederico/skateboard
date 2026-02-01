@@ -1,7 +1,7 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '@stevederico/skateboard-ui/Context';
 import constants from '../constants.json';
@@ -26,7 +26,14 @@ import constants from '../constants.json';
  * @returns {JSX.Element} Home view with todo list interface
  */
 export default function HomeView() {
-  const { state } = getState();
+  const { state, dispatch } = getState();
+  const requireAuth = useCallback((callback) => {
+    if (state.user) {
+      callback();
+    } else {
+      dispatch({ type: 'SHOW_AUTH_OVERLAY', payload: callback });
+    }
+  }, [state.user, dispatch]);
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
   const isUserSubscriber = usageInfo.isSubscriber
 
@@ -139,7 +146,7 @@ export default function HomeView() {
    */
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      addTodo();
+      requireAuth(() => addTodo());
     }
   };
 
@@ -251,7 +258,7 @@ export default function HomeView() {
               >
                 {/* Checkbox */}
                 <div
-                  onClick={() => toggleTodo(todo.id)}
+                  onClick={() => requireAuth(() => toggleTodo(todo.id))}
                   className={`w-6 h-6 border-2 border-accent rounded cursor-pointer flex items-center justify-center bg-background`}
                 >
                   {todo.completed && <DynamicIcon name="check" size={14} className="text-foreground" />}
@@ -272,7 +279,7 @@ export default function HomeView() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    deleteTodo(todo.id);
+                    requireAuth(() => deleteTodo(todo.id));
                   }}
                   className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-all p-1 cursor-pointer"
                   title="Delete task"

@@ -1,7 +1,7 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '@stevederico/skateboard-ui/Context';
 
@@ -26,7 +26,14 @@ import { getState } from '@stevederico/skateboard-ui/Context';
  * @returns {JSX.Element} Chat view with message interface
  */
 export default function ChatView() {
-  const { state } = getState();
+  const { state, dispatch } = getState();
+  const requireAuth = useCallback((callback) => {
+    if (state.user) {
+      callback();
+    } else {
+      dispatch({ type: 'SHOW_AUTH_OVERLAY', payload: callback });
+    }
+  }, [state.user, dispatch]);
   const [messages, setMessages] = useState([
     { id: 1, text: "Hey there! 👋", time: "2:30 PM", isMe: false },
     { id: 2, text: "Hi! How's it going?", time: "2:31 PM", isMe: true },
@@ -148,12 +155,12 @@ export default function ChatView() {
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            onKeyPress={(e) => e.key === 'Enter' && requireAuth(() => handleSend())}
             placeholder="Message..."
             className="flex-1 px-4 py-3 bg-accent rounded-full outline-none"
           />
           <button
-            onClick={handleSend}
+            onClick={() => requireAuth(() => handleSend())}
             disabled={isLoading}
             className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
               newMessage.trim() && !isLoading
