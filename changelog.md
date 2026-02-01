@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+1.5.0
+
+  Update skateboard-ui 1.5.0
+  Update version references
+
 1.3.7
 
   Update skateboard-ui 1.3.7
