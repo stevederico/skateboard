@@ -1,5 +1,14 @@
 ## CHANGELOG
 
+2.2.2
+
+  Update version 2.2.2
+  Update skateboardVersion 2.2.2
+
+1.8.1
+
+  Add server.js JSDoc comments
+
 1.8.0
 
   Add SettingsView component
