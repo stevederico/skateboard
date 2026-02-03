@@ -1,5 +1,26 @@
 ## CHANGELOG
 
+1.6.0
+
+  Add dashboard-01 UI
+  Add DataTable component
+  Add SectionCards component
+  Add ChartAreaInteractive component
+  Add dnd-kit drag reorder
+  Add tanstack react-table
+  Update HomeView composition
+  Update AppSidebar layout
+  Update Header quick create
+  Update dark mode styles
+
+1.5.3
+
+  Add dashboard HomeView
+  Add recharts dependency
+  Update ChatView shadcn components
+  Add Vite skateboard-ui exclude
+  Add Tailwind source directive
+
 1.5.2
 
   Update skateboard-ui 1.5.2
