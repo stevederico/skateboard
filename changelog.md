@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+1.8.0
+
+  Add SettingsView component
+  Add settings route
+  Add next-themes dependency
+  Remove rate limiting
+  Disable authOverlay
+
 1.7.0
 
   Update skateboard-ui 2.0.1
