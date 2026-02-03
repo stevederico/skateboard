@@ -4,6 +4,9 @@ import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { getState } from '@stevederico/skateboard-ui/Context';
+import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
+import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
+import { Card, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
 
 /**
  * Chat view component with usage tracking and typing indicator
@@ -14,13 +17,7 @@ import { getState } from '@stevederico/skateboard-ui/Context';
  * - Typing indicator animation
  * - Auto-response after 200ms (placeholder for LLM API)
  * - Real-time usage counter in header
- *
- * State Management:
- * - messages: Array of { id, text, time, isMe }
- * - usageInfo: { remaining, isSubscriber } from getRemainingUsage
- * - newMessage: Input field state
- * - isTyping: Boolean for typing animation
- * - isLoading: Boolean to prevent sends during usage check
+ * - Auto-scroll to latest message
  *
  * @component
  * @returns {JSX.Element} Chat view with message interface
@@ -47,8 +44,16 @@ export default function ChatView() {
   const [isLoading, setIsLoading] = useState(true);
   const isUserSubscriber = usageInfo.isSubscriber
   const upgradeSheetRef = useRef();
+  const messagesEndRef = useRef(null);
 
-  // Update usage info when messages change
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isTyping]);
+
   useEffect(() => {
     const updateUsage = async () => {
       try {
@@ -77,7 +82,6 @@ export default function ChatView() {
     if (isLoading) return;
 
     if (newMessage.trim()) {
-      // Check usage limit from current state
       if (!usageInfo.isSubscriber && usageInfo.remaining <= 0) {
         showUpgradeSheet(upgradeSheetRef);
         return;
@@ -94,7 +98,6 @@ export default function ChatView() {
       setNewMessage("");
       setIsTyping(true);
 
-      // Track usage and update state with response
       const updatedUsage = await trackUsage('messages');
       setUsageInfo(updatedUsage);
 
@@ -114,66 +117,74 @@ export default function ChatView() {
   };
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col flex-1 h-full">
       <Header
         title="Chat"
         buttonTitle={!isUserSubscriber && usageInfo.remaining >= 0 ? `${usageInfo.remaining}` : undefined}
         buttonClass={!isUserSubscriber && usageInfo.remaining >= 0 ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
         onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet(upgradeSheetRef) : undefined}
       />
-      
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.map(msg => (
-          <div key={msg.id} className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-sm px-4 py-3 rounded-lg ${
-              msg.isMe 
-                ? 'bg-app text-white' 
-                : 'bg-accent'
-            }`}>
-              <p className="text-sm">{msg.text}</p>
+          <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-sm ${msg.isMe ? 'items-end' : 'items-start'} flex flex-col`}>
+              <Card className={`py-0 gap-0 shadow-none ring-0 ${
+                msg.isMe
+                  ? 'bg-app text-white rounded-br-sm'
+                  : 'bg-accent rounded-bl-sm'
+              }`}>
+                <CardContent className="px-4 py-2.5">
+                  <p className="text-sm leading-relaxed">{msg.text}</p>
+                </CardContent>
+              </Card>
+              <span className="text-[11px] text-muted-foreground mt-1 px-1">{msg.time}</span>
             </div>
-            <p className="text-xs opacity-60 mt-1">{msg.time}</p>
           </div>
         ))}
-        
+
         {isTyping && (
-          <div className="flex flex-col items-start">
-            <div className="max-w-sm px-4 py-3 rounded-lg bg-accent">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              </div>
-            </div>
+          <div className="flex justify-start">
+            <Card className="py-0 gap-0 shadow-none ring-0 bg-accent rounded-bl-sm">
+              <CardContent className="px-4 py-2.5">
+                <div className="flex space-x-1.5">
+                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"></div>
+                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-6 pb-20 md:pb-6 border-t bg-background">
+      <div className="p-4 pb-20 md:pb-4 border-t bg-background">
         <div className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && requireAuth(() => handleSend())}
+            onKeyDown={(e) => e.key === 'Enter' && requireAuth(() => handleSend())}
             placeholder="Message..."
-            className="flex-1 px-4 py-3 bg-accent rounded-full outline-none"
+            className="flex-1 h-10 rounded-full bg-accent border-0 px-4 focus-visible:ring-app"
           />
-          <button
+          <Button
+            size="icon"
             onClick={() => requireAuth(() => handleSend())}
             disabled={isLoading}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+            className={`rounded-full w-10 h-10 ${
               newMessage.trim() && !isLoading
-                ? 'bg-app text-white'
+                ? 'bg-app text-white hover:bg-app/80'
                 : 'bg-accent text-foreground opacity-50'
             }`}
           >
-            <DynamicIcon name="arrow-up" size={20} />
-          </button>
+            <DynamicIcon name="arrow-up" size={18} />
+          </Button>
         </div>
       </div>
-      
-      <UpgradeSheet 
+
+      <UpgradeSheet
         ref={upgradeSheetRef}
         userEmail={state.user?.email}
       />
