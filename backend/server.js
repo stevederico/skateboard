@@ -221,7 +221,15 @@ try {
 const STRIPE_KEY = process.env.STRIPE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Validate required environment variables
+/**
+ * Validate required environment variables are set
+ *
+ * Checks for STRIPE_KEY, STRIPE_ENDPOINT_SECRET, JWT_SECRET, and any
+ * unresolved ${VAR} references in database config. Logs warnings for
+ * missing variables but does not exit the process.
+ *
+ * @returns {boolean} True if all required variables are present
+ */
 function validateEnvironmentVariables() {
   const missing = [];
 
@@ -1111,6 +1119,15 @@ app.onError((err, c) => {
 });
 
 // ==== UTILITY FUNCTIONS ====
+
+/**
+ * Check if the server is running in production mode
+ *
+ * Reads the ENV environment variable. Returns true only when
+ * ENV is explicitly set to "production".
+ *
+ * @returns {boolean} True if ENV === "production"
+ */
 function isProd() {
   if (typeof process.env.ENV === "undefined") {
     return false
@@ -1121,6 +1138,15 @@ function isProd() {
   }
 }
 
+/**
+ * Load environment variables from local .env file
+ *
+ * Reads key=value pairs from backend/.env into process.env. Creates .env
+ * from .env.example if it doesn't exist. Handles quoted values, comments,
+ * and values containing '=' characters. Only called in non-production mode.
+ *
+ * @returns {void}
+ */
 function loadLocalENV() {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
