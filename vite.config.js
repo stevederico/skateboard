@@ -301,6 +301,7 @@ export default defineConfig({
     ],
     force: true,
     exclude: [
+      '@stevederico/skateboard-ui',
       '@swc/core',
       '@swc/core-darwin-arm64',
       '@swc/wasm',

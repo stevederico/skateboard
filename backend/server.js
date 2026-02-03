@@ -19,10 +19,6 @@ import { promisify } from 'node:util';
 // ==== SERVER CONFIG ====
 const port = parseInt(process.env.PORT || "8000");
 
-// ==== RATE LIMITING ====
-const rateLimitStore = new Map();
-const RATE_LIMIT_MAX_ENTRIES = 10000; // LRU eviction threshold
-
 // ==== CSRF PROTECTION ====
 const csrfTokenStore = new Map(); // userID -> { token, timestamp }
 const CSRF_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
@@ -140,77 +136,6 @@ async function csrfProtection(c, next) {
   logger.debug('CSRF validation passed', { userID });
   await next();
 }
-
-/**
- * Rate limiter middleware factory with sliding window algorithm
- *
- * Tracks requests per IP within time window using in-memory Map. Uses
- * X-Forwarded-For header when behind proxy. Returns 429 with retryAfter
- * when limit exceeded. Automatic cleanup via setInterval.
- *
- * @param {number} maxRequests - Maximum requests allowed in window
- * @param {number} windowMs - Time window in milliseconds
- * @param {string} [routeName='unknown'] - Route name for logging
- * @returns {Function} Hono middleware function
- */
-const rateLimiter = (maxRequests, windowMs, routeName = 'unknown') => {
-  return async (c, next) => {
-    // Use X-Forwarded-For when behind proxy, fallback to remote address
-    const key = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const now = Date.now();
-    const windowStart = now - windowMs;
-
-    if (!rateLimitStore.has(key)) {
-      rateLimitStore.set(key, []);
-    }
-
-    const requests = rateLimitStore.get(key);
-    // Remove old requests outside the window
-    const validRequests = requests.filter(time => time > windowStart);
-
-    if (validRequests.length >= maxRequests) {
-      logger.warn('Rate limit exceeded', { route: routeName, requests: validRequests.length, limit: maxRequests });
-      return c.json({
-        error: 'Too many requests, please try again later.',
-        retryAfter: Math.ceil((windowStart + windowMs - now) / 1000)
-      }, 429);
-    }
-
-    validRequests.push(now);
-    rateLimitStore.set(key, validRequests);
-    await next();
-  };
-};
-
-// Define limiters
-const authLimiter = rateLimiter(10, 15 * 60 * 1000, 'auth routes'); // 10 requests per 15 minutes
-const userLimiter = rateLimiter(120, 15 * 60 * 1000, 'user routes'); // 120 requests per 15 minutes
-const globalLimiter = rateLimiter(300, 15 * 60 * 1000, 'global'); // 300 requests per 15 minutes
-const paymentLimiter = rateLimiter(5, 15 * 60 * 1000, 'payment routes'); // 5 requests per 15 minutes
-
-// Cleanup old rate limit entries every hour to prevent memory leak
-setInterval(() => {
-  const now = Date.now();
-  const maxWindow = 15 * 60 * 1000; // 15 minutes (largest window)
-  let cleaned = 0;
-
-  for (const [ip, requests] of rateLimitStore.entries()) {
-    const validRequests = requests.filter(time => time > now - maxWindow);
-    if (validRequests.length === 0) {
-      rateLimitStore.delete(ip);
-      cleaned++;
-    } else {
-      rateLimitStore.set(ip, validRequests);
-    }
-  }
-
-  // LRU eviction if still over limit
-  evictOldestEntries(rateLimitStore, RATE_LIMIT_MAX_ENTRIES, (requests) => Math.max(...requests));
-
-  if (cleaned > 0) {
-    console.log(`[${new Date().toISOString()}] Rate limit cleanup: removed ${cleaned} inactive IPs`);
-  }
-}, 60 * 60 * 1000); // Run every hour
 
 // Cleanup expired CSRF tokens every hour to prevent memory leak
 setInterval(() => {
@@ -466,9 +391,6 @@ app.use('*', secureHeaders({
     payment: []
   }
 }));
-
-// Global rate limiter
-app.use('*', globalLimiter);
 
 // Request logging middleware (dev only)
 app.use('*', async (c, next) => {
@@ -731,7 +653,7 @@ app.post("/api/payment", async (c) => {
 app.get("/api/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
 
 // ==== AUTH ROUTES ====
-app.post("/api/signup", authLimiter, async (c) => {
+app.post("/api/signup", async (c) => {
   try {
     const body = await c.req.json();
     let { email, password, name } = body;
@@ -807,7 +729,7 @@ app.post("/api/signup", authLimiter, async (c) => {
   }
 });
 
-app.post("/api/signin", authLimiter, async (c) => {
+app.post("/api/signin", async (c) => {
   try {
     const body = await c.req.json();
     let { email, password } = body;
@@ -921,7 +843,7 @@ app.post("/api/signout", authMiddleware, async (c) => {
 });
 
 // ==== USER DATA ROUTES ====
-app.get("/api/me", userLimiter, authMiddleware, async (c) => {
+app.get("/api/me", authMiddleware, async (c) => {
   const userID = c.get('userID');
   const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
   logger.debug('/me checking for user');
@@ -1073,7 +995,7 @@ app.post("/api/usage", authMiddleware, async (c) => {
 });
 
 // ==== PAYMENT ROUTES ====
-app.post("/api/checkout", paymentLimiter, authMiddleware, csrfProtection, async (c) => {
+app.post("/api/checkout", authMiddleware, csrfProtection, async (c) => {
   try {
     const userID = c.get('userID');
     const body = await c.req.json();
@@ -1111,7 +1033,7 @@ app.post("/api/checkout", paymentLimiter, authMiddleware, csrfProtection, async 
   }
 });
 
-app.post("/api/portal", paymentLimiter, authMiddleware, csrfProtection, async (c) => {
+app.post("/api/portal", authMiddleware, csrfProtection, async (c) => {
   try {
     const userID = c.get('userID');
     const body = await c.req.json();

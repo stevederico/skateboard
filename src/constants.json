@@ -5,7 +5,7 @@
     "tagline": "Try Something New",
     "cta": "Get Started",
     "noLogin": false,
-    "authOverlay": true,
+    "authOverlay": false,
     "features": {
         "title": "Everything You Need",
         "items": [
@@ -30,14 +30,29 @@
     "devBackendURL": "http://localhost:8000/api",
     "pages": [
         {
-            "title": "Home",
+            "title": "Dashboard",
             "url": "home",
-            "icon": "house"
+            "icon": "layout-dashboard"
         },
         {
-            "title": "Chat",
-            "url": "chat",
-            "icon": "message-circle-more"
+            "title": "Lifecycle",
+            "url": "lifecycle",
+            "icon": "list-details"
+        },
+        {
+            "title": "Analytics",
+            "url": "analytics",
+            "icon": "chart-bar"
+        },
+        {
+            "title": "Projects",
+            "url": "projects",
+            "icon": "folder"
+        },
+        {
+            "title": "Team",
+            "url": "team",
+            "icon": "users"
         }
     ],
     "stripeProducts": [{
