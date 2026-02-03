@@ -1,5 +1,15 @@
 ## CHANGELOG
 
+1.5.2
+
+  Update skateboard-ui 1.5.2
+
+1.5.1
+
+  Add authOverlay lazy auth
+  Add requireAuth action gating
+  Update skateboard-ui 1.5.1
+
 1.5.0
 
   Update skateboard-ui 1.5.0
