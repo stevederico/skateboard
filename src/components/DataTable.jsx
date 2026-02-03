@@ -278,15 +278,17 @@ const columns = [
     id: "actions",
     cell: () => (
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
-            size="icon"
-          >
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              className="data-[state=open]:bg-muted text-muted-foreground flex size-8"
+              size="icon"
+            />
+          }
+        >
             <IconDotsVertical />
             <span className="sr-only">Open menu</span>
-          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-32">
           <DropdownMenuItem>Edit</DropdownMenuItem>
@@ -419,13 +421,13 @@ export function DataTable({ data: initialData }) {
         </TabsList>
         <div className="flex items-center gap-2">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
+            <DropdownMenuTrigger
+              render={<Button variant="outline" size="sm" />}
+            >
                 <IconLayoutColumns />
                 <span className="hidden lg:inline">Customize Columns</span>
                 <span className="lg:hidden">Columns</span>
                 <IconChevronDown />
-              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               {table
