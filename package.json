@@ -1,7 +1,7 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "1.6.1",
+  "version": "1.7.0",
   "skateboardVersion": "1.6.0",
   "type": "module",
   "workspaces": [
@@ -20,7 +20,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@stevederico/skateboard-ui": "^1.5.2",
+    "@stevederico/skateboard-ui": "^2.0.1",
     "@tabler/icons-react": "^3.36.1",
     "@tanstack/react-table": "^8.21.3",
     "react": "^19.2.0",

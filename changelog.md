@@ -1,5 +1,16 @@
 ## CHANGELOG
 
+1.7.0
+
+  Update skateboard-ui 2.0.1
+  Add flash prevention styles
+  Update DropdownMenuTrigger render prop
+
+1.6.1
+
+  Narrow sidebar width
+  Fix footer text truncation
+
 1.6.0
 
   Add dashboard-01 UI
