@@ -144,6 +144,29 @@ Apps own their `vite.config.js` directly. See [reference implementation](https:/
 }
 ```
 
+## UI Components — shadcn Primitives
+
+**Always use the shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui` when building views.** The goal is the standard shadcn design look and feel — clean, consistent, and composable.
+
+**Import path:** `@stevederico/skateboard-ui/shadcn/ui/<component>`
+
+**Available components:**
+`accordion`, `alert`, `alert-dialog`, `aspect-ratio`, `avatar`, `badge`, `breadcrumb`, `button`, `button-group`, `calendar`, `card`, `carousel`, `chart`, `checkbox`, `collapsible`, `command`, `context-menu`, `dialog`, `drawer`, `dropdown-menu`, `empty`, `field`, `hover-card`, `input`, `input-group`, `item`, `kbd`, `label`, `menubar`, `navigation-menu`, `pagination`, `popover`, `progress`, `radio-group`, `resizable`, `scroll-area`, `select`, `separator`, `sheet`, `sidebar`, `skeleton`, `slider`, `sonner`, `spinner`, `switch`, `table`, `tabs`, `textarea`, `toggle`, `toggle-group`, `tooltip`
+
+**Rules:**
+- Prefer shadcn components over custom HTML elements (e.g., use `<Button>` not `<button>`, `<Card>` not `<div className="card">`)
+- Compose views from these primitives — don't reinvent patterns they already solve
+- Check available components before building custom UI; if shadcn has it, use it
+- Combine with Tailwind utility classes for layout and spacing
+
+**Example:**
+```javascript
+import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
+import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
+import { Label } from '@stevederico/skateboard-ui/shadcn/ui/label';
+```
+
 ## Key Implementation Patterns
 
 ### API Requests
