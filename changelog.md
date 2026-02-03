@@ -1,5 +1,45 @@
 ## CHANGELOG
 
+1.8.0
+
+  Add SettingsView component
+  Add settings route
+  Add next-themes dependency
+  Remove rate limiting
+  Disable authOverlay
+
+1.7.0
+
+  Update skateboard-ui 2.0.1
+  Add flash prevention styles
+  Update DropdownMenuTrigger render prop
+
+1.6.1
+
+  Narrow sidebar width
+  Fix footer text truncation
+
+1.6.0
+
+  Add dashboard-01 UI
+  Add DataTable component
+  Add SectionCards component
+  Add ChartAreaInteractive component
+  Add dnd-kit drag reorder
+  Add tanstack react-table
+  Update HomeView composition
+  Update AppSidebar layout
+  Update Header quick create
+  Update dark mode styles
+
+1.5.3
+
+  Add dashboard HomeView
+  Add recharts dependency
+  Update ChatView shadcn components
+  Add Vite skateboard-ui exclude
+  Add Tailwind source directive
+
 1.5.2
 
   Update skateboard-ui 1.5.2
