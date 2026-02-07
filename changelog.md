@@ -1,5 +1,14 @@
 ## CHANGELOG
 
+2.4.0
+
+  Update skateboard-ui 2.6.0
+  Enable authOverlay default
+  Remove Lifecycle page
+  Add BlankView routes
+  Add SettingsView sign-in card
+  Fix BlankView title prop
+
 2.3.0
 
   Update skateboard-ui 2.5.0
