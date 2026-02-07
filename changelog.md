@@ -1,5 +1,17 @@
 ## CHANGELOG
 
+2.3.0
+
+  Update skateboard-ui 2.5.0
+  Add ctaHeading constant
+  Add sidebarCollapsed constant
+  Add pricing.title constant
+  Add pricing.extras constant
+  Add navLinks constant
+  Add footerLinks constant
+  Add copyrightText constant
+  Fix stripeProducts interval
+
 2.2.2
 
   Update version 2.2.2
