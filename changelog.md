@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+2.5.0
+
+  Update skateboard-ui 2.9.3
+  Update docs version refs
+  Remove local file deps
+  Add dark mode screenshot
+
 2.4.0
 
   Update skateboard-ui 2.6.0

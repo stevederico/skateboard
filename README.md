@@ -26,7 +26,7 @@
 ## 🎬 Demo
 
 <div align="center">
-  <img width="75%" alt="landing" src="https://github.com/user-attachments/assets/db1d9cb7-e398-4c87-a245-14371f37a38b" />
+  <img width="75%" alt="skateboard dark mode demo" src="public/skateboard-dark.png" />
 </div>
 
   <br />
@@ -197,7 +197,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v1.2+ | Application Shell Framework |
+| **skateboard-ui** | v2.9+ | Application Shell Framework |
 | **Vite** | v7.1+ | Build Tool & Dev Server |
 | **Tailwind CSS** | v4.1+ | Styling |
 | **Shadcn/ui** | Latest | Component Library |

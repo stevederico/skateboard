@@ -242,8 +242,8 @@ Backend requires `.env` file with:
 - [Schema](docs/SCHEMA.md) - Database schema reference
 
 **Version:**
-- skateboard@1.5.0
-- skateboard-ui@1.5.0
+- skateboard@2.4.0
+- skateboard-ui@2.9.3
 
 ## Updating from Skateboard Boilerplate
 
