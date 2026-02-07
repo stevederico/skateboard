@@ -4,8 +4,10 @@
     "appIcon": "command",
     "tagline": "Try Something New",
     "cta": "Get Started",
+    "ctaHeading": "Ready to Get Started?",
     "noLogin": false,
     "authOverlay": false,
+    "sidebarCollapsed": false,
     "features": {
         "title": "Everything You Need",
         "items": [
@@ -58,16 +60,28 @@
     "stripeProducts": [{
         "price": "$5.00",
         "title": "Unlimited",
-        "interval": "monthly",
+        "interval": "month",
         "lookup_key": "my_lookup_key",
         "features": [
             "Unlimited Todos",
-            "Unlimited Messages", 
-            "All Premium Features",
-            "Priority Customer Support",
-            "Cancel Anytime"
+            "Unlimited Messages",
+            "All Premium Features"
         ]
     }],
+    "pricing": {
+        "title": "Simple, Transparent Pricing",
+        "extras": ["Priority Customer Support", "Cancel Anytime"]
+    },
+    "navLinks": [
+        { "label": "Features", "href": "#features" },
+        { "label": "Pricing", "href": "#pricing" }
+    ],
+    "footerLinks": [
+        { "label": "Privacy", "href": "/privacy" },
+        { "label": "Terms", "href": "/terms" },
+        { "label": "EULA", "href": "/eula" }
+    ],
+    "copyrightText": "All rights reserved.",
     "companyName": "Company Inc",
     "companyWebsite": "company.com",
     "companyEmail": "support@company.com",
