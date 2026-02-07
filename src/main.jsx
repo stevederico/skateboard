@@ -22,6 +22,7 @@ import constants from './constants.json';
 import HomeView from './components/HomeView.jsx';
 import ChatView from './components/ChatView.jsx';
 import SettingsView from './components/SettingsView.jsx';
+import BlankView from './components/BlankView.jsx';
 
 /**
  * Application route configuration
@@ -34,6 +35,9 @@ import SettingsView from './components/SettingsView.jsx';
 const appRoutes = [
   { path: 'home', element: <HomeView /> },
   { path: 'chat', element: <ChatView /> },
+  { path: 'analytics', element: <BlankView title="Analytics" /> },
+  { path: 'projects', element: <BlankView title="Projects" /> },
+  { path: 'team', element: <BlankView title="Team" /> },
   { path: 'settings', element: <SettingsView /> }
 ];
 

@@ -6,7 +6,7 @@
     "cta": "Get Started",
     "ctaHeading": "Ready to Get Started?",
     "noLogin": false,
-    "authOverlay": false,
+    "authOverlay": true,
     "sidebarCollapsed": false,
     "features": {
         "title": "Everything You Need",
@@ -35,11 +35,6 @@
             "title": "Dashboard",
             "url": "home",
             "icon": "layout-dashboard"
-        },
-        {
-            "title": "Lifecycle",
-            "url": "lifecycle",
-            "icon": "list-details"
         },
         {
             "title": "Analytics",

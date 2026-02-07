@@ -56,6 +56,25 @@ export default function SettingsView() {
       <div className="flex flex-1 flex-col">
         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6 max-w-2xl w-full mx-auto">
 
+          {/* Sign In */}
+          {!user && constants.noLogin !== true && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Account</CardTitle>
+                <CardDescription>Sign in to access your account settings.</CardDescription>
+                <CardAction className="self-center">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => constants.authOverlay ? dispatch({ type: 'SHOW_AUTH_OVERLAY' }) : navigate('/signin')}
+                  >
+                    Sign In
+                  </Button>
+                </CardAction>
+              </CardHeader>
+            </Card>
+          )}
+
           {/* Account */}
           {showAuth && (
             <Card>
