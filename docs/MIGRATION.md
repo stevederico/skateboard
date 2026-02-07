@@ -1,6 +1,6 @@
 # Migration Guide
 
-## Current Version: 1.1.x
+## Current Version: 2.4.x
 
 ### Quick Upgrade
 
@@ -63,7 +63,7 @@ This is the major migration that reduces boilerplate by 95%.
 ```json
 {
   "dependencies": {
-    "@stevederico/skateboard-ui": "^1.2.0",
+    "@stevederico/skateboard-ui": "^2.9.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.0"
@@ -226,11 +226,10 @@ Ensure appRoutes paths don't have leading slash:
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 1.2.x | Current | Security fixes, Deno runtime |
-| 1.1.x | Supported | Build config in apps |
-| 1.0.x | Upgrade | Application Shell base |
-| 0.9.x | Upgrade | Use this guide |
-| 0.8.x | Deprecated | Upgrade to 0.9.8 first |
+| 2.4.x | Current | Latest features, skateboard-ui 2.9.3 |
+| 2.3.x | Supported | Added constants options |
+| 1.x | Upgrade | Use this guide |
+| 0.9.x | Deprecated | Upgrade to 1.x first |
 
 ## Reference
 
