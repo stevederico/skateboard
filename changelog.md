@@ -1,5 +1,12 @@
 ## CHANGELOG
 
+2.7.0
+
+  Update skateboard-ui 2.9.7
+  Fix env variable consistency
+  Add structured logging
+  Add webhook idempotency
+
 2.6.0
 
   Remove local SettingsView
