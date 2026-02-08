@@ -32,7 +32,7 @@ export class PostgreSQLProvider {
    * @returns {Promise<void>}
    */
   async initialize() {
-    console.log('PostgreSQL provider initialized');
+    // Provider ready for connections
   }
 
   /**
@@ -120,6 +120,15 @@ export class PostgreSQLProvider {
       // Create indexes
       await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
       await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_auths_email ON auths(email)`);
+
+      // Create webhook_events table for idempotency
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS webhook_events (
+          event_id TEXT PRIMARY KEY,
+          event_type TEXT NOT NULL,
+          processed_at BIGINT NOT NULL
+        )
+      `);
 
     } finally {
       client.release();
@@ -340,6 +349,46 @@ export class PostgreSQLProvider {
     try {
       await client.query(sql, [email, password, userID]);
       return { insertedId: email };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Find webhook event by event ID for idempotency check
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {string} eventId - Stripe event ID
+   * @returns {Promise<Object|null>} Webhook event record or null if not found
+   */
+  async findWebhookEvent(pool, eventId) {
+    const sql = "SELECT * FROM webhook_events WHERE event_id = $1";
+    const client = await pool.connect();
+    try {
+      const result = await client.query(sql, [eventId]);
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Insert webhook event record for idempotency tracking
+   *
+   * @async
+   * @param {pg.Pool} pool - PostgreSQL connection pool
+   * @param {string} eventId - Stripe event ID (unique)
+   * @param {string} eventType - Stripe event type
+   * @param {number} processedAt - Unix timestamp
+   * @returns {Promise<{insertedId: string}>} Inserted event ID
+   */
+  async insertWebhookEvent(pool, eventId, eventType, processedAt) {
+    const sql = "INSERT INTO webhook_events (event_id, event_type, processed_at) VALUES ($1, $2, $3)";
+    const client = await pool.connect();
+    try {
+      await client.query(sql, [eventId, eventType, processedAt]);
+      return { insertedId: eventId };
     } finally {
       client.release();
     }

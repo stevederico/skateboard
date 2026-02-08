@@ -19,6 +19,51 @@ import { promisify } from 'node:util';
 // ==== SERVER CONFIG ====
 const port = parseInt(process.env.PORT || "8000");
 
+// ==== STRUCTURED LOGGING ====
+// Defined early so all code can use it (no external dependencies)
+const logger = {
+  error: (message, meta = {}) => {
+    const logEntry = {
+      level: 'ERROR',
+      timestamp: new Date().toISOString(),
+      message,
+      ...meta
+    };
+    console.error(!isProd() ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
+  },
+
+  warn: (message, meta = {}) => {
+    const logEntry = {
+      level: 'WARN',
+      timestamp: new Date().toISOString(),
+      message,
+      ...meta
+    };
+    console.warn(!isProd() ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
+  },
+
+  info: (message, meta = {}) => {
+    const logEntry = {
+      level: 'INFO',
+      timestamp: new Date().toISOString(),
+      message,
+      ...meta
+    };
+    console.log(!isProd() ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
+  },
+
+  debug: (message, meta = {}) => {
+    if (isProd()) return;
+    const logEntry = {
+      level: 'DEBUG',
+      timestamp: new Date().toISOString(),
+      message,
+      ...meta
+    };
+    console.log(JSON.stringify(logEntry, null, 2));
+  }
+};
+
 // ==== CSRF PROTECTION ====
 const csrfTokenStore = new Map(); // userID -> { token, timestamp }
 const CSRF_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
@@ -101,7 +146,7 @@ async function csrfProtection(c, next) {
 
     setCookie(c, 'csrf_token', newToken, {
       httpOnly: false,
-      secure: !isDevelopment,
+      secure: isProd(),
       sameSite: 'Lax',
       path: '/',
       maxAge: CSRF_TOKEN_EXPIRY / 1000
@@ -153,7 +198,7 @@ setInterval(() => {
   evictOldestEntries(csrfTokenStore, CSRF_MAX_ENTRIES, (data) => data.timestamp);
 
   if (cleaned > 0) {
-    console.log(`[${new Date().toISOString()}] CSRF cleanup: removed ${cleaned} expired tokens`);
+    logger.debug('CSRF cleanup completed', { removedTokens: cleaned });
   }
 }, 60 * 60 * 1000); // Run every hour
 
@@ -163,7 +208,7 @@ if (!isProd()) {
   loadLocalENV();
 } else {
   setInterval(async () => {
-    console.log(`Hourly Completed at ${new Date().toLocaleTimeString()}`);
+    logger.debug('Hourly task completed');
   }, 60 * 60 * 1000); // Every hour
 }
 
@@ -182,7 +227,7 @@ function resolveEnvironmentVariables(str) {
   return str.replace(/\$\{([^}]+)\}/g, (match, varName) => {
     const envValue = process.env[varName];
     if (envValue === undefined) {
-      console.warn(`Environment variable ${varName} is not defined, using placeholder: ${match}`);
+      logger.warn('Environment variable not defined, using placeholder', { varName, placeholder: match });
       return match; // Return the placeholder if env var is not found
     }
     return envValue;
@@ -207,7 +252,7 @@ try {
     }
   };
 } catch (err) {
-  console.error('Failed to load config:', err);
+  logger.error('Failed to load config, using defaults', { error: err.message });
   config = {
     staticDir: '../dist',
     database: {
@@ -251,15 +296,10 @@ function validateEnvironmentVariables() {
   }
 
   if (missing.length > 0) {
-    console.warn("⚠️  Missing environment variables (server will continue with limited functionality):");
-    missing.forEach(varName => console.warn(`   - ${varName}`));
-    console.warn("\n💡 For full functionality, set these environment variables:");
-    console.warn("   - DATABASE_URL (general database connection)");
-    console.warn("   - MONGODB_URL (MongoDB connection)");
-    console.warn("   - POSTGRES_URL (PostgreSQL connection)");
-    console.warn("   - STRIPE_KEY (Stripe payments)");
-    console.warn("   - JWT_SECRET (authentication)");
-    console.warn("\n🔄 Server continuing with fallback/default values...\n");
+    logger.warn('Missing environment variables - server continuing with limited functionality', {
+      missing,
+      hint: 'Set DATABASE_URL, MONGODB_URL, POSTGRES_URL, STRIPE_KEY, JWT_SECRET for full functionality'
+    });
 
     // Don't exit - let the server continue with warnings
     return false;
@@ -271,62 +311,10 @@ function validateEnvironmentVariables() {
 const envValidationPassed = validateEnvironmentVariables();
 
 if (envValidationPassed) {
-  console.log('✅ Environment variables validated successfully');
+  logger.info('Environment variables validated successfully');
 }
 
-console.log('Single-client backend initialized');
-
-// Development mode check
-const isDevelopment = process.env.NODE_ENV !== 'production';
-
-// Structured logging system (no external dependencies)
-const logger = {
-  error: (message, meta = {}) => {
-    const logEntry = {
-      level: 'ERROR',
-      timestamp: new Date().toISOString(),
-      message,
-      ...meta
-    };
-    console.error(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
-  },
-
-  warn: (message, meta = {}) => {
-    const logEntry = {
-      level: 'WARN',
-      timestamp: new Date().toISOString(),
-      message,
-      ...meta
-    };
-    console.warn(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
-  },
-
-  info: (message, meta = {}) => {
-    const logEntry = {
-      level: 'INFO',
-      timestamp: new Date().toISOString(),
-      message,
-      ...meta
-    };
-    console.log(isDevelopment ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
-  },
-
-  debug: (message, meta = {}) => {
-    if (!isDevelopment) return;
-    const logEntry = {
-      level: 'DEBUG',
-      timestamp: new Date().toISOString(),
-      message,
-      ...meta
-    };
-    console.log(JSON.stringify(logEntry, null, 2));
-  }
-};
-
-// Log server initialization
-logger.info('Server initialization started', {
-  environment: isDevelopment ? 'development' : 'production'
-});
+logger.info('Single-client backend initialized');
 
 // ==== DATABASE CONFIG ====
 // Single database configuration - no origin-based routing needed
@@ -338,7 +326,7 @@ let stripe = null;
 if (STRIPE_KEY) {
   stripe = new Stripe(STRIPE_KEY);
 } else {
-  console.warn('⚠️  STRIPE_KEY not set - Stripe functionality will be disabled');
+  logger.warn('STRIPE_KEY not set - Stripe functionality disabled');
 }
 
 // Single database config - always use the same one
@@ -388,7 +376,7 @@ app.use('*', secureHeaders({
     connectSrc: ["'self'"],
     frameAncestors: ["'none'"]
   },
-  strictTransportSecurity: isDevelopment ? false : 'max-age=31536000; includeSubDomains; preload',
+  strictTransportSecurity: !isProd() ? false : 'max-age=31536000; includeSubDomains; preload',
   xFrameOptions: 'DENY',
   xContentTypeOptions: 'nosniff',
   referrerPolicy: 'strict-origin-when-cross-origin',
@@ -402,9 +390,9 @@ app.use('*', secureHeaders({
 
 // Request logging middleware (dev only)
 app.use('*', async (c, next) => {
-  if (isDevelopment) {
+  if (!isProd()) {
     const requestId = Math.random().toString(36).substr(2, 9);
-    console.log(`[${new Date().toISOString()}] ${c.req.method} ${c.req.path} - ID: ${requestId}`);
+    logger.debug('Request received', { method: c.req.method, path: c.req.path, requestId });
   }
   await next();
 });
@@ -621,6 +609,16 @@ app.post("/api/payment", async (c) => {
   try {
     // Use the single database config for webhooks
     const webhookConfig = currentDbConfig;
+
+    // Idempotency check - skip if already processed
+    const existingEvent = await databaseManager.findWebhookEvent(
+      webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, event.id
+    );
+    if (existingEvent) {
+      logger.info('Webhook event already processed, skipping', { eventId: event.id });
+      return c.body(null, 200);
+    }
+
     const { customer: stripeID, current_period_end, status } = event.data.object;
 
     // Validate required fields exist
@@ -640,7 +638,6 @@ app.post("/api/payment", async (c) => {
     const customerEmail = customer.email.toLowerCase();
 
     if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
-      logger.info('Webhook processed', { type: event.type });
       const user = await databaseManager.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
       if (user) {
         await databaseManager.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, {
@@ -650,6 +647,14 @@ app.post("/api/payment", async (c) => {
         logger.warn('Webhook: No user found for email');
       }
     }
+
+    // Record successful processing for idempotency
+    await databaseManager.insertWebhookEvent(
+      webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString,
+      event.id, event.type, Date.now()
+    );
+    logger.info('Webhook processed successfully', { eventId: event.id, type: event.type });
+
     return c.body(null, 200);
   } catch (e) {
     logger.error('Webhook processing error', { error: e.message });
@@ -701,7 +706,7 @@ app.post("/api/signup", async (c) => {
       // Set HttpOnly cookie
       setCookie(c, 'token', token, {
         httpOnly: true,
-        secure: !isDevelopment,
+        secure: isProd(),
         sameSite: 'Strict',
         path: '/',
         maxAge: tokenExpirationDays * 24 * 60 * 60
@@ -710,7 +715,7 @@ app.post("/api/signup", async (c) => {
       // Set CSRF token cookie (readable by frontend)
       setCookie(c, 'csrf_token', csrfToken, {
         httpOnly: false,
-        secure: !isDevelopment,
+        secure: isProd(),
         sameSite: 'Lax',
         path: '/',
         maxAge: CSRF_TOKEN_EXPIRY / 1000
@@ -783,7 +788,7 @@ app.post("/api/signin", async (c) => {
     // Set HttpOnly cookie
     setCookie(c, 'token', token, {
       httpOnly: true,
-      secure: !isDevelopment,
+      secure: isProd(),
       sameSite: 'Strict',
       path: '/',
       maxAge: tokenExpirationDays * 24 * 60 * 60
@@ -792,7 +797,7 @@ app.post("/api/signin", async (c) => {
     // Set CSRF token cookie (readable by frontend)
     setCookie(c, 'csrf_token', csrfToken, {
       httpOnly: false,
-      secure: !isDevelopment,
+      secure: isProd(),
       sameSite: 'Lax',
       path: '/',
       maxAge: CSRF_TOKEN_EXPIRY / 1000
@@ -829,7 +834,7 @@ app.post("/api/signout", authMiddleware, async (c) => {
     // Clear the HttpOnly cookie
     deleteCookie(c, 'token', {
       httpOnly: true,
-      secure: !isDevelopment,
+      secure: isProd(),
       sameSite: 'Strict',
       path: '/'
     });
@@ -837,7 +842,7 @@ app.post("/api/signout", authMiddleware, async (c) => {
     // Clear the CSRF token cookie
     deleteCookie(c, 'csrf_token', {
       httpOnly: false,
-      secure: !isDevelopment,
+      secure: isProd(),
       sameSite: 'Lax',
       path: '/'
     });
@@ -1106,15 +1111,15 @@ app.onError((err, c) => {
 
   logger.error('Unhandled error occurred', {
     message: err.message,
-    stack: isDevelopment ? err.stack : undefined,
+    stack: !isProd() ? err.stack : undefined,
     path: c.req.path,
     method: c.req.method,
     requestId
   });
 
   return c.json({
-    error: isDevelopment ? err.message : 'Internal server error',
-    ...(isDevelopment && { stack: err.stack })
+    error: !isProd() ? err.message : 'Internal server error',
+    ...(!isProd() && { stack: err.stack })
   }, 500);
 });
 
@@ -1123,19 +1128,13 @@ app.onError((err, c) => {
 /**
  * Check if the server is running in production mode
  *
- * Reads the ENV environment variable. Returns true only when
- * ENV is explicitly set to "production".
+ * Reads the NODE_ENV environment variable. Returns true only when
+ * NODE_ENV is explicitly set to "production".
  *
- * @returns {boolean} True if ENV === "production"
+ * @returns {boolean} True if NODE_ENV === "production"
  */
 function isProd() {
-  if (typeof process.env.ENV === "undefined") {
-    return false
-  } else if (process.env.ENV === "production") {
-    return true
-  } else {
-    return false
-  }
+  return process.env.NODE_ENV === 'production';
 }
 
 /**
@@ -1162,7 +1161,7 @@ function loadLocalENV() {
       const exampleData = readFileSync(envExamplePath, 'utf8');
       writeFileSync(envFilePath, exampleData);
     } catch (exampleErr) {
-      console.error('Failed to create .env from template:', exampleErr);
+      logger.error('Failed to create .env from template', { error: exampleErr.message });
       return;
     }
   }
@@ -1186,7 +1185,7 @@ function loadLocalENV() {
       }
     }
   } catch (err) {
-    console.error('Failed to load .env file:', err);
+    logger.error('Failed to load .env file', { error: err.message });
   }
 }
 
@@ -1198,7 +1197,7 @@ const server = serve({
 }, (info) => {
   logger.info('Server started successfully', {
     port: info.port,
-    environment: isDevelopment ? 'development' : 'production'
+    environment: !isProd() ? 'development' : 'production'
   });
 });
 
