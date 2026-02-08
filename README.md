@@ -50,7 +50,7 @@ That's it, your app is now running at `http://localhost:5173` 🎉
 
 Everything you need to ship a production-ready app:
 
-### 🏗️ **Application Shell Architecture (v1.0)**
+### 🏗️ **Application Shell Architecture (v1.1)**
 - **95% less boilerplate** - Focus on features, not infrastructure
 - **Shell + Content + Config** - Framework provides structure, you provide content
 - **Update once, fix everywhere** - All apps inherit improvements from skateboard-ui
@@ -203,7 +203,7 @@ Built with the latest and greatest:
 | **Shadcn/ui** | Latest | Component Library |
 | **React Router** | v7.8+ | Routing |
 | **Hono** | v4+ | Backend Server |
-| **Deno** | v2.3+ | Runtime |
+| **Deno** | v2.6.8+ | Runtime |
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
 | **Stripe** | Latest | Payments |
 | **JWT** | Latest | Authentication |

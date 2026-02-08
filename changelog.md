@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+2.6.0
+
+  Remove local SettingsView
+  Use package SettingsView
+  Update docs version refs
+
 2.5.0
 
   Update skateboard-ui 2.9.3
