@@ -1,6 +1,6 @@
 # Migration Guide
 
-## Current Version: 2.4.x
+## Current Version: 2.6.x
 
 ### Quick Upgrade
 
@@ -226,7 +226,7 @@ Ensure appRoutes paths don't have leading slash:
 
 | Version | Status | Notes |
 |---------|--------|-------|
-| 2.4.x | Current | Latest features, skateboard-ui 2.9.3 |
+| 2.6.x | Current | Latest features, skateboard-ui 2.9.3 |
 | 2.3.x | Supported | Added constants options |
 | 1.x | Upgrade | Use this guide |
 | 0.9.x | Deprecated | Upgrade to 1.x first |
