@@ -3,7 +3,7 @@ import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
-import { getState } from '@stevederico/skateboard-ui/Context';
+import { useUser, useDispatch } from '@stevederico/skateboard-ui/Context';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Card, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
@@ -23,14 +23,15 @@ import { Card, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
  * @returns {JSX.Element} Chat view with message interface
  */
 export default function ChatView() {
-  const { state, dispatch } = getState();
+  const user = useUser();
+  const dispatch = useDispatch();
   const requireAuth = useCallback((callback) => {
-    if (state.user) {
+    if (user) {
       callback();
     } else {
       dispatch({ type: 'SHOW_AUTH_OVERLAY', payload: callback });
     }
-  }, [state.user, dispatch]);
+  }, [user, dispatch]);
   const [messages, setMessages] = useState([
     { id: 1, text: "Hey there! 👋", time: "2:30 PM", isMe: false },
     { id: 2, text: "Hi! How's it going?", time: "2:31 PM", isMe: true },
@@ -181,7 +182,7 @@ export default function ChatView() {
 
       <UpgradeSheet
         ref={upgradeSheetRef}
-        userEmail={state.user?.email}
+        userEmail={user?.email}
       />
     </div>
   )
