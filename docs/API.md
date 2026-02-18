@@ -330,3 +330,13 @@ All errors return JSON with an `error` field:
 | `CORS_ORIGINS` | Comma-separated allowed origins | No |
 | `FRONTEND_URL` | Frontend URL for redirects | No |
 | `PORT` | Server port | No (default: 8000) |
+
+---
+
+## Known Limitations
+
+### Password Reset
+
+Password reset functionality is not yet implemented. Users who forget their password must contact support for manual account recovery.
+
+**Planned for future release:** Self-service password reset via email with time-limited tokens.

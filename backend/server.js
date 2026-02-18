@@ -202,6 +202,204 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000); // Run every hour
 
+// ==== RATE LIMITING ====
+const rateLimitStore = new Map(); // key -> { count, resetAt }
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX_ENTRIES = 100000; // LRU eviction threshold
+
+// Route-specific rate limits
+const RATE_LIMITS = {
+  auth: { limit: 10, window: RATE_LIMIT_WINDOW },       // /api/signin, /api/signup
+  payment: { limit: 5, window: RATE_LIMIT_WINDOW },     // /api/checkout, /api/portal
+  global: { limit: 300, window: RATE_LIMIT_WINDOW }     // all other /api routes
+};
+
+/**
+ * Get client IP address from request
+ *
+ * Checks X-Forwarded-For header first (for proxies), falls back to
+ * socket address. Handles comma-separated forwarded IPs.
+ *
+ * @param {Context} c - Hono context
+ * @returns {string} Client IP address
+ */
+function getClientIP(c) {
+  const forwarded = c.req.header('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return c.req.raw?.socket?.remoteAddress || 'unknown';
+}
+
+/**
+ * Get rate limit category for a given path
+ *
+ * @param {string} path - Request path
+ * @returns {string} Rate limit category: 'auth', 'payment', or 'global'
+ */
+function getRateLimitCategory(path) {
+  if (path === '/api/signin' || path === '/api/signup') {
+    return 'auth';
+  }
+  if (path === '/api/checkout' || path === '/api/portal') {
+    return 'payment';
+  }
+  return 'global';
+}
+
+/**
+ * Rate limiting middleware
+ *
+ * Tracks requests per IP+category with sliding window. Returns 429 when
+ * limit exceeded. Adds X-RateLimit-Remaining and Retry-After headers.
+ *
+ * @async
+ * @param {Context} c - Hono context
+ * @param {Function} next - Next middleware function
+ * @returns {Promise<Response|void>} 429 error or continues to next middleware
+ */
+async function rateLimitMiddleware(c, next) {
+  // Skip rate limiting for health check and static files
+  if (c.req.path === '/api/health' || !c.req.path.startsWith('/api/')) {
+    return next();
+  }
+
+  const ip = getClientIP(c);
+  const category = getRateLimitCategory(c.req.path);
+  const { limit, window } = RATE_LIMITS[category];
+  const key = `${ip}:${category}`;
+  const now = Date.now();
+
+  let record = rateLimitStore.get(key);
+
+  // Reset if window expired
+  if (!record || now > record.resetAt) {
+    record = { count: 0, resetAt: now + window };
+    rateLimitStore.set(key, record);
+  }
+
+  record.count++;
+
+  // Check if over limit
+  if (record.count > limit) {
+    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+    c.header('Retry-After', String(retryAfter));
+    c.header('X-RateLimit-Remaining', '0');
+    logger.info('Rate limit exceeded', { ip, category, path: c.req.path });
+    return c.json({ error: 'Too many requests' }, 429);
+  }
+
+  c.header('X-RateLimit-Remaining', String(limit - record.count));
+  await next();
+}
+
+// Cleanup expired rate limit entries every 15 minutes
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+
+  for (const [key, record] of rateLimitStore.entries()) {
+    if (now > record.resetAt) {
+      rateLimitStore.delete(key);
+      cleaned++;
+    }
+  }
+
+  // LRU eviction if still over limit
+  evictOldestEntries(rateLimitStore, RATE_LIMIT_MAX_ENTRIES, (data) => data.resetAt);
+
+  if (cleaned > 0) {
+    logger.debug('Rate limit cleanup completed', { removedEntries: cleaned });
+  }
+}, 15 * 60 * 1000);
+
+// ==== ACCOUNT LOCKOUT ====
+const loginAttemptStore = new Map(); // email -> { attempts, lockedUntil }
+const LOCKOUT_THRESHOLD = 5; // Lock after 5 failed attempts
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+const LOCKOUT_MAX_ENTRIES = 50000; // LRU eviction threshold
+
+/**
+ * Check if account is locked due to failed login attempts
+ *
+ * @param {string} email - Email address to check
+ * @returns {{locked: boolean, remainingTime: number}} Lock status and remaining time in seconds
+ */
+function isAccountLocked(email) {
+  const record = loginAttemptStore.get(email);
+  if (!record) return { locked: false, remainingTime: 0 };
+
+  const now = Date.now();
+  if (record.lockedUntil && now < record.lockedUntil) {
+    return {
+      locked: true,
+      remainingTime: Math.ceil((record.lockedUntil - now) / 1000)
+    };
+  }
+
+  // Lock expired, clear record
+  if (record.lockedUntil && now >= record.lockedUntil) {
+    loginAttemptStore.delete(email);
+  }
+
+  return { locked: false, remainingTime: 0 };
+}
+
+/**
+ * Record a failed login attempt for an email
+ *
+ * Increments attempt counter. Locks account after LOCKOUT_THRESHOLD failures.
+ *
+ * @param {string} email - Email address that failed login
+ * @returns {void}
+ */
+function recordFailedLogin(email) {
+  const now = Date.now();
+  let record = loginAttemptStore.get(email);
+
+  if (!record) {
+    record = { attempts: 0, lockedUntil: null };
+    loginAttemptStore.set(email, record);
+  }
+
+  record.attempts++;
+
+  if (record.attempts >= LOCKOUT_THRESHOLD) {
+    record.lockedUntil = now + LOCKOUT_DURATION;
+    logger.info('Account locked due to failed attempts', { email: email.substring(0, 3) + '***' });
+  }
+}
+
+/**
+ * Clear failed login attempts on successful login
+ *
+ * @param {string} email - Email address to clear
+ * @returns {void}
+ */
+function clearFailedLogins(email) {
+  loginAttemptStore.delete(email);
+}
+
+// Cleanup expired lockout entries every 15 minutes
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+
+  for (const [email, record] of loginAttemptStore.entries()) {
+    if (record.lockedUntil && now >= record.lockedUntil) {
+      loginAttemptStore.delete(email);
+      cleaned++;
+    }
+  }
+
+  // LRU eviction if still over limit
+  evictOldestEntries(loginAttemptStore, LOCKOUT_MAX_ENTRIES, (data) => data.lockedUntil || 0);
+
+  if (cleaned > 0) {
+    logger.debug('Lockout cleanup completed', { removedEntries: cleaned });
+  }
+}, 15 * 60 * 1000);
+
 // ==== CONFIG & ENV ====
 // Environment setup - MUST happen before config loading
 if (!isProd()) {
@@ -332,6 +530,30 @@ if (STRIPE_KEY) {
 // Single database config - always use the same one
 const currentDbConfig = dbConfig;
 
+/**
+ * Database helper with pre-bound configuration
+ *
+ * Provides shorthand methods for database operations without repeating
+ * dbType, db, connectionString on every call.
+ *
+ * @type {Object}
+ * @example
+ * // Instead of:
+ * await db.findUser( { email });
+ * // Use:
+ * await db.findUser({ email });
+ */
+const db = {
+  findUser: (query, projection) => databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query, projection),
+  insertUser: (userData) => databaseManager.insertUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, userData),
+  updateUser: (query, update) => databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query, update),
+  findAuth: (query) => databaseManager.findAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query),
+  insertAuth: (authData) => databaseManager.insertAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, authData),
+  findWebhookEvent: (eventId) => databaseManager.findWebhookEvent(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, eventId),
+  insertWebhookEvent: (eventId, eventType, processedAt) => databaseManager.insertWebhookEvent(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, eventId, eventType, processedAt),
+  executeQuery: (queryObject) => databaseManager.executeQuery(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, queryObject)
+};
+
 // ==== HONO SETUP ====
 const app = new Hono();
 
@@ -351,6 +573,9 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
   credentials: true
 }));
+
+// Rate limiting middleware
+app.use('*', rateLimitMiddleware);
 
 // Apache Common Log Format middleware
 app.use('*', async (c, next) => {
@@ -589,6 +814,43 @@ const validateName = (name) => {
   return true;
 };
 
+/**
+ * Set authentication cookies and generate CSRF token for user session
+ *
+ * Creates CSRF token, stores it in memory, and sets both JWT (HttpOnly) and
+ * CSRF (readable) cookies. Consolidates duplicate cookie logic from signup/signin.
+ *
+ * @async
+ * @param {Context} c - Hono context
+ * @param {string} userID - User ID to associate with session
+ * @param {string} jwtToken - Pre-generated JWT token
+ * @returns {string} Generated CSRF token
+ */
+function setAuthCookies(c, userID, jwtToken) {
+  const csrfToken = generateCSRFToken();
+  csrfTokenStore.set(userID.toString(), { token: csrfToken, timestamp: Date.now() });
+
+  // Set HttpOnly JWT cookie
+  setCookie(c, 'token', jwtToken, {
+    httpOnly: true,
+    secure: isProd(),
+    sameSite: 'Strict',
+    path: '/',
+    maxAge: tokenExpirationDays * 24 * 60 * 60
+  });
+
+  // Set CSRF token cookie (readable by frontend)
+  setCookie(c, 'csrf_token', csrfToken, {
+    httpOnly: false,
+    secure: isProd(),
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: CSRF_TOKEN_EXPIRY / 1000
+  });
+
+  return csrfToken;
+}
+
 // ==== STRIPE WEBHOOK (raw body needed) ====
 app.post("/api/payment", async (c) => {
   logger.info('Payment webhook received');
@@ -607,13 +869,8 @@ app.post("/api/payment", async (c) => {
   }
 
   try {
-    // Use the single database config for webhooks
-    const webhookConfig = currentDbConfig;
-
     // Idempotency check - skip if already processed
-    const existingEvent = await databaseManager.findWebhookEvent(
-      webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, event.id
-    );
+    const existingEvent = await db.findWebhookEvent(event.id);
     if (existingEvent) {
       logger.info('Webhook event already processed, skipping', { eventId: event.id });
       return c.body(null, 200);
@@ -638,9 +895,9 @@ app.post("/api/payment", async (c) => {
     const customerEmail = customer.email.toLowerCase();
 
     if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
-      const user = await databaseManager.findUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail });
+      const user = await db.findUser({ email: customerEmail });
       if (user) {
-        await databaseManager.updateUser(webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString, { email: customerEmail }, {
+        await db.updateUser({ email: customerEmail }, {
           $set: { subscription: { stripeID, expires: current_period_end, status } }
         });
       } else {
@@ -649,10 +906,7 @@ app.post("/api/payment", async (c) => {
     }
 
     // Record successful processing for idempotency
-    await databaseManager.insertWebhookEvent(
-      webhookConfig.dbType, webhookConfig.db, webhookConfig.connectionString,
-      event.id, event.type, Date.now()
-    );
+    await db.insertWebhookEvent(event.id, event.type, Date.now());
     logger.info('Webhook processed successfully', { eventId: event.id, type: event.type });
 
     return c.body(null, 200);
@@ -665,10 +919,34 @@ app.post("/api/payment", async (c) => {
 // ==== STATIC ROUTES ====
 app.get("/api/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
 
+/**
+ * Parse JSON request body with proper error handling
+ *
+ * Returns parsed JSON or null if parsing fails. Sets 400 response on failure.
+ * Handles SyntaxError from malformed JSON.
+ *
+ * @async
+ * @param {Context} c - Hono context
+ * @returns {Promise<Object|null>} Parsed body or null on error
+ */
+async function parseJsonBody(c) {
+  try {
+    return await c.req.json();
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      return null;
+    }
+    throw e;
+  }
+}
+
 // ==== AUTH ROUTES ====
 app.post("/api/signup", async (c) => {
   try {
-    const body = await c.req.json();
+    const body = await parseJsonBody(c);
+    if (!body) {
+      return c.json({ error: 'Invalid request body' }, 400);
+    }
     let { email, password, name } = body;
 
     // Validation
@@ -689,38 +967,30 @@ app.post("/api/signup", async (c) => {
     let insertID = generateUUID()
 
     try {
-      const result = await databaseManager.insertUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, {
+      // Insert user first
+      await db.insertUser({
         _id: insertID,
         email: email,
         name: name,
         created_at: Date.now()
       });
 
+      // Insert auth record (compensating delete on failure)
+      try {
+        await db.insertAuth({ email: email, password: hash, userID: insertID });
+      } catch (authError) {
+        // Rollback: delete the user we just created
+        logger.error('Auth insert failed, rolling back user creation', { error: authError.message });
+        try {
+          await db.executeQuery({ query: 'DELETE FROM Users WHERE _id = ?', params: [insertID] });
+        } catch (rollbackError) {
+          logger.error('Rollback failed - orphaned user record', { userID: insertID, error: rollbackError.message });
+        }
+        throw authError;
+      }
+
       const token = await generateToken(insertID);
-      await databaseManager.insertAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email, password: hash, userID: insertID });
-
-      // Generate CSRF token
-      const csrfToken = generateCSRFToken();
-      csrfTokenStore.set(insertID.toString(), { token: csrfToken, timestamp: Date.now() });
-
-      // Set HttpOnly cookie
-      setCookie(c, 'token', token, {
-        httpOnly: true,
-        secure: isProd(),
-        sameSite: 'Strict',
-        path: '/',
-        maxAge: tokenExpirationDays * 24 * 60 * 60
-      });
-
-      // Set CSRF token cookie (readable by frontend)
-      setCookie(c, 'csrf_token', csrfToken, {
-        httpOnly: false,
-        secure: isProd(),
-        sameSite: 'Lax',
-        path: '/',
-        maxAge: CSRF_TOKEN_EXPIRY / 1000
-      });
-
+      setAuthCookies(c, insertID, token);
       logger.info('Signup success');
 
       return c.json({
@@ -744,7 +1014,10 @@ app.post("/api/signup", async (c) => {
 
 app.post("/api/signin", async (c) => {
   try {
-    const body = await c.req.json();
+    const body = await parseJsonBody(c);
+    if (!body) {
+      return c.json({ error: 'Invalid request body' }, 400);
+    }
     let { email, password } = body;
 
     // Validation
@@ -758,51 +1031,44 @@ app.post("/api/signin", async (c) => {
     email = email.toLowerCase().trim();
     logger.debug('Attempting signin');
 
+    // Check account lockout
+    const lockStatus = isAccountLocked(email);
+    if (lockStatus.locked) {
+      c.header('Retry-After', String(lockStatus.remainingTime));
+      return c.json({
+        error: 'Account temporarily locked. Try again later.',
+        retryAfter: lockStatus.remainingTime
+      }, 429);
+    }
+
     // Check if auth exists
-    const auth = await databaseManager.findAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
+    const auth = await db.findAuth( { email: email });
     if (!auth) {
       logger.debug('Auth record not found');
+      recordFailedLogin(email);
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
-    //verify
+    // Verify password
     if (!(await verifyPassword(password, auth.password))) {
       logger.debug('Password verification failed');
+      recordFailedLogin(email);
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
-    // get user
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { email: email });
+    // Get user
+    const user = await db.findUser( { email: email });
     if (!user) {
       logger.error('User not found for auth record');
       return c.json({ error: "Invalid credentials" }, 401);
     }
 
-    // generate token
+    // Clear failed attempts on successful login
+    clearFailedLogins(email);
+
+    // Generate token
     const token = await generateToken(user._id.toString());
-
-    // Generate CSRF token
-    const csrfToken = generateCSRFToken();
-    csrfTokenStore.set(user._id.toString(), { token: csrfToken, timestamp: Date.now() });
-
-    // Set HttpOnly cookie
-    setCookie(c, 'token', token, {
-      httpOnly: true,
-      secure: isProd(),
-      sameSite: 'Strict',
-      path: '/',
-      maxAge: tokenExpirationDays * 24 * 60 * 60
-    });
-
-    // Set CSRF token cookie (readable by frontend)
-    setCookie(c, 'csrf_token', csrfToken, {
-      httpOnly: false,
-      secure: isProd(),
-      sameSite: 'Lax',
-      path: '/',
-      maxAge: CSRF_TOKEN_EXPIRY / 1000
-    });
-
+    setAuthCookies(c, user._id, token);
     logger.info('Signin success');
 
     return c.json({
@@ -858,7 +1124,7 @@ app.post("/api/signout", authMiddleware, async (c) => {
 // ==== USER DATA ROUTES ====
 app.get("/api/me", authMiddleware, async (c) => {
   const userID = c.get('userID');
-  const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+  const user = await db.findUser( { _id: userID });
   logger.debug('/me checking for user');
   if (!user) return c.json({ error: "User not found" }, 404);
   return c.json(user);
@@ -879,7 +1145,7 @@ app.put("/api/me", authMiddleware, csrfProtection, async (c) => {
     const UPDATEABLE_USER_FIELDS = ['name'];
 
     // Find user first to verify existence
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    const user = await db.findUser( { _id: userID });
     if (!user) return c.json({ error: "User not found" }, 404);
 
     // Whitelist approach - only allow specific fields
@@ -896,14 +1162,14 @@ app.put("/api/me", authMiddleware, csrfProtection, async (c) => {
     }
 
     // Update user document
-    const result = await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID }, { $set: update });
+    const result = await db.updateUser( { _id: userID }, { $set: update });
 
     if (result.modifiedCount === 0) {
       return c.json({ error: "No changes made" }, 400);
     }
 
     // Return updated user
-    const updatedUser = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    const updatedUser = await db.findUser( { _id: userID });
     return c.json(updatedUser);
   } catch (err) {
     logger.error('Update user error', { error: err.message });
@@ -923,7 +1189,7 @@ app.post("/api/usage", authMiddleware, async (c) => {
     }
 
     // Get user
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    const user = await db.findUser( { _id: userID });
     if (!user) return c.json({ error: "User not found" }, 404);
 
     // Check if user is a subscriber - subscribers get unlimited
@@ -953,7 +1219,7 @@ app.post("/api/usage", authMiddleware, async (c) => {
     if (!usage.reset_at || now > usage.reset_at) {
       const newResetAt = now + (30 * 24 * 60 * 60); // 30 days from now
       // Reset usage - atomic set operation
-      await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
+      await db.updateUser(
         { _id: userID },
         { $set: { usage: { count: 0, reset_at: newResetAt } } }
       );
@@ -963,18 +1229,18 @@ app.post("/api/usage", authMiddleware, async (c) => {
     if (operation === 'track') {
       // Atomic increment first to prevent race conditions
       // Then verify we haven't exceeded the limit
-      await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
+      await db.updateUser(
         { _id: userID },
         { $inc: { 'usage.count': 1 } }
       );
 
       // Re-read user to get actual count after atomic increment
-      const updatedUser = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+      const updatedUser = await db.findUser( { _id: userID });
       const actualCount = updatedUser?.usage?.count || 1;
 
       // If we exceeded the limit, rollback the increment and return 429
       if (actualCount > limit) {
-        await databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString,
+        await db.updateUser(
           { _id: userID },
           { $inc: { 'usage.count': -1 } }
         );
@@ -1017,7 +1283,7 @@ app.post("/api/checkout", authMiddleware, csrfProtection, async (c) => {
     if (!email || !lookup_key) return c.json({ error: "Missing email or lookup_key" }, 400);
 
     // Verify the email matches the authenticated user
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    const user = await db.findUser( { _id: userID });
     if (!user || user.email !== email) return c.json({ error: "Email mismatch" }, 403);
 
     const prices = await stripe.prices.list({ lookup_keys: [lookup_key], expand: ["data.product"] });
@@ -1055,7 +1321,7 @@ app.post("/api/portal", authMiddleware, csrfProtection, async (c) => {
     if (!customerID) return c.json({ error: "Missing customerID" }, 400);
 
     // Verify the customerID matches the authenticated user's subscription
-    const user = await databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, { _id: userID });
+    const user = await db.findUser( { _id: userID });
     if (!user || (user.subscription?.stripeID && user.subscription.stripeID !== customerID)) {
       return c.json({ error: "Unauthorized customerID" }, 403);
     }
