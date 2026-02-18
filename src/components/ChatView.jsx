@@ -55,19 +55,11 @@ export default function ChatView() {
   }, [messages, isTyping]);
 
   useEffect(() => {
-    const updateUsage = async () => {
-      try {
-        const usage = await getRemainingUsage('messages');
-        setUsageInfo(usage);
-      } catch (error) {
-        console.error('Error updating usage:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    updateUsage();
-  }, [messages]);
+    getRemainingUsage('messages')
+      .then(setUsageInfo)
+      .catch((error) => console.error('Error fetching usage:', error))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   /**
    * Handle send message with usage tracking
