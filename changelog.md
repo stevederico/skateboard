@@ -1,5 +1,16 @@
 ## CHANGELOG
 
+2.8.0
+
+  Add rate limiting middleware
+  Add account lockout
+  Add auth test suite
+  Add setAuthCookies helper
+  Add db helper object
+  Add JSON parse handling
+  Add signup rollback
+  Document password reset
+
 2.7.0
 
   Update skateboard-ui 2.9.7
