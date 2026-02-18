@@ -140,9 +140,9 @@ export default function ChatView() {
             <Card className="py-0 gap-0 shadow-none ring-0 bg-accent rounded-bl-sm">
               <CardContent className="px-4 py-2.5">
                 <div className="flex space-x-1.5">
-                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce"></div>
-                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
-                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce motion-reduce:animate-none"></div>
+                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: '0.15s' }}></div>
+                  <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: '0.3s' }}></div>
                 </div>
               </CardContent>
             </Card>
@@ -155,14 +155,17 @@ export default function ChatView() {
         <div className="flex gap-2">
           <Input
             type="text"
+            name="message"
+            autoComplete="off"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && requireAuth(() => handleSend())}
-            placeholder="Message..."
+            placeholder="Message…"
             className="flex-1 h-10 rounded-full bg-accent border-0 px-4 focus-visible:ring-app"
           />
           <Button
             size="icon"
+            aria-label="Send message"
             onClick={() => requireAuth(() => handleSend())}
             disabled={isLoading}
             className={`rounded-full w-10 h-10 ${
