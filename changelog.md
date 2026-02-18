@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+2.10.0
+
+  Add ChatView aria-label
+  Add ChatView input attributes
+  Add motion-reduce support
+  Fix hardcoded locale
+  Fix placeholder ellipsis
+
 2.9.0
 
   Fix ChatView usage effect
