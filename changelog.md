@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+2.11.0
+
+  Update skateboard-ui 2.9.8
+  Use useUser hook ChatView
+  Use useDispatch hook ChatView
+
 2.10.0
 
   Add ChatView aria-label
