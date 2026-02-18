@@ -145,8 +145,7 @@ export function ChartAreaInteractive() {
     }
   }, [isMobile])
 
-  const filteredData = chartData.filter((item) => {
-    const date = new Date(item.date)
+  const filteredData = React.useMemo(() => {
     const referenceDate = new Date("2024-06-30")
     let daysToSubtract = 90
     if (timeRange === "30d") {
@@ -156,8 +155,8 @@ export function ChartAreaInteractive() {
     }
     const startDate = new Date(referenceDate)
     startDate.setDate(startDate.getDate() - daysToSubtract)
-    return date >= startDate
-  })
+    return chartData.filter((item) => new Date(item.date) >= startDate)
+  }, [timeRange])
 
   return (
     <Card className="@container/card">

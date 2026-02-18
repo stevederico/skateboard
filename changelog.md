@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+2.9.0
+
+  Fix ChatView usage effect
+  Add ChartAreaInteractive useMemo
+
 2.8.0
 
   Add rate limiting middleware
