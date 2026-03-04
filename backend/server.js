@@ -876,38 +876,89 @@ app.post("/api/payment", async (c) => {
       return c.body(null, 200);
     }
 
-    const { customer: stripeID, current_period_end, status } = event.data.object;
+    // Record event BEFORE processing to prevent race conditions
+    await db.insertWebhookEvent(event.id, event.type, Date.now());
 
-    // Validate required fields exist
-    if (!stripeID) {
-      logger.error('Webhook missing customer ID');
-      return c.body(null, 400);
-    }
+    const eventObject = event.data.object;
 
-    const customer = await stripe.customers.retrieve(stripeID);
+    // Handle subscription lifecycle events
+    if (["customer.subscription.deleted", "customer.subscription.updated", "customer.subscription.created"].includes(event.type)) {
+      const { customer: stripeID, current_period_end, status } = eventObject;
+      if (!stripeID) {
+        logger.error('Webhook missing customer ID', { type: event.type });
+        return c.body(null, 400);
+      }
 
-    // Null check for customer email
-    if (!customer || !customer.email) {
-      logger.error('Webhook: Customer has no email', { stripeID });
-      return c.body(null, 400);
-    }
+      const customer = await stripe.customers.retrieve(stripeID);
+      if (!customer || !customer.email) {
+        logger.error('Webhook: Customer has no email', { stripeID });
+        return c.body(null, 400);
+      }
 
-    const customerEmail = customer.email.toLowerCase();
-
-    if (["customer.subscription.deleted", "customer.subscription.updated","customer.subscription.created"].includes(event.type)) {
+      const customerEmail = customer.email.toLowerCase();
       const user = await db.findUser({ email: customerEmail });
       if (user) {
         await db.updateUser({ email: customerEmail }, {
           $set: { subscription: { stripeID, expires: current_period_end, status } }
         });
+        logger.info('Subscription updated', { type: event.type, email: customerEmail, status });
       } else {
-        logger.warn('Webhook: No user found for email');
+        logger.warn('Webhook: No user found for email', { email: customerEmail });
       }
     }
 
-    // Record successful processing for idempotency
-    await db.insertWebhookEvent(event.id, event.type, Date.now());
-    logger.info('Webhook processed successfully', { eventId: event.id, type: event.type });
+    // Handle checkout session completed (initial subscription)
+    if (event.type === "checkout.session.completed") {
+      const { customer: stripeID, customer_email, subscription: subscriptionId } = eventObject;
+      if (subscriptionId && stripeID) {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const customerEmail = (customer_email || (await stripe.customers.retrieve(stripeID)).email).toLowerCase();
+        const user = await db.findUser({ email: customerEmail });
+        if (user) {
+          await db.updateUser({ email: customerEmail }, {
+            $set: { subscription: { stripeID, expires: subscription.current_period_end, status: subscription.status } }
+          });
+          logger.info('Checkout completed', { email: customerEmail, status: subscription.status });
+        }
+      }
+    }
+
+    // Handle invoice paid (recurring payment success)
+    if (event.type === "invoice.paid") {
+      const { customer: stripeID, subscription: subscriptionId } = eventObject;
+      if (subscriptionId && stripeID) {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const customer = await stripe.customers.retrieve(stripeID);
+        if (customer?.email) {
+          const customerEmail = customer.email.toLowerCase();
+          const user = await db.findUser({ email: customerEmail });
+          if (user) {
+            await db.updateUser({ email: customerEmail }, {
+              $set: { subscription: { stripeID, expires: subscription.current_period_end, status: subscription.status } }
+            });
+            logger.info('Invoice paid', { email: customerEmail });
+          }
+        }
+      }
+    }
+
+    // Handle invoice payment failed
+    if (event.type === "invoice.payment_failed") {
+      const { customer: stripeID } = eventObject;
+      if (stripeID) {
+        const customer = await stripe.customers.retrieve(stripeID);
+        if (customer?.email) {
+          const customerEmail = customer.email.toLowerCase();
+          const user = await db.findUser({ email: customerEmail });
+          if (user) {
+            await db.updateUser({ email: customerEmail }, {
+              $set: { 'subscription.paymentFailed': true, 'subscription.paymentFailedAt': Date.now() }
+            });
+            logger.warn('Invoice payment failed', { email: customerEmail });
+          }
+        }
+      }
+    }
 
     return c.body(null, 200);
   } catch (e) {
