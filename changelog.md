@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+2.12.0
+
+  Add Stripe webhook handlers
+  Handle checkout.session.completed
+  Handle invoice.paid event
+  Handle invoice.payment_failed
+  Fix idempotency timing
+
 2.11.0
 
   Update skateboard-ui 2.9.8
