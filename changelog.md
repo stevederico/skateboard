@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+2.22.0
+
+  Fix command menu spacing
+
 2.21.0
 
   Add Cmd+K command menu
