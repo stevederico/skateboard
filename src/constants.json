@@ -1,5 +1,11 @@
 {
     "version": "0.1.0",
+    "design": {
+        "baseColor": "neutral",
+        "radius": "medium",
+        "font": "geist",
+        "iconLibrary": "tabler"
+    },
     "appName": "Test App",
     "appIcon": "command",
     "tagline": "Try Something New",
@@ -12,17 +18,17 @@
         "title": "Everything You Need",
         "items": [
             {
-                "icon": "🔐",
+                "icon": "lock",
                 "title": "Authentication",
                 "description": "Complete user management with JWT tokens and secure sessions"
             },
             {
-                "icon": "💳",
+                "icon": "credit-card",
                 "title": "Stripe Payments",
                 "description": "Ready-to-use checkout flows and subscription management"
             },
             {
-                "icon": "🎨",
+                "icon": "palette",
                 "title": "Beautiful UI",
                 "description": "50+ Shadcn components with dark mode support"
             }

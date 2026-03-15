@@ -23,3 +23,98 @@
   --card: #0d0d0d;
   --accent: #111111;
 }
+
+/* Status tokens */
+@theme {
+  --color-success: oklch(0.72 0.19 142);
+  --color-success-foreground: oklch(0.98 0.02 142);
+  --color-warning: oklch(0.78 0.18 85);
+  --color-warning-foreground: oklch(0.98 0.02 85);
+  --color-info: oklch(0.7 0.15 240);
+  --color-info-foreground: oklch(0.98 0.02 240);
+}
+
+/* Typography scale */
+@layer utilities {
+  .text-heading-xl {
+    font-size: 2.25rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+  .text-heading-lg {
+    font-size: 1.5rem;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+  .text-heading-md {
+    font-size: 1.25rem;
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .text-heading-sm {
+    font-size: 1rem;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  .text-label-lg {
+    font-size: 1rem;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .text-label-md {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .text-label-sm {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .text-copy-lg {
+    font-size: 1.125rem;
+    line-height: 1.6;
+    font-weight: 400;
+  }
+  .text-copy-md {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    font-weight: 400;
+  }
+  .text-copy-sm {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    font-weight: 400;
+  }
+}
+
+/* Material / elevation utilities */
+@layer utilities {
+  .material-base {
+    background-color: var(--background);
+    border: 1px solid transparent;
+  }
+  .material-raised {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.05);
+  }
+  .material-elevated {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 12px oklch(0 0 0 / 0.08);
+  }
+  .material-menu {
+    background-color: var(--popover);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 24px oklch(0 0 0 / 0.12);
+  }
+  .material-modal {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 16px 48px oklch(0 0 0 / 0.16);
+  }
+}
