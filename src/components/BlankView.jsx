@@ -1,19 +1,41 @@
 import Header from '@stevederico/skateboard-ui/Header';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
+import { IconLayoutDashboard } from '@tabler/icons-react';
 
 /**
  * Blank view template component
  *
- * Minimal view with Header only. Use as starting point for new views.
+ * Starter view with Header and empty state. Use as starting point for new views.
  *
  * @component
  * @param {Object} props
  * @param {string} props.title - Header title
- * @returns {JSX.Element} Blank view with header
+ * @param {string} [props.description] - Empty state description text
+ * @param {import('react').ReactNode} [props.icon] - Custom icon element for empty state
+ * @param {import('react').ReactNode} [props.children] - Optional content to replace empty state
+ * @returns {JSX.Element} Blank view with header and empty state
  */
-export default function BlankView({ title = "Blank" }) {
+export default function BlankView({ title = "Blank", description, icon, children }) {
   return (
     <>
       <Header title={title} />
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        {children || (
+          <div className="flex flex-1 items-center justify-center">
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  {icon || <IconLayoutDashboard size={24} />}
+                </EmptyMedia>
+                <EmptyTitle>No {title.toLowerCase()} yet</EmptyTitle>
+                <EmptyDescription>
+                  {description || `${title} will appear here once you get started.`}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </div>
+        )}
+      </div>
     </>
   )
 }

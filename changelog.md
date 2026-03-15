@@ -1,5 +1,15 @@
 ## CHANGELOG
 
+2.13.0
+
+  Add BlankView empty state
+  Add design config block
+  Add status color tokens
+  Add typography scale utilities
+  Add material elevation utilities
+  Replace emoji feature icons
+  Update CLAUDE.md self-sufficient
+
 2.12.0
 
   Add Stripe webhook handlers
