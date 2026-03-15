@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+2.14.0
+
+  Add skills design rules
+  Fix Empty compound pattern
+  Add layout constraint rules
+  Ban space-x/y utilities
+  Ban manual dark overrides
+
 2.13.0
 
   Add BlankView empty state
