@@ -14,12 +14,17 @@
  * - Route configuration
  * - App constants
  *
+ * HomeView is lazy-loaded via React.lazy to code-split heavy dependencies
+ * (recharts, @tanstack/react-table, @dnd-kit, zod) out of the initial bundle.
+ *
  * @see {@link https://github.com/stevederico/skateboard|Skateboard Docs}
  */
 import './assets/styles.css';
+import { lazy, Suspense } from 'react';
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
+import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
 import constants from './constants.json';
-import HomeView from './components/HomeView.jsx';
+const HomeView = lazy(() => import('./components/HomeView.jsx'));
 import ChatView from './components/ChatView.jsx';
 import BlankView from './components/BlankView.jsx';
 
@@ -32,7 +37,7 @@ import BlankView from './components/BlankView.jsx';
  * @type {Array<{path: string, element: JSX.Element}>}
  */
 const appRoutes = [
-  { path: 'home', element: <HomeView /> },
+  { path: 'home', element: <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner /></div>}><HomeView /></Suspense> },
   { path: 'chat', element: <ChatView /> },
   { path: 'analytics', element: <BlankView title="Analytics" description="Analytics will appear here once you have activity." buttonTitle="View Reports" /> },
   { path: 'projects', element: <BlankView title="Projects" description="Create your first project to get started." buttonTitle="Create Project" /> },
