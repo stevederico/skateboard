@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+2.20.0
+
+  Update skateboard-ui 2.11.0
+
 2.19.0
 
   Fix webhook parallel Stripe calls
