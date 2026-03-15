@@ -71,9 +71,9 @@ export default function CommandMenu() {
       title="Command Menu"
       description="Search and navigate to any page"
     >
-      <Command>
+      <Command className="rounded-lg">
         <CommandInput placeholder="Search pages..." />
-        <CommandList>
+        <CommandList className="p-2">
           <CommandEmpty>No pages found.</CommandEmpty>
           <CommandGroup heading="Pages">
             {pages.map((page) => (
@@ -81,12 +81,10 @@ export default function CommandMenu() {
                 key={page.url}
                 value={page.title}
                 onSelect={() => handleSelect(page.url)}
+                className="gap-3 px-3 py-2.5"
               >
                 <DynamicIcon name={page.icon} className="size-4 shrink-0" />
                 <span>{page.title}</span>
-                <CommandShortcut className="sr-only">
-                  Navigate to {page.title}
-                </CommandShortcut>
               </CommandItem>
             ))}
           </CommandGroup>
