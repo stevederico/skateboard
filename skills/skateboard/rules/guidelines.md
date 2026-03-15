@@ -75,3 +75,29 @@
 29. **Pagination or infinite scroll — never both** — Pick one. Pagination for data tables, infinite scroll for feeds. Show total count.
 
 30. **Truncate with intention** — Long text gets `line-clamp-2` or `truncate` with a tooltip or expand action. Never let text overflow its container.
+
+## Copywriting
+
+31. **Active voice, not passive** — "Save your changes" not "Changes will be saved." Direct, clear, action-oriented.
+
+32. **Title Case for headings and buttons** — "Create New Project", "Save Changes". Sentence case for body text and descriptions.
+
+33. **Error messages guide the exit** — Don't just say what went wrong. Say what to do: "Email is required" not "Invalid input". "Check your connection and try again" not "Network error".
+
+## Typography Polish
+
+34. **Curly quotes, not straight quotes** — Use `"` `"` `'` `'` in user-facing text, not `"` `'`. Especially in marketing copy and headings.
+
+35. **Tabular numbers for comparisons** — Use `font-variant-numeric: tabular-nums` (Tailwind: `tabular-nums`) on prices, stats, table columns. Numbers should align vertically.
+
+36. **Non-breaking spaces before units** — Use `&nbsp;` between numbers and units (`100&nbsp;MB`, `$5.00&nbsp;/mo`) to prevent awkward line breaks.
+
+37. **Optical alignment** — Adjust ±1px when perception beats geometry. Icons next to text may need visual nudging even when technically aligned.
+
+## Performance
+
+38. **Mutations under 500ms** — POST, PATCH, DELETE operations must complete within 500ms. If they can't, show progress and allow cancellation.
+
+39. **Virtualize large lists** — Any list over 100 items should use virtualization (windowing). Never render 1000 DOM nodes for a scrollable list.
+
+40. **No layout shift on load** — Reserve space for images, embeds, and async content with aspect-ratio or fixed dimensions. CLS score matters.
