@@ -69,6 +69,13 @@ Use the typography scale utilities (defined in `styles.css`):
 | `text-copy-md` | Default body text |
 | `text-copy-sm` | Help text, captions |
 
+### Typography Polish
+
+- Use `tabular-nums` (Tailwind: `tabular-nums`) on prices, stats, table number columns — numbers align vertically
+- Use `text-balance` on headings, `text-pretty` on titles — prevents orphaned words
+- Use curly quotes (`"` `"`) in user-facing marketing copy, not straight quotes
+- Use non-breaking spaces (`&nbsp;`) between numbers and units (`100&nbsp;MB`)
+
 ## Elevation / Materials
 
 Use material utilities for layered surfaces:

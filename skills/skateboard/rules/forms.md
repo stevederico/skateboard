@@ -115,3 +115,11 @@ Prefer `ToggleGroup` over radio buttons for small option sets:
 - Cancel is `variant="outline"`, Submit is default
 - Disable submit button during submission
 - Show `<Spinner>` inside button during loading — never replace button text with "Loading..."
+
+## Form UX Rules
+
+- **Keep submit enabled until submission** — Never disable the submit button based on incomplete fields. Let the user click submit and show validation errors. Disabled buttons with no explanation are frustrating.
+- **Never block typing** — Don't prevent characters from being entered. Validate after input, not during. Let users paste freely.
+- **Show validation on submit, clear on edit** — Show errors when the form is submitted. Clear individual field errors as the user edits that field.
+- **Autofocus the first field** — When a form opens (dialog, page), autofocus the first input so the user can start typing immediately.
+- **Enter submits the form** — Single-field forms and login forms should submit on Enter. Multi-field forms use the submit button.

@@ -1,5 +1,13 @@
 ## CHANGELOG
 
+2.15.0
+
+  Add copywriting guidelines
+  Add typography polish rules
+  Add performance targets
+  Add form UX rules
+  Update guidelines to 40 rules
+
 2.14.0
 
   Add skills design rules
