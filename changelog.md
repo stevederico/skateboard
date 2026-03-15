@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+2.17.0
+
+  Update skateboard-ui 2.10.1
+  Add Geist font self-hosted
+
 2.16.0
 
   Update skateboard-ui 2.9.9
