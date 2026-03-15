@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+2.23.0
+
+  Fix command menu icons
+  Update skateboard-ui 2.13.0
+
 2.22.0
 
   Fix command menu spacing
