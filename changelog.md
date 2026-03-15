@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+2.16.0
+
+  Update skateboard-ui 2.9.9
+  Update skateboardVersion 2.16.0
+  Update CLAUDE.md version refs
+
 2.15.0
 
   Add copywriting guidelines

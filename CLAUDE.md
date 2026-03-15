@@ -611,8 +611,8 @@ When working with these libraries, consult the provided documentation before mak
 - [Schema](docs/SCHEMA.md) - Database schema reference
 
 **Version:**
-- skateboard@2.6.0
-- skateboard-ui@2.9.3
+- skateboard@2.16.0
+- skateboard-ui@2.9.9
 
 ## Updating from Skateboard Boilerplate
 
