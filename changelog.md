@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+2.18.0
+
+  Add BlankView CTA button
+  Add route empty state CTAs
+
 2.17.0
 
   Update skateboard-ui 2.10.1
