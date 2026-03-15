@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+2.19.0
+
+  Fix webhook parallel Stripe calls
+  Lazy load HomeView heavy deps
+  Fix ChartArea useEffect anti-pattern
+
 2.18.0
 
   Add BlankView CTA button

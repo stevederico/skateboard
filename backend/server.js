@@ -911,8 +911,10 @@ app.post("/api/payment", async (c) => {
     if (event.type === "checkout.session.completed") {
       const { customer: stripeID, customer_email, subscription: subscriptionId } = eventObject;
       if (subscriptionId && stripeID) {
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-        const customerEmail = (customer_email || (await stripe.customers.retrieve(stripeID)).email).toLowerCase();
+        const subscriptionPromise = stripe.subscriptions.retrieve(subscriptionId);
+        const customerPromise = !customer_email ? stripe.customers.retrieve(stripeID) : null;
+        const [subscription, fetchedCustomer] = await Promise.all([subscriptionPromise, customerPromise]);
+        const customerEmail = (customer_email || fetchedCustomer.email).toLowerCase();
         const user = await db.findUser({ email: customerEmail });
         if (user) {
           await db.updateUser({ email: customerEmail }, {
@@ -927,8 +929,10 @@ app.post("/api/payment", async (c) => {
     if (event.type === "invoice.paid") {
       const { customer: stripeID, subscription: subscriptionId } = eventObject;
       if (subscriptionId && stripeID) {
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-        const customer = await stripe.customers.retrieve(stripeID);
+        const [subscription, customer] = await Promise.all([
+          stripe.subscriptions.retrieve(subscriptionId),
+          stripe.customers.retrieve(stripeID)
+        ]);
         if (customer?.email) {
           const customerEmail = customer.email.toLowerCase();
           const user = await db.findUser({ email: customerEmail });
