@@ -23,10 +23,29 @@ import './assets/styles.css';
 import { lazy, Suspense } from 'react';
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
 import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
+import Layout from '@stevederico/skateboard-ui/Layout';
+import CommandMenu from './components/CommandMenu.jsx';
 import constants from './constants.json';
 const HomeView = lazy(() => import('./components/HomeView.jsx'));
 import ChatView from './components/ChatView.jsx';
 import BlankView from './components/BlankView.jsx';
+
+/**
+ * App layout with global command menu overlay.
+ *
+ * Wraps the default skateboard-ui Layout and injects CommandMenu
+ * so the Cmd+K shortcut is available on all authenticated routes.
+ *
+ * @returns {JSX.Element} Layout with command menu
+ */
+function AppLayout() {
+  return (
+    <>
+      <CommandMenu />
+      <Layout />
+    </>
+  );
+}
 
 /**
  * Application route configuration
@@ -62,5 +81,9 @@ const appRoutes = [
 createSkateboardApp({
   constants,
   appRoutes,
-  defaultRoute: 'home'
+  defaultRoute: 'home',
+  overrides: { layout: AppLayout }
 });
+
+/** Preload HomeView chunk after initial render for instant navigation */
+setTimeout(() => import('./components/HomeView.jsx'), 2000);

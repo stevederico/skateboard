@@ -1,5 +1,11 @@
 ## CHANGELOG
 
+2.21.0
+
+  Add Cmd+K command menu
+  Add idle preload HomeView
+  Update skateboard-ui 2.12.0
+
 2.20.0
 
   Update skateboard-ui 2.11.0
