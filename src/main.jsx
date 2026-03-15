@@ -34,9 +34,9 @@ import BlankView from './components/BlankView.jsx';
 const appRoutes = [
   { path: 'home', element: <HomeView /> },
   { path: 'chat', element: <ChatView /> },
-  { path: 'analytics', element: <BlankView title="Analytics" /> },
-  { path: 'projects', element: <BlankView title="Projects" /> },
-  { path: 'team', element: <BlankView title="Team" /> }
+  { path: 'analytics', element: <BlankView title="Analytics" description="Analytics will appear here once you have activity." buttonTitle="View Reports" /> },
+  { path: 'projects', element: <BlankView title="Projects" description="Create your first project to get started." buttonTitle="Create Project" /> },
+  { path: 'team', element: <BlankView title="Team" description="Invite your first team member to start collaborating." buttonTitle="Invite Member" /> }
 ];
 
 /**
