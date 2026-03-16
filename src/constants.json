@@ -4,7 +4,7 @@
         "baseColor": "neutral",
         "radius": "medium",
         "font": "geist",
-        "iconLibrary": "tabler"
+        "iconLibrary": "lucide"
     },
     "appName": "Test App",
     "appIcon": "command",
