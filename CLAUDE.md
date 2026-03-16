@@ -185,7 +185,7 @@ When making ANY code changes, you MUST update:
 
 ### Icons
 
-- Default icon library: Tabler Icons (`@tabler/icons-react`)
+- Default icon library: Lucide React (`lucide-react`)
 - Never use emoji as UI icons — use proper icon components (exception: `constants.json` feature icons where the shell renders them as text)
 - Icon-only buttons must have `aria-label`
 - Standard sizes: 16px inline, 18px buttons, 24px cards, 48px empty states
@@ -211,7 +211,7 @@ When a project uses `constants.json`, include a `design` block:
   "baseColor": "neutral",
   "radius": "medium",
   "font": "geist",
-  "iconLibrary": "tabler"
+  "iconLibrary": "lucide"
 }
 ```
 
@@ -473,7 +473,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@s
 
 <Empty>
   <EmptyHeader>
-    <EmptyMedia variant="icon"><IconFolder size={24} /></EmptyMedia>
+    <EmptyMedia variant="icon"><Folder size={24} /></EmptyMedia>
     <EmptyTitle>No items yet</EmptyTitle>
     <EmptyDescription>Create your first item to get started.</EmptyDescription>
   </EmptyHeader>
@@ -494,7 +494,7 @@ import Header from '@stevederico/skateboard-ui/Header';
 // Props: title, buttonTitle, onButtonTitleClick, children
 // Use children for custom right-side content (buttons, dialogs, etc.)
 <Header title="Projects">
-  <Button size="sm"><IconPlus size={18} /> New Project</Button>
+  <Button size="sm"><Plus size={18} /> New Project</Button>
 </Header>
 
 // Simple text button shorthand:
@@ -538,7 +538,7 @@ import { useListData } from '@stevederico/skateboard-ui/Utilities';
 import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
-import { IconAlertCircle } from '@tabler/icons-react';
+import { CircleAlert } from 'lucide-react';
 
 function DealsView() {
   const { data, loading, error, refetch } = useListData('/deals');
@@ -550,7 +550,7 @@ function DealsView() {
   if (error) return (
     <Empty>
       <EmptyHeader>
-        <EmptyMedia variant="icon"><IconAlertCircle size={24} /></EmptyMedia>
+        <EmptyMedia variant="icon"><CircleAlert size={24} /></EmptyMedia>
         <EmptyTitle>Failed to load deals</EmptyTitle>
         <EmptyDescription>{error}</EmptyDescription>
       </EmptyHeader>

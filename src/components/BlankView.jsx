@@ -1,7 +1,7 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
-import { IconLayoutDashboard, IconPlus } from '@tabler/icons-react';
+import { LayoutDashboard, Plus } from 'lucide-react';
 
 /**
  * Blank view template component
@@ -28,7 +28,7 @@ export default function BlankView({ title = "Blank", description, buttonTitle, o
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  {icon || <IconLayoutDashboard size={24} />}
+                  {icon || <LayoutDashboard size={24} />}
                 </EmptyMedia>
                 <EmptyTitle>No {title.toLowerCase()} yet</EmptyTitle>
                 <EmptyDescription>
@@ -37,7 +37,7 @@ export default function BlankView({ title = "Blank", description, buttonTitle, o
               </EmptyHeader>
               {buttonTitle && (
                 <Button onClick={onButtonClick}>
-                  <IconPlus size={18} />
+                  <Plus size={18} />
                   {buttonTitle}
                 </Button>
               )}

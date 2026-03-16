@@ -46,7 +46,7 @@ Read these before building:
 - **[Styling](rules/styling.md)** — Color tokens, spacing, semantic classes
 - **[Composition](rules/composition.md)** — Component nesting, Card/Dialog/Form patterns
 - **[Forms](rules/forms.md)** — Label+Input pairing, validation, option groups
-- **[Icons](rules/icons.md)** — Tabler icons, sizing, accessibility
+- **[Icons](rules/icons.md)** — Lucide icons, sizing, accessibility
 - **[Guidelines](rules/guidelines.md)** — Top 30 web interface guidelines
 - **[Views](rules/views.md)** — Page layout, headers, data fetching patterns
 
@@ -59,7 +59,7 @@ The `constants.json` file contains a `design` block that defines the app's visua
   "baseColor": "neutral",
   "radius": "medium",
   "font": "geist",
-  "iconLibrary": "tabler"
+  "iconLibrary": "lucide"
 }
 ```
 
