@@ -1,5 +1,16 @@
 ## CHANGELOG
 
+2.25.0
+
+  Update skateboard-ui 2.15.0
+  Fix auth overlay modal
+
+2.24.0
+
+  Update skateboard-ui 2.14.0
+  Switch icons to Lucide React
+  Update docs icon references
+
 2.23.0
 
   Fix command menu icons
