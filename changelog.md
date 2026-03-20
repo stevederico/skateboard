@@ -1,5 +1,15 @@
 ## CHANGELOG
 
+2.28.0
+
+  Remove sidebar-width override
+  Use skateboard-ui 12rem default
+
+2.27.0
+
+  Add .env.local override support
+  Extract loadEnvFile helper
+
 2.26.0
 
   Update skateboard-ui 2.16.0
