@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+2.26.0
+
+  Update skateboard-ui 2.16.0
+  Fix DynamicIcon production builds
+
 2.25.0
 
   Update skateboard-ui 2.15.0
