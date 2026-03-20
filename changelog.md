@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+2.29.0
+
+  Update skateboard-ui 2.22.0
+
 2.28.0
 
   Remove sidebar-width override
