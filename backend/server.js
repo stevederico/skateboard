@@ -1395,28 +1395,16 @@ app.post("/api/portal", authMiddleware, csrfProtection, async (c) => {
 });
 
 // ==== STATIC FILE SERVING (Production) ====
-// All /api/* routes are handled above. Everything else is static/SPA.
 const staticDir = resolve(__dirname, config.staticDir);
 
-// Serve static assets - skip /api/* paths
-app.use('*', async (c, next) => {
-  // Skip API routes - they're handled by route handlers above
-  if (c.req.path.startsWith('/api/')) {
-    return next();
-  }
+// Serve static files
+app.use('/*', serveStatic({ root: staticDir }));
 
-  // Try to serve static file
-  const staticMiddleware = serveStatic({ root: config.staticDir });
-  return staticMiddleware(c, next);
-});
-
-// SPA fallback - serve index.html for client-side routing
+// SPA fallback — only for non-asset routes
 app.get('*', async (c) => {
-  // Skip API routes
-  if (c.req.path.startsWith('/api/')) {
-    return c.json({ error: 'Not found' }, 404);
+  if (c.req.path.startsWith('/api/') || c.req.path.match(/\.\w+$/)) {
+    return c.notFound();
   }
-
   try {
     const indexPath = resolve(staticDir, 'index.html');
     const file = await promisify(readFile)(indexPath);

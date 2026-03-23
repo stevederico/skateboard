@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+2.30.0
+
+  Fix serveStatic resolution
+
 2.29.0
 
   Update skateboard-ui 2.22.0
