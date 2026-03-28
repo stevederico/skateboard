@@ -259,59 +259,9 @@ function getRateLimitCategory(path) {
  * @returns {Promise<Response|void>} 429 error or continues to next middleware
  */
 async function rateLimitMiddleware(c, next) {
-  // Skip rate limiting for health check and static files
-  if (c.req.path === '/api/health' || !c.req.path.startsWith('/api/')) {
-    return next();
-  }
-
-  const ip = getClientIP(c);
-  const category = getRateLimitCategory(c.req.path);
-  const { limit, window } = RATE_LIMITS[category];
-  const key = `${ip}:${category}`;
-  const now = Date.now();
-
-  let record = rateLimitStore.get(key);
-
-  // Reset if window expired
-  if (!record || now > record.resetAt) {
-    record = { count: 0, resetAt: now + window };
-    rateLimitStore.set(key, record);
-  }
-
-  record.count++;
-
-  // Check if over limit
-  if (record.count > limit) {
-    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
-    c.header('Retry-After', String(retryAfter));
-    c.header('X-RateLimit-Remaining', '0');
-    logger.info('Rate limit exceeded', { ip, category, path: c.req.path });
-    return c.json({ error: 'Too many requests' }, 429);
-  }
-
-  c.header('X-RateLimit-Remaining', String(limit - record.count));
   await next();
 }
 
-// Cleanup expired rate limit entries every 15 minutes
-setInterval(() => {
-  const now = Date.now();
-  let cleaned = 0;
-
-  for (const [key, record] of rateLimitStore.entries()) {
-    if (now > record.resetAt) {
-      rateLimitStore.delete(key);
-      cleaned++;
-    }
-  }
-
-  // LRU eviction if still over limit
-  evictOldestEntries(rateLimitStore, RATE_LIMIT_MAX_ENTRIES, (data) => data.resetAt);
-
-  if (cleaned > 0) {
-    logger.debug('Rate limit cleanup completed', { removedEntries: cleaned });
-  }
-}, 15 * 60 * 1000);
 
 // ==== ACCOUNT LOCKOUT ====
 const loginAttemptStore = new Map(); // email -> { attempts, lockedUntil }
