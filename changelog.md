@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+2.32.0
+
+  AI-friendly robots.txt
+
 2.31.0
 
   Remove duplicate dependencies
