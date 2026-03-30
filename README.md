@@ -197,11 +197,11 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v2.9+ | Application Shell Framework |
+| **skateboard-ui** | v2.22+ | Application Shell, Components, Theming |
 | **Vite** | v7.1+ | Build Tool & Dev Server |
 | **Tailwind CSS** | v4.1+ | Styling |
-| **Shadcn/ui** | Latest | Component Library |
-| **React Router** | v7.8+ | Routing |
+| **React Router** | v7.9+ | Routing |
+| **Zod** | v4 | Validation |
 | **Hono** | v4+ | Backend Server |
 | **Deno** | v2.6.8+ | Runtime |
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
