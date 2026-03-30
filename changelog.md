@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+2.31.0
+
+  Remove duplicate dependencies
+
 2.30.0
 
   Fix serveStatic resolution
