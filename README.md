@@ -11,17 +11,6 @@
   <h3 align="center" style="margin-top: 0; font-weight: normal;">
     a react starter with auth, stripe, shadcn, and sqlite
   </h3>
-    <p align="center">
-    <a href="https://opensource.org/licenses/mit">
-      <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License">
-    </a>
-    <a href="https://github.com/stevederico/skateboard/stargazers">
-      <img src="https://img.shields.io/github/stars/stevederico/skateboard?style=social" alt="GitHub stars">
-    </a>
-    <a href="https://www.npmjs.com/package/create-skateboard-app">
-      <img src="https://img.shields.io/npm/v/create-skateboard-app?color=green" alt="npm version">
-    </a>
-  </p>
 
 ## 🎬 Demo
 
@@ -242,12 +231,7 @@ That's it! The shell handles routing, auth, layout, landing page, sign in/up, se
 
 ## 🚀 Deployment
 
-See the [Deployment Guide](docs/DEPLOY.md) for step-by-step instructions:
-
-- **Vercel** - Deploy both frontend and backend together (recommended)
-- **Render** - Separate frontend and backend services
-- **Netlify + Railway** - Netlify frontend with Railway backend
-- **Docker** - Container deployment with included Dockerfile
+See the [Deployment Guide](docs/DEPLOY.md) for step-by-step instructions on deploying to your preferred platform.
 
 <br />
 
