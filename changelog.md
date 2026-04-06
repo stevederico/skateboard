@@ -1,5 +1,10 @@
 ## CHANGELOG
 
+2.34.0
+
+  Expand Skateboard skill
+  Clean changelog
+
 2.33.0
 
   Clean README standards
@@ -965,29 +970,3 @@
  switch to plugin-react-swc
  added tailwindcss
  removed eslint
-
-
-
-## To-Do
-- move init theme from settingsview to main 
-- PRD 
-- system prompts
-- iOS Support
-    - Delete Account
-    - Trigger IAP
-    - Swift Wrapper
-    - Guest Mode
-    - Restore Purchases
-    - Rate Us
-    - Native Share Sheet 
-    - Push Notifications 
-    - Subscription URL
-    - Event Listener
-    - Native Loading Indicator
-    - Subscriptions Legal Notice
-- Sheet Component
-- Chat Component
-- Recommendations Component
-- CRUD SDK
-- /premiumContent
-- credits-system -checkViews , viewRemain
