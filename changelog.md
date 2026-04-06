@@ -1,5 +1,9 @@
 ## CHANGELOG
 
+2.33.0
+
+  Clean README standards
+
 2.32.0
 
   AI-friendly robots.txt
