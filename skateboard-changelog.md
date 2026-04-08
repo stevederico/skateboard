@@ -1,5 +1,24 @@
 ## CHANGELOG
 
+<!--
+  This file is named `skateboard-changelog.md` (not `changelog.md`) because
+  skateboard is a boilerplate. Apps scaffolded via `create-skateboard-app`
+  inherit every file in this repo, so a file named `changelog.md` would
+  pollute each new app's changelog with skateboard's release history and
+  cause merge conflicts on every boilerplate upgrade.
+
+  Rules for maintainers of the skateboard repo itself:
+  - Record skateboard releases in THIS file, not `changelog.md`
+  - The project-level CLAUDE.md still references `CHANGELOG.md` generically
+    because it is copied into downstream apps; do not "fix" that reference
+  - Downstream apps create and maintain their own `changelog.md` on first commit
+-->
+
+2.35.0
+
+  Rename boilerplate changelog
+  Add AGENTS.md symlink
+
 2.34.0
 
   Expand Skateboard skill
