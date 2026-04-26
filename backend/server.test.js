@@ -464,3 +464,377 @@ describe('Authentication Flow', () => {
     });
   });
 });
+
+// ==== STRIPE WEBHOOK TESTS ====
+
+const noopLogger = {
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {}
+};
+
+/**
+ * Build a Hono app with /api/payment wired to the given stripe and db mocks.
+ * Mirrors the helper structure in server.js so refactors stay in lockstep.
+ */
+function createWebhookApp({ stripe, db, logger = noopLogger }) {
+  const webhookApp = new Hono();
+
+  async function resolveCustomerEmail(stripeID) {
+    const customer = await stripe.customers.retrieve(stripeID);
+    if (!customer?.email) {
+      logger.warn('Webhook: Customer has no email', { stripeID });
+      return null;
+    }
+    return customer.email.toLowerCase();
+  }
+
+  function buildSubscriptionPatch(stripeID, stripeSub) {
+    return {
+      stripeID,
+      expires: stripeSub.current_period_end,
+      status: stripeSub.status
+    };
+  }
+
+  async function applyUserPatch(email, $set) {
+    const user = await db.findUser({ email });
+    if (!user) {
+      logger.warn('Webhook: No user found for email', { email });
+      return false;
+    }
+    await db.updateUser({ email }, { $set });
+    return true;
+  }
+
+  webhookApp.post('/api/payment', async (c) => {
+    const signature = c.req.header('stripe-signature');
+    const rawBody = await c.req.arrayBuffer();
+    const body = Buffer.from(rawBody);
+
+    let event;
+    try {
+      event = await stripe.webhooks.constructEventAsync(body, signature, 'test-secret');
+    } catch (e) {
+      return c.body(null, 400);
+    }
+
+    try {
+      const existingEvent = await db.findWebhookEvent(event.id);
+      if (existingEvent) return c.body(null, 200);
+      await db.insertWebhookEvent(event.id, event.type, Date.now());
+
+      const eventObject = event.data.object;
+
+      if (['customer.subscription.deleted', 'customer.subscription.updated', 'customer.subscription.created'].includes(event.type)) {
+        const { customer: stripeID, current_period_end, status } = eventObject;
+        if (!stripeID) return c.body(null, 400);
+        const email = await resolveCustomerEmail(stripeID);
+        if (!email) return c.body(null, 400);
+        await applyUserPatch(email, { subscription: { stripeID, expires: current_period_end, status } });
+      }
+
+      if (event.type === 'checkout.session.completed') {
+        const { customer: stripeID, customer_email, subscription: subscriptionId } = eventObject;
+        if (subscriptionId && stripeID) {
+          const [subscription, email] = await Promise.all([
+            stripe.subscriptions.retrieve(subscriptionId),
+            customer_email ? Promise.resolve(customer_email.toLowerCase()) : resolveCustomerEmail(stripeID)
+          ]);
+          if (email) {
+            await applyUserPatch(email, { subscription: buildSubscriptionPatch(stripeID, subscription) });
+          }
+        }
+      }
+
+      if (event.type === 'invoice.paid') {
+        const { customer: stripeID, subscription: subscriptionId } = eventObject;
+        if (subscriptionId && stripeID) {
+          const [subscription, email] = await Promise.all([
+            stripe.subscriptions.retrieve(subscriptionId),
+            resolveCustomerEmail(stripeID)
+          ]);
+          if (email) {
+            await applyUserPatch(email, { subscription: buildSubscriptionPatch(stripeID, subscription) });
+          }
+        }
+      }
+
+      if (event.type === 'invoice.payment_failed') {
+        const { customer: stripeID } = eventObject;
+        if (stripeID) {
+          const email = await resolveCustomerEmail(stripeID);
+          if (email) {
+            await applyUserPatch(email, {
+              'subscription.paymentFailed': true,
+              'subscription.paymentFailedAt': Date.now()
+            });
+          }
+        }
+      }
+
+      return c.body(null, 200);
+    } catch (e) {
+      return c.body(null, 500);
+    }
+  });
+
+  return webhookApp;
+}
+
+/**
+ * Stub builder that records every call so tests can assert on them.
+ */
+function spy(impl = () => {}) {
+  const calls = [];
+  const fn = async (...args) => {
+    calls.push(args);
+    return impl(...args);
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+async function postWebhook(webhookApp, body = '{}', signature = 'test-sig') {
+  const req = new Request('http://localhost/api/payment', {
+    method: 'POST',
+    headers: { 'stripe-signature': signature, 'Content-Type': 'application/json' },
+    body
+  });
+  return webhookApp.fetch(req);
+}
+
+describe('Stripe Webhook', () => {
+  it('returns 400 when signature verification fails', async () => {
+    const stripe = {
+      webhooks: { constructEventAsync: spy(() => { throw new Error('bad sig'); }) },
+      customers: { retrieve: spy() },
+      subscriptions: { retrieve: spy() }
+    };
+    const db = {
+      findWebhookEvent: spy(),
+      insertWebhookEvent: spy(),
+      findUser: spy(),
+      updateUser: spy()
+    };
+    const app = createWebhookApp({ stripe, db });
+    const res = await postWebhook(app);
+    assert.equal(res.status, 400);
+    assert.equal(db.findWebhookEvent.calls.length, 0);
+  });
+
+  it('skips and returns 200 when event already processed (idempotency)', async () => {
+    const stripe = {
+      webhooks: { constructEventAsync: spy(() => ({ id: 'evt_123', type: 'invoice.paid', data: { object: {} } })) },
+      customers: { retrieve: spy() },
+      subscriptions: { retrieve: spy() }
+    };
+    const db = {
+      findWebhookEvent: spy(() => ({ id: 'evt_123' })),
+      insertWebhookEvent: spy(),
+      findUser: spy(),
+      updateUser: spy()
+    };
+    const app = createWebhookApp({ stripe, db });
+    const res = await postWebhook(app);
+    assert.equal(res.status, 200);
+    assert.equal(db.insertWebhookEvent.calls.length, 0);
+    assert.equal(db.updateUser.calls.length, 0);
+  });
+
+  it('records event before processing to prevent races', async () => {
+    const order = [];
+    const stripe = {
+      webhooks: { constructEventAsync: spy(() => ({
+        id: 'evt_1',
+        type: 'customer.subscription.updated',
+        data: { object: { customer: 'cus_1', current_period_end: 1700000000, status: 'active' } }
+      })) },
+      customers: { retrieve: async () => { order.push('customer.retrieve'); return { email: 'a@b.com' }; } },
+      subscriptions: { retrieve: spy() }
+    };
+    const db = {
+      findWebhookEvent: spy(),
+      insertWebhookEvent: async (...a) => { order.push('insertWebhookEvent'); },
+      findUser: async () => { order.push('findUser'); return { _id: 'u1' }; },
+      updateUser: async () => { order.push('updateUser'); }
+    };
+    const app = createWebhookApp({ stripe, db });
+    await postWebhook(app);
+    assert.equal(order[0], 'insertWebhookEvent', 'event must be recorded before any user mutation');
+  });
+
+  describe('customer.subscription.* events', () => {
+    function setup({ customerEmail = 'user@example.com', userExists = true } = {}) {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_sub_1',
+          type: 'customer.subscription.updated',
+          data: { object: { customer: 'cus_42', current_period_end: 1800000000, status: 'active' } }
+        })) },
+        customers: { retrieve: spy(() => customerEmail ? { email: customerEmail } : { email: null }) },
+        subscriptions: { retrieve: spy() }
+      };
+      const db = {
+        findWebhookEvent: spy(() => null),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => userExists ? { _id: 'u1', email: customerEmail.toLowerCase() } : null),
+        updateUser: spy()
+      };
+      return { stripe, db, app: createWebhookApp({ stripe, db }) };
+    }
+
+    it('updates user subscription on customer.subscription.updated', async () => {
+      const { db, app } = setup();
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(db.updateUser.calls.length, 1);
+      const [, patch] = db.updateUser.calls[0];
+      assert.deepEqual(patch.$set.subscription, {
+        stripeID: 'cus_42',
+        expires: 1800000000,
+        status: 'active'
+      });
+    });
+
+    it('normalizes email to lowercase before lookup', async () => {
+      const { db, app } = setup({ customerEmail: 'Mixed@Case.COM' });
+      await postWebhook(app);
+      assert.equal(db.findUser.calls[0][0].email, 'mixed@case.com');
+    });
+
+    it('returns 400 when customer ID is missing', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_x',
+          type: 'customer.subscription.created',
+          data: { object: { current_period_end: 1, status: 'active' } }
+        })) },
+        customers: { retrieve: spy() },
+        subscriptions: { retrieve: spy() }
+      };
+      const db = { findWebhookEvent: spy(), insertWebhookEvent: spy(), findUser: spy(), updateUser: spy() };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 400);
+      assert.equal(db.updateUser.calls.length, 0);
+    });
+
+    it('returns 400 when stripe customer has no email', async () => {
+      const { db, app } = setup({ customerEmail: '' });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 400);
+      assert.equal(db.updateUser.calls.length, 0);
+    });
+
+    it('returns 200 and does not patch when user is unknown', async () => {
+      const { db, app } = setup({ userExists: false });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(db.updateUser.calls.length, 0);
+    });
+  });
+
+  describe('checkout.session.completed', () => {
+    it('uses customer_email when present without fetching customer', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_co_1',
+          type: 'checkout.session.completed',
+          data: { object: { customer: 'cus_1', customer_email: 'Buyer@Test.com', subscription: 'sub_1' } }
+        })) },
+        customers: { retrieve: spy() },
+        subscriptions: { retrieve: spy(() => ({ current_period_end: 1900000000, status: 'active' })) }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u1' })),
+        updateUser: spy()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(stripe.customers.retrieve.calls.length, 0, 'should not fetch customer when email is on the event');
+      assert.equal(db.findUser.calls[0][0].email, 'buyer@test.com');
+      assert.equal(db.updateUser.calls[0][1].$set.subscription.stripeID, 'cus_1');
+    });
+
+    it('falls back to fetching customer when customer_email is missing', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_co_2',
+          type: 'checkout.session.completed',
+          data: { object: { customer: 'cus_2', subscription: 'sub_2' } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'fetched@example.com' })) },
+        subscriptions: { retrieve: spy(() => ({ current_period_end: 1, status: 'active' })) }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u2' })),
+        updateUser: spy()
+      };
+      const app = createWebhookApp({ stripe, db });
+      await postWebhook(app);
+      assert.equal(stripe.customers.retrieve.calls.length, 1);
+      assert.equal(db.updateUser.calls[0][0].email, 'fetched@example.com');
+    });
+  });
+
+  describe('invoice.paid', () => {
+    it('updates subscription expiry and status', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_inv_1',
+          type: 'invoice.paid',
+          data: { object: { customer: 'cus_3', subscription: 'sub_3' } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'pay@example.com' })) },
+        subscriptions: { retrieve: spy(() => ({ current_period_end: 2000000000, status: 'active' })) }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u3' })),
+        updateUser: spy()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.deepEqual(db.updateUser.calls[0][1].$set.subscription, {
+        stripeID: 'cus_3',
+        expires: 2000000000,
+        status: 'active'
+      });
+    });
+  });
+
+  describe('invoice.payment_failed', () => {
+    it('marks the user as paymentFailed without changing subscription status', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_fail_1',
+          type: 'invoice.payment_failed',
+          data: { object: { customer: 'cus_9' } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'fail@example.com' })) },
+        subscriptions: { retrieve: spy() }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u9' })),
+        updateUser: spy()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      const [, patch] = db.updateUser.calls[0];
+      assert.equal(patch.$set['subscription.paymentFailed'], true);
+      assert.ok(typeof patch.$set['subscription.paymentFailedAt'] === 'number');
+    });
+  });
+});

@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.41.0
+
+  Cover webhook handler
+
 2.40.0
 
   Bump bcryptjs major
