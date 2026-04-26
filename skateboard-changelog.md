@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.40.0
+
+  Bump bcryptjs major
+
 2.39.0
 
   Split DataTable component
