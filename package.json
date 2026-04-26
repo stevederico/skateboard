@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "2.36.0",
-  "skateboardVersion": "2.36.0",
+  "version": "2.37.0",
+  "skateboardVersion": "2.37.0",
   "type": "module",
   "workspaces": [
     "backend"
@@ -22,13 +22,13 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@stevederico/skateboard-ui": "2.22.0",
     "@tanstack/react-table": "^8.21.3",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react-swc": "^4.1.0",
+    "@vitejs/plugin-react-swc": "^4.3.0",
     "tailwindcss": "^4.1.14",
     "vite": "^7.1.10"
   }

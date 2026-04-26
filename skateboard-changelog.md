@@ -14,6 +14,11 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.37.0
+
+  Bump frontend patches
+  Bump backend patches
+
 2.36.0
 
   Remove rate limiter
