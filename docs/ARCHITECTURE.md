@@ -1039,7 +1039,6 @@ deno install npm:@stevederico/skateboard-ui@latest
 The default configuration uses in-memory stores:
 
 ```javascript
-const rateLimitStore = new Map();  // Rate limiting
 const csrfTokenStore = new Map();  // CSRF tokens
 ```
 
