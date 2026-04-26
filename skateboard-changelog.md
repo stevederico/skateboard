@@ -14,6 +14,11 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.42.0
+
+  Bump skateboard-ui major
+  Declare direct deps
+
 2.41.0
 
   Cover webhook handler
