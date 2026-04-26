@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "2.38.0",
-  "skateboardVersion": "2.38.0",
+  "version": "2.39.0",
+  "skateboardVersion": "2.39.0",
   "type": "module",
   "workspaces": [
     "backend"

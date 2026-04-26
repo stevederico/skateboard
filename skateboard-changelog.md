@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.39.0
+
+  Split DataTable component
+
 2.38.0
 
   Refactor webhook handler
