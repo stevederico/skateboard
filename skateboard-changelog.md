@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.38.0
+
+  Refactor webhook handler
+
 2.37.0
 
   Bump frontend patches
