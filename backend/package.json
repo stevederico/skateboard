@@ -14,9 +14,9 @@
         "@hono/node-server": "^1.14.1",
         "bcryptjs": "^2.4.3",
         "hono": "^4.7.11",
-        "jsonwebtoken": "^9.0.2",
+        "jsonwebtoken": "^9.0.3",
         "mongodb": "^6.19.0",
-        "pg": "^8.16.3",
+        "pg": "^8.20.0",
         "stripe": "^18.5.0"
     }
 }
