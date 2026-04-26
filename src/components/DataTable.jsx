@@ -42,7 +42,6 @@ import {
 } from "@tanstack/react-table"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { toast } from "sonner"
-import { z } from "zod"
 
 import { useIsMobile } from "@stevederico/skateboard-ui/shadcn/hooks/use-mobile"
 import { Badge } from "@stevederico/skateboard-ui/shadcn/ui/badge"
@@ -95,16 +94,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@stevederico/skateboard-ui/shadcn/ui/tabs"
-
-export const schema = z.object({
-  id: z.number(),
-  header: z.string(),
-  type: z.string(),
-  status: z.string(),
-  target: z.string(),
-  limit: z.string(),
-  reviewer: z.string(),
-})
 
 function DragHandle({ id }) {
   const { attributes, listeners } = useSortable({
@@ -182,7 +171,7 @@ const columns = [
     cell: ({ row }) => (
       <Badge variant="outline" className="text-muted-foreground px-1.5">
         {row.original.status === "Done" ? (
-          <CircleCheckBig className="fill-green-500 dark:fill-green-400" />
+          <CircleCheckBig className="fill-green-500" />
         ) : (
           <Loader />
         )}
@@ -208,7 +197,7 @@ const columns = [
           Target
         </Label>
         <Input
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-16 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
+          className="hover:bg-input/30 focus-visible:bg-input/30 h-8 w-16 border-transparent bg-transparent text-right shadow-none focus-visible:border"
           defaultValue={row.original.target}
           id={`${row.original.id}-target`}
         />
@@ -233,7 +222,7 @@ const columns = [
           Limit
         </Label>
         <Input
-          className="hover:bg-input/30 focus-visible:bg-background dark:hover:bg-input/30 dark:focus-visible:bg-input/30 h-8 w-16 border-transparent bg-transparent text-right shadow-none focus-visible:border dark:bg-transparent"
+          className="hover:bg-input/30 focus-visible:bg-input/30 h-8 w-16 border-transparent bg-transparent text-right shadow-none focus-visible:border"
           defaultValue={row.original.limit}
           id={`${row.original.id}-limit`}
         />

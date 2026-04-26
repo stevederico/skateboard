@@ -14,6 +14,14 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.36.0
+
+  Remove rate limiter
+  Cleanup style overrides
+  Drop unused schema
+  Fix usage error toast
+  Sync UI version
+
 2.35.0
 
   Rename boilerplate changelog

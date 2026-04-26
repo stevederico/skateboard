@@ -7,6 +7,7 @@ import { useUser, useDispatch } from '@stevederico/skateboard-ui/Context';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Card, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
+import { toast } from "sonner";
 
 /**
  * Chat view component with usage tracking and typing indicator
@@ -58,7 +59,7 @@ export default function ChatView() {
   useEffect(() => {
     getRemainingUsage('messages')
       .then(setUsageInfo)
-      .catch((error) => console.error('Error fetching usage:', error))
+      .catch(() => toast.error("Couldn't load usage"))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -118,7 +119,7 @@ export default function ChatView() {
         onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet(upgradeSheetRef) : undefined}
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex flex-col flex-1 overflow-y-auto p-6 gap-4">
         {messages.map(msg => (
           <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-sm ${msg.isMe ? 'items-end' : 'items-start'} flex flex-col`}>
@@ -140,7 +141,7 @@ export default function ChatView() {
           <div className="flex justify-start">
             <Card className="py-0 gap-0 shadow-none ring-0 bg-accent rounded-bl-sm">
               <CardContent className="px-4 py-2.5">
-                <div className="flex space-x-1.5">
+                <div className="flex gap-1.5">
                   <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce motion-reduce:animate-none"></div>
                   <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: '0.15s' }}></div>
                   <div className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce motion-reduce:animate-none" style={{ animationDelay: '0.3s' }}></div>
