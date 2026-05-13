@@ -263,7 +263,7 @@ export default defineConfig({
     drop: []
   },
   resolve: {
-    dedupe: ['react', 'react-dom'],
+    dedupe: ['react', 'react-dom', 'react-router-dom', 'react-router'],
     alias: {
       '@': path.resolve(process.cwd(), './src'),
       '@package': path.resolve(process.cwd(), 'package.json'),

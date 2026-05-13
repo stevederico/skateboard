@@ -14,6 +14,49 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+3.0.0
+
+  Bump skateboard-ui to 3.0
+  Drop 8 frontend deps
+  Backend db drivers opt-in
+  Pin direct deps
+  Track lockfiles in git
+  Add update-skateboard script
+  Add CalendarTestView QA page
+
+  Breaking: requires skateboard-ui 3.0 (vendored icons + recreated primitives).
+  Existing apps need: deno install --reload + run scripts/update-skateboard.js.
+
+2.48.0
+
+  Add CalendarTestView QA page
+
+2.47.0
+
+  Use Dialog for ChatView errors
+
+2.46.0
+
+  Track lockfiles in git
+
+2.45.0
+
+  Add update-skateboard script
+
+2.44.0
+
+  Bump skateboard-ui major
+  Drop lucide-react dep
+  Use vendored icons
+
+2.43.0
+
+  Drop table demo
+  Drop chart demo
+  Drop sonner
+  Make db drivers opt-in
+  Lazy-load db adapters
+
 2.42.0
 
   Bump skateboard-ui major

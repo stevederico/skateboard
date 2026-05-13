@@ -1,7 +1,7 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
-import { LayoutDashboard, Plus } from 'lucide-react';
+import { LayoutDashboard, Plus } from '@stevederico/skateboard-ui/icons';
 
 /**
  * Blank view template component

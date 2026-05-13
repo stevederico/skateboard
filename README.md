@@ -179,6 +179,21 @@ The default configuration uses in-memory stores for rate limiting and CSRF token
 
 See [Architecture Documentation](docs/ARCHITECTURE.md#scaling) for details.
 
+## 🪶 Dependency Footprint
+
+Skateboard is intentionally lean. As of v3.0:
+
+| | Frontend runtime | Frontend dev | Backend runtime |
+|---|---|---|---|
+| Before (v2.x) | 12 | 4 | 7 |
+| **Now (v3.0)** | **4** | **4** | **5** |
+
+Backend `pg` and `mongodb` are no longer hard deps — `create-skateboard-app` injects only the driver you pick at scaffold time, and the adapter manager lazy-loads them so SQLite-only installs never resolve the others.
+
+The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui), which itself dropped from 15 deps to 3 hard + 4 optional peer deps in v3.0 (lucide-react, cmdk, sonner, next-themes, class-variance-authority, clsx, react-day-picker, tailwindcss-animate were all recreated or vendored in-house).
+
+<br />
+
 ## 🏗️ Tech Stack
 
 Built with the latest and greatest:
@@ -186,7 +201,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v2.22+ | Application Shell, Components, Theming |
+| **skateboard-ui** | v3.0+ | Application Shell, Components, Theming |
 | **Vite** | v7.1+ | Build Tool & Dev Server |
 | **Tailwind CSS** | v4.1+ | Styling |
 | **React Router** | v7.9+ | Routing |
@@ -232,6 +247,19 @@ That's it! The shell handles routing, auth, layout, landing page, sign in/up, se
 ## 🚀 Deployment
 
 See the [Deployment Guide](docs/DEPLOY.md) for step-by-step instructions on deploying to your preferred platform.
+
+<br />
+
+## ⬆️ Updating from a Newer Boilerplate
+
+Apps scaffolded from skateboard can pull in upstream boilerplate updates with:
+
+```bash
+node scripts/update-skateboard.js          # interactive — diff per file
+node scripts/update-skateboard.js --yes    # apply all without prompts
+```
+
+Updates only files in the safe allowlist (`backend/server.js`, `backend/adapters/*`, `vite.config.js`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
 
 <br />
 
