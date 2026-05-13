@@ -8,7 +8,7 @@ import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Card, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
 import { Alert, AlertTitle, AlertDescription } from '@stevederico/skateboard-ui/shadcn/ui/alert';
-import { CircleAlert, X } from 'lucide-react';
+import { CircleAlert, X } from '@stevederico/skateboard-ui/icons';
 
 /**
  * Chat view component with usage tracking and typing indicator
