@@ -14,6 +14,12 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.44.0
+
+  Bump skateboard-ui major
+  Drop lucide-react dep
+  Use vendored icons
+
 2.43.0
 
   Drop table demo
