@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.48.0
+
+  Add CalendarTestView QA page
+
 2.47.0
 
   Use Dialog for ChatView errors
