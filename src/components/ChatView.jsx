@@ -7,8 +7,7 @@ import { useUser, useDispatch } from '@stevederico/skateboard-ui/Context';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Card, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
-import { Alert, AlertTitle, AlertDescription } from '@stevederico/skateboard-ui/shadcn/ui/alert';
-import { CircleAlert, X } from '@stevederico/skateboard-ui/icons';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@stevederico/skateboard-ui/shadcn/ui/dialog';
 
 /**
  * Chat view component with usage tracking and typing indicator
@@ -121,22 +120,19 @@ export default function ChatView() {
         onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet(upgradeSheetRef) : undefined}
       />
 
+      <Dialog open={!!usageError} onOpenChange={(open) => !open && setUsageError(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Something went wrong</DialogTitle>
+            <DialogDescription>{usageError}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setUsageError(null)}>Dismiss</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-col flex-1 overflow-y-auto p-6 gap-4">
-        {usageError && (
-          <Alert variant="destructive" role="alert" className="relative pr-10">
-            <CircleAlert size={16} />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{usageError}</AlertDescription>
-            <button
-              type="button"
-              aria-label="Dismiss error"
-              onClick={() => setUsageError(null)}
-              className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground hover:text-foreground"
-            >
-              <X size={16} />
-            </button>
-          </Alert>
-        )}
         {messages.map(msg => (
           <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-sm ${msg.isMe ? 'items-end' : 'items-start'} flex flex-col`}>
