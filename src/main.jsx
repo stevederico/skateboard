@@ -27,6 +27,7 @@ const HomeView = lazy(() => import('./components/HomeView.jsx'));
 import ChatView from './components/ChatView.jsx';
 import BlankView from './components/BlankView.jsx';
 import CalendarTestView from './components/CalendarTestView.jsx';
+import LandingSpecSheet from './components/LandingSpecSheet.jsx';
 
 /**
  * App layout with global command menu overlay.
@@ -81,6 +82,7 @@ createSkateboardApp({
   constants,
   appRoutes,
   defaultRoute: 'home',
+  landingPage: <LandingSpecSheet />,
   overrides: { layout: AppLayout }
 });
 
