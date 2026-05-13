@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.46.0
+
+  Track lockfiles in git
+
 2.45.0
 
   Add update-skateboard script
