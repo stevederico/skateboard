@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.47.0
+
+  Use Dialog for ChatView errors
+
 2.46.0
 
   Track lockfiles in git
