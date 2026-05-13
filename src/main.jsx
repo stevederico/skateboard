@@ -14,9 +14,6 @@
  * - Route configuration
  * - App constants
  *
- * HomeView is lazy-loaded via React.lazy to code-split heavy dependencies
- * (recharts, @tanstack/react-table, @dnd-kit, zod) out of the initial bundle.
- *
  * @see {@link https://github.com/stevederico/skateboard|Skateboard Docs}
  */
 import './assets/styles.css';

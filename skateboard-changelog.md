@@ -14,6 +14,14 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+2.43.0
+
+  Drop table demo
+  Drop chart demo
+  Drop sonner
+  Make db drivers opt-in
+  Lazy-load db adapters
+
 2.42.0
 
   Bump skateboard-ui major
