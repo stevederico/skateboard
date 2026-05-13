@@ -1,6 +1,4 @@
 import { SQLiteProvider } from './sqlite.js';
-import { PostgreSQLProvider } from './postgres.js';
-import { MongoDBProvider } from './mongodb.js';
 
 /**
  * Database manager implementing factory pattern for multi-database support
@@ -41,13 +39,17 @@ class DatabaseManager {
           provider = new SQLiteProvider();
           break;
         case 'postgresql':
-        case 'postgres':
+        case 'postgres': {
+          const { PostgreSQLProvider } = await import('./postgres.js');
           provider = new PostgreSQLProvider();
           break;
+        }
         case 'mongodb':
-        case 'mongo':
+        case 'mongo': {
+          const { MongoDBProvider } = await import('./mongodb.js');
           provider = new MongoDBProvider();
           break;
+        }
         default:
           throw new Error(`Unsupported database type: ${dbType}`);
       }
