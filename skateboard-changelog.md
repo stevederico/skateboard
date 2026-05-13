@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+3.1.1
+
+  Add react-router dep
+
 3.1.0
 
   Add LandingSpecSheet variant
