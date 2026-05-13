@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+3.1.3
+
+  Retarget migrate doc
+
 3.1.2
 
   Add MIGRATE-3.0 doc
