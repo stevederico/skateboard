@@ -14,9 +14,6 @@
  * - Route configuration
  * - App constants
  *
- * HomeView is lazy-loaded via React.lazy to code-split heavy dependencies
- * (recharts, @tanstack/react-table, @dnd-kit, zod) out of the initial bundle.
- *
  * @see {@link https://github.com/stevederico/skateboard|Skateboard Docs}
  */
 import './assets/styles.css';
@@ -29,6 +26,7 @@ import constants from './constants.json';
 const HomeView = lazy(() => import('./components/HomeView.jsx'));
 import ChatView from './components/ChatView.jsx';
 import BlankView from './components/BlankView.jsx';
+import CalendarTestView from './components/CalendarTestView.jsx';
 
 /**
  * App layout with global command menu overlay.
@@ -60,7 +58,8 @@ const appRoutes = [
   { path: 'chat', element: <ChatView /> },
   { path: 'analytics', element: <BlankView title="Analytics" description="Analytics will appear here once you have activity." buttonTitle="View Reports" /> },
   { path: 'projects', element: <BlankView title="Projects" description="Create your first project to get started." buttonTitle="Create Project" /> },
-  { path: 'team', element: <BlankView title="Team" description="Invite your first team member to start collaborating." buttonTitle="Invite Member" /> }
+  { path: 'team', element: <BlankView title="Team" description="Invite your first team member to start collaborating." buttonTitle="Invite Member" /> },
+  { path: 'calendar-test', element: <CalendarTestView /> }
 ];
 
 /**

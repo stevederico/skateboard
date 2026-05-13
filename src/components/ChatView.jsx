@@ -7,7 +7,7 @@ import { useUser, useDispatch } from '@stevederico/skateboard-ui/Context';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Card, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
-import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@stevederico/skateboard-ui/shadcn/ui/dialog';
 
 /**
  * Chat view component with usage tracking and typing indicator
@@ -43,6 +43,7 @@ export default function ChatView() {
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
+  const [usageError, setUsageError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const isUserSubscriber = usageInfo.isSubscriber
   const upgradeSheetRef = useRef();
@@ -59,7 +60,7 @@ export default function ChatView() {
   useEffect(() => {
     getRemainingUsage('messages')
       .then(setUsageInfo)
-      .catch(() => toast.error("Couldn't load usage"))
+      .catch(() => setUsageError("Couldn't load usage"))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -118,6 +119,18 @@ export default function ChatView() {
         buttonClass={!isUserSubscriber && usageInfo.remaining >= 0 ? "rounded-full w-10 h-10 flex items-center justify-center text-lg" : ""}
         onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet(upgradeSheetRef) : undefined}
       />
+
+      <Dialog open={!!usageError} onOpenChange={(open) => !open && setUsageError(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Something went wrong</DialogTitle>
+            <DialogDescription>{usageError}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setUsageError(null)}>Dismiss</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-col flex-1 overflow-y-auto p-6 gap-4">
         {messages.map(msg => (
