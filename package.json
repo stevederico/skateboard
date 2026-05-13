@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "3.1.0",
-  "skateboardVersion": "3.1.0",
+  "version": "3.1.1",
+  "skateboardVersion": "3.1.1",
   "type": "module",
   "workspaces": [
     "backend"
@@ -19,6 +19,7 @@
     "@stevederico/skateboard-ui": "^3.0.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "react-router": "7.15.0",
     "react-router-dom": "7.15.0"
   },
   "devDependencies": {
