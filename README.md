@@ -235,6 +235,19 @@ See the [Deployment Guide](docs/DEPLOY.md) for step-by-step instructions on depl
 
 <br />
 
+## ⬆️ Updating from a Newer Boilerplate
+
+Apps scaffolded from skateboard can pull in upstream boilerplate updates with:
+
+```bash
+node scripts/update-skateboard.js          # interactive — diff per file
+node scripts/update-skateboard.js --yes    # apply all without prompts
+```
+
+Updates only files in the safe allowlist (`backend/server.js`, `backend/adapters/*`, `vite.config.js`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
+
+<br />
+
 ## 🤝 Contributing
 
 We love contributions!
