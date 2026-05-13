@@ -14,6 +14,10 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+3.0.1
+
+  Add react-router dep
+
 3.0.0
 
   Bump skateboard-ui to 3.0
