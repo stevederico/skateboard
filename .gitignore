@@ -12,9 +12,6 @@ dist
 dist-ssr
 *.local
 
-deno.lock
-package-lock.json
-
 # Environment variables
 .env
 .env.local
