@@ -21,6 +21,9 @@ dist-ssr
 backend/.env
 
 .claude/
+.agent-browser/
+.playwright-mcp/
+deno.lock
 
 # Editor directories and files
 .vscode/*
