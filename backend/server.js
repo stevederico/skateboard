@@ -6,7 +6,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { secureHeaders } from 'hono/secure-headers'
 import { cors } from 'hono/cors'
 import Stripe from "stripe";
-import bcrypt from "bcryptjs";
+import { compare as legacyBcryptCompare } from "./vendor/legacy-bcrypt.js";
 import crypto from "crypto";
 
 import { databaseManager } from "./adapters/manager.js";
@@ -552,7 +552,7 @@ async function verifyPassword(password, stored) {
     return expected.length === candidate.length && crypto.timingSafeEqual(expected, candidate);
   }
   if (stored.startsWith('$2')) {
-    return await bcrypt.compare(password, stored);
+    return await legacyBcryptCompare(password, stored);
   }
   return false;
 }
