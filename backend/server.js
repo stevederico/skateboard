@@ -6,7 +6,6 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { secureHeaders } from 'hono/secure-headers'
 import { cors } from 'hono/cors'
 import Stripe from "stripe";
-import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -548,6 +547,56 @@ function tokenExpireTimestamp(){
 }
 
 /**
+ * Sign an HS256 JWT using node:crypto HMAC-SHA256
+ *
+ * Produces a token byte-compatible with jsonwebtoken: header
+ * {"alg":"HS256","typ":"JWT"} followed by the payload, joined and signed
+ * over `base64url(header).base64url(payload)`.
+ *
+ * @param {Object} payload - Payload to encode (must include exp)
+ * @param {string} secret - HMAC signing secret
+ * @returns {string} Compact JWT string
+ */
+function jwtSign(payload, secret) {
+  const head = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
+  return `${head}.${body}.${sig}`;
+}
+
+/**
+ * Verify an HS256 JWT and return its payload
+ *
+ * Compatible with tokens issued by jsonwebtoken (same algorithm, same secret).
+ * Throws an Error with name === 'TokenExpiredError' for expired tokens, or a
+ * generic Error for malformed/invalid signatures.
+ *
+ * @param {string} token - JWT string to verify
+ * @param {string} secret - HMAC verification secret
+ * @returns {Object} Decoded payload
+ * @throws {Error} If token is malformed, signature invalid, or expired
+ */
+function jwtVerify(token, secret) {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('Invalid token');
+  const [head, body, sig] = parts;
+  if (!head || !body || !sig) throw new Error('Invalid token');
+  const expected = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    throw new Error('Invalid signature');
+  }
+  const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+  if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
+    const err = new Error('Token expired');
+    err.name = 'TokenExpiredError';
+    throw err;
+  }
+  return payload;
+}
+
+/**
  * Generate JWT token for user authentication
  *
  * Creates HS256-signed JWT with 30-day expiration. Requires JWT_SECRET
@@ -567,10 +616,7 @@ async function generateToken(userID) {
     const exp = tokenExpireTimestamp();
     const payload = { userID, exp };
 
-    return jwt.sign(payload, JWT_SECRET, {
-      algorithm: 'HS256',
-      header: { alg: "HS256", typ: "JWT" }
-    });
+    return jwtSign(payload, JWT_SECRET);
   } catch (error) {
     logger.error('Token generation error', { error: error.message });
     throw error;
@@ -602,7 +648,7 @@ async function authMiddleware(c, next) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+    const payload = jwtVerify(token, JWT_SECRET);
     // Normalize userID to string for consistent Map key usage (CSRF, sessions)
     const normalizedUserID = String(payload.userID);
     c.set('userID', normalizedUserID);
