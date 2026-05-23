@@ -30,7 +30,7 @@ That's it, your app is now running at `http://localhost:5173` 🎉
 
 Everything you need to ship a production-ready app:
 
-### 🏗️ **Application Shell Architecture (v1.1)**
+### 🏗️ **Application Shell Architecture**
 - **95% less boilerplate** - Focus on features, not infrastructure
 - **Shell + Content + Config** - Framework provides structure, you provide content
 - **Update once, fix everywhere** - All apps inherit improvements from skateboard-ui
@@ -38,11 +38,11 @@ Everything you need to ship a production-ready app:
 - **Convention over configuration** - Sensible defaults with escape hatches everywhere
 
 ### 🔐 **Authentication & User Management**
-- **Sign up / Sign in** with JWT tokens
+- **Sign up / Sign in** with native HS256 JWT in HttpOnly cookies
 - **Protected routes** with automatic redirects
 - **User context** management across your app
 - **Session persistence** with secure cookies
-- **App-specific auth isolation**
+- **scrypt password hashing** via `node:crypto` (zero external deps)
 - **Usage tracking** with configurable limits for free users
 
 ### 💳 **Stripe Integration**
@@ -52,7 +52,7 @@ Everything you need to ship a production-ready app:
 - **Customer portal** integration
 
 ### 🎨 **Beautiful UI Components**
-- **50+ Shadcn/ui components** pre-configured
+- **Shadcn/ui components** via skateboard-ui
 - **Dark/Light mode** with system detection
 - **Mobile-ready design** with responsive sidebar and TabBar
 - **Landing page** that converts - fully customizable via constants.json
@@ -60,7 +60,7 @@ Everything you need to ship a production-ready app:
 - **Legal pages** (Terms, Privacy, EULA)
 
 ### 🛠️ **Developer Experience**
-- **Hot Module Replacement** with Vite 7.1+
+- **Hot Module Replacement** with Vite 7.3+
 - **Zero config** - just works out of the box
 - **Multi-database support** - SQLite (default), MongoDB, PostgreSQL
 - **constants.json** - customize everything in one place
@@ -70,10 +70,6 @@ Everything you need to ship a production-ready app:
 
 <br />
 
-
-
-
-
 ## 📖 Frontend Configuration
 
 Update `src/constants.json` to customize your app:
@@ -81,7 +77,7 @@ Update `src/constants.json` to customize your app:
 ```json
 {
   "appName": "Your App Name",
-  "tagline": "Your Tagline", 
+  "tagline": "Your Tagline",
   "cta": "Get Started"
 }
 ```
@@ -101,26 +97,25 @@ Update `src/constants.json` to customize your app:
 }
 ```
 
-Update to `backend/.env`:
+For Postgres or Mongo, point `connectionString` at the relevant env var:
 
 ```bash
-# Sqlite remove below
+# backend/.env
 MONGODB_URL=mongodb+srv://user:pass@example-cluster.example.net/
 POSTGRES_URL=postgresql://user:pass@example-hostname:5432/myapp
 ```
 
-**Auth Variables** - Update to `backend/.env`:
-enter a unique random string below
+**Auth Variables** - add to `backend/.env` (use a unique random string):
 
 ```bash
 JWT_SECRET=your-secret-key
-FREE_USAGE_LIMIT=20  # Optional: Monthly usage limit for free users (default: 20)
+FREE_USAGE_LIMIT=20  # Optional: monthly usage limit for free users (default: 20)
 ```
 
 **Supported Database Types:**
 - **SQLite** (default): `"dbType": "sqlite"`
 - **PostgreSQL**: `"dbType": "postgresql"` with `"connectionString": "${POSTGRES_URL}"`
-- **MongoDB**: `"dbType": "mongodb"` with `"connectionString": "${MONGODB_URL}"` with `"db": "SkateboardApp"`
+- **MongoDB**: `"dbType": "mongodb"` with `"connectionString": "${MONGODB_URL}"` and `"db": "SkateboardApp"`
 
 <br />
 
@@ -140,7 +135,7 @@ To enable payments, configure your Stripe products:
    ```bash
    STRIPE_KEY=sk_live_your_secret_key
    ```
-   
+
    **Security Note:** Use your secret key OR create a restricted key with these permissions:
    - **Read/Write:** Checkout Sessions
    - **Read:** Customers, Prices, Products
@@ -151,13 +146,14 @@ To enable payments, configure your Stripe products:
    - Add your endpoint URL: `https://yourdomain.com/payment`
    - Select these events:
      - `customer.subscription.created` - Customer signed up for new plan
-     - `customer.subscription.deleted` - Customer's subscription ends  
+     - `customer.subscription.deleted` - Customer's subscription ends
      - `customer.subscription.updated` - Subscription changes (plan switch, trial to active, etc.)
    - Copy the **Signing Secret** to your environment:
    ```bash
    STRIPE_ENDPOINT_SECRET=whsec_your_webhook_secret
    ```
 
+<br />
 
 ## 📈 Scaling Notes
 
@@ -170,18 +166,22 @@ The default configuration uses in-memory stores for rate limiting and CSRF token
 
 See [Guide → Architecture](docs/GUIDE.md#architecture) for details.
 
+<br />
+
 ## 🪶 Dependency Footprint
 
-Skateboard is intentionally lean. As of v3.0:
+Skateboard is intentionally lean. As of v3.1.7:
 
 | | Frontend runtime | Frontend dev | Backend runtime |
 |---|---|---|---|
 | Before (v2.x) | 12 | 4 | 7 |
-| **Now (v3.0)** | **4** | **4** | **5** |
+| **Now (v3.1.7)** | **4** | **4** | **3** |
 
-Backend `pg` and `mongodb` are no longer hard deps — `create-skateboard-app` injects only the driver you pick at scaffold time, and the adapter manager lazy-loads them so SQLite-only installs never resolve the others.
+Backend `jsonwebtoken` and `bcryptjs` were both dropped — JWT signing/verification now uses `node:crypto` HMAC, and password hashing uses `node:crypto` scrypt. Legacy bcrypt hashes from older versions still verify (vendored at `backend/vendor/legacy-bcrypt.js`) and are silently re-hashed to scrypt on next login.
 
-The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui), which itself dropped from 15 deps to 3 hard + 4 optional peer deps in v3.0 (lucide-react, cmdk, sonner, next-themes, class-variance-authority, clsx, react-day-picker, tailwindcss-animate were all recreated or vendored in-house).
+Backend `pg` and `mongodb` are not hard deps — `create-skateboard-app` injects only the driver you pick at scaffold time, and the adapter manager lazy-loads them so SQLite-only installs never resolve the others.
+
+The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui), which itself runs on a single hard dep (`@base-ui/react`) plus optional peer deps for heavy components users opt into.
 
 <br />
 
@@ -193,15 +193,14 @@ Built with the latest and greatest:
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
 | **skateboard-ui** | v3.0+ | Application Shell, Components, Theming |
-| **Vite** | v7.1+ | Build Tool & Dev Server |
-| **Tailwind CSS** | v4.1+ | Styling |
-| **React Router** | v7.9+ | Routing |
-| **Zod** | v4 | Validation |
-| **Hono** | v4+ | Backend Server |
+| **Vite** | v7.3+ | Build Tool & Dev Server |
+| **Tailwind CSS** | v4.3+ | Styling |
+| **React Router** | v7.15+ | Routing |
+| **Hono** | v4.7+ | Backend Server |
 | **Node.js** | v22+ | Runtime |
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
-| **Stripe** | Latest | Payments |
-| **JWT** | Latest | Authentication |
+| **Stripe** | v18+ | Payments |
+| **node:crypto** | built-in | JWT + scrypt password hashing |
 
 <br />
 
@@ -229,8 +228,7 @@ createSkateboardApp({ constants, appRoutes });
 
 That's it! The shell handles routing, auth, layout, landing page, sign in/up, settings, payment, and all legal pages.
 
-**Learn more:**
-- [Guide](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
+**Learn more:** [Guide](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 <br />
 
@@ -240,9 +238,9 @@ See [Guide → Deployment](docs/GUIDE.md#deployment) for step-by-step instructio
 
 <br />
 
-## ⬆️ Updating from a Newer Boilerplate
+## ⬆️ Updating Boilerplate Files
 
-Apps scaffolded from skateboard can pull in upstream boilerplate updates with:
+Apps scaffolded from Skateboard can pull in upstream boilerplate updates with:
 
 ```bash
 node scripts/update-skateboard.js          # interactive — diff per file
@@ -261,8 +259,8 @@ We love contributions!
 # Fork the repo, then:
 git clone https://github.com/YOUR_USERNAME/skateboard
 cd skateboard
-deno install
-deno run start
+npm install
+npm run start
 ```
 
 <br />
@@ -282,6 +280,7 @@ Built on the shoulders of giants:
 - [Vite](https://vitejs.dev) - Lightning fast build tool
 - [Tailwind CSS](https://tailwindcss.com) - Utility-first CSS
 - [Shadcn/ui](https://ui.shadcn.com) - Beautiful components
+- [Hono](https://hono.dev) - Lightweight web framework
 - [Stripe](https://stripe.com) - Payment infrastructure
 
 <br />
@@ -293,7 +292,6 @@ Built on the shoulders of giants:
 - [create-skateboard-app](https://github.com/stevederico/create-skateboard-app) - CLI tool
 
 <br />
-
 
 ## 🚀 Ready to Ship?
 
@@ -315,7 +313,7 @@ MIT License - use it however you want! See [LICENSE](LICENSE) for details.
   <p>
     Built with ❤️ by <a href="https://github.com/stevederico">Steve Derico</a> and contributors
   </p>
-  
+
   <p>
     <a href="https://github.com/stevederico/skateboard">⭐ Star us on GitHub</a> — it helps!
   </p>
