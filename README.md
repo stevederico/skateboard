@@ -60,7 +60,7 @@ Everything you need to ship a production-ready app:
 - **Legal pages** (Terms, Privacy, EULA)
 
 ### 🛠️ **Developer Experience**
-- **Hot Module Replacement** with Vite 7.3+
+- **Hot Module Replacement** with Vite 8
 - **Zero config** - just works out of the box
 - **Multi-database support** - SQLite (default), MongoDB, PostgreSQL
 - **constants.json** - customize everything in one place
@@ -170,12 +170,12 @@ See [Guide → Architecture](docs/GUIDE.md#architecture) for details.
 
 ## 🪶 Dependency Footprint
 
-Skateboard is intentionally lean. As of v3.1.7:
+Skateboard is intentionally lean. As of v3.3.0:
 
 | | Frontend runtime | Frontend dev | Backend runtime |
 |---|---|---|---|
 | Before (v2.x) | 12 | 4 | 7 |
-| **Now (v3.1.7)** | **4** | **4** | **3** |
+| **Now (v3.3.0)** | **4** | **4** | **3** |
 
 Backend `jsonwebtoken` and `bcryptjs` were both dropped — JWT signing/verification now uses `node:crypto` HMAC, and password hashing uses `node:crypto` scrypt. Legacy bcrypt hashes from older versions still verify (vendored at `backend/vendor/legacy-bcrypt.js`) and are silently re-hashed to scrypt on next login.
 
@@ -192,8 +192,8 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v3.0+ | Application Shell, Components, Theming |
-| **Vite** | v7.3+ | Build Tool & Dev Server |
+| **skateboard-ui** | v3.6+ | Application Shell, Components, Theming |
+| **Vite** | v8 | Build Tool & Dev Server (Oxc/Rolldown) |
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.15+ | Routing |
 | **Hono** | v4.7+ | Backend Server |
