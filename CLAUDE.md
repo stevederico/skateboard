@@ -603,12 +603,7 @@ When working with these libraries, consult the provided documentation before mak
 
 ## Documentation
 
-**Reference:**
-- [Architecture](docs/ARCHITECTURE.md) - Application Shell pattern, production config
-- [Migration](docs/MIGRATION.md) - Upgrade between versions
-- [Deployment](docs/DEPLOY.md) - Vercel, Render, Netlify, Docker
-- [API Reference](docs/API.md) - REST endpoint documentation
-- [Schema](docs/SCHEMA.md) - Database schema reference
+**Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
 - skateboard@2.42.0

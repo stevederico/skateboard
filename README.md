@@ -177,7 +177,7 @@ The default configuration uses in-memory stores for rate limiting and CSRF token
 - Move CSRF tokens to database or Redis
 - Use sticky sessions or shared session store
 
-See [Architecture Documentation](docs/ARCHITECTURE.md#scaling) for details.
+See [Guide → Architecture](docs/GUIDE.md#architecture) for details.
 
 ## 🪶 Dependency Footprint
 
@@ -207,7 +207,7 @@ Built with the latest and greatest:
 | **React Router** | v7.9+ | Routing |
 | **Zod** | v4 | Validation |
 | **Hono** | v4+ | Backend Server |
-| **Deno** | v2.6.8+ | Runtime |
+| **Node.js** | v22+ | Runtime |
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
 | **Stripe** | Latest | Payments |
 | **JWT** | Latest | Authentication |
@@ -239,14 +239,13 @@ createSkateboardApp({ constants, appRoutes });
 That's it! The shell handles routing, auth, layout, landing page, sign in/up, settings, payment, and all legal pages.
 
 **Learn more:**
-- [Architecture Documentation](docs/ARCHITECTURE.md) - Deep dive into the shell pattern
-- [Migration Guide](docs/MIGRATION.md) - Upgrade from any version
+- [Guide](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 <br />
 
 ## 🚀 Deployment
 
-See the [Deployment Guide](docs/DEPLOY.md) for step-by-step instructions on deploying to your preferred platform.
+See [Guide → Deployment](docs/GUIDE.md#deployment) for step-by-step instructions on deploying to your preferred platform.
 
 <br />
 
