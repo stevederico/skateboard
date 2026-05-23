@@ -314,6 +314,26 @@ export class SQLiteProvider {
   }
 
   /**
+   * Update authentication record (password only)
+   *
+   * @async
+   * @param {Database} db - SQLite database instance
+   * @param {Object} query - Query object with email
+   * @param {string} query.email - Email of auth record to update
+   * @param {Object} update - Fields to update
+   * @param {string} update.password - New password hash
+   * @returns {Promise<{modifiedCount: number}>} Number of modified rows
+   */
+  async updateAuth(db, query, update) {
+    const { email } = query;
+    const { password } = update;
+    if (typeof password !== 'string') return { modifiedCount: 0 };
+    const sql = "UPDATE Auths SET password = ? WHERE email = ?";
+    const result = db.prepare(sql).run(password, email);
+    return { modifiedCount: result.changes };
+  }
+
+  /**
    * Find webhook event by event ID for idempotency check
    *
    * @async

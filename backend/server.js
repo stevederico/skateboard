@@ -437,6 +437,7 @@ const db = {
   updateUser: (query, update) => databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query, update),
   findAuth: (query) => databaseManager.findAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query),
   insertAuth: (authData) => databaseManager.insertAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, authData),
+  updateAuth: (query, update) => databaseManager.updateAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query, update),
   findWebhookEvent: (eventId) => databaseManager.findWebhookEvent(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, eventId),
   insertWebhookEvent: (eventId, eventType, processedAt) => databaseManager.insertWebhookEvent(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, eventId, eventType, processedAt),
   executeQuery: (queryObject) => databaseManager.executeQuery(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, queryObject)
@@ -509,32 +510,61 @@ app.use('*', async (c, next) => {
 
 const tokenExpirationDays = 30;
 
+const scryptAsync = promisify(crypto.scrypt);
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_SALTLEN = 16;
+
 /**
- * Hash password using bcrypt with 10 salt rounds
+ * Hash password using node:crypto scrypt
  *
- * Generates salt and hashes password for secure storage. Uses bcrypt's
- * automatic salt generation.
+ * Format: `scrypt$<base64url salt>$<base64url key>`. New hashes always use
+ * scrypt; legacy bcrypt hashes (prefix `$2`) are verified via the dispatch
+ * in verifyPassword but never created.
  *
  * @async
  * @param {string} password - Plain text password to hash
- * @returns {Promise<string>} Bcrypt hashed password
- * @throws {Error} If bcrypt hashing fails
+ * @returns {Promise<string>} Scrypt hash string
  */
 async function hashPassword(password) {
-  const salt = await bcrypt.genSalt(10);
-  return await bcrypt.hash(password, salt);
+  const salt = crypto.randomBytes(SCRYPT_SALTLEN);
+  const key = await scryptAsync(password, salt, SCRYPT_KEYLEN);
+  return `scrypt$${salt.toString('base64url')}$${key.toString('base64url')}`;
 }
 
 /**
- * Verify password against bcrypt hash using timing-safe comparison
+ * Verify password against stored hash (scrypt or legacy bcrypt)
+ *
+ * Dispatches on stored hash prefix: `scrypt$` → native scrypt verify;
+ * `$2` → bcryptjs (legacy users predating the scrypt migration).
  *
  * @async
  * @param {string} password - Plain text password to verify
- * @param {string} hash - Bcrypt hash to compare against
- * @returns {Promise<boolean>} True if password matches hash
+ * @param {string} stored - Stored hash (scrypt or bcrypt format)
+ * @returns {Promise<boolean>} True if password matches stored hash
  */
-async function verifyPassword(password, hash) {
-  return await bcrypt.compare(password, hash);
+async function verifyPassword(password, stored) {
+  if (typeof stored !== 'string') return false;
+  if (stored.startsWith('scrypt$')) {
+    const [, saltB64, keyB64] = stored.split('$');
+    const salt = Buffer.from(saltB64, 'base64url');
+    const expected = Buffer.from(keyB64, 'base64url');
+    const candidate = await scryptAsync(password, salt, SCRYPT_KEYLEN);
+    return expected.length === candidate.length && crypto.timingSafeEqual(expected, candidate);
+  }
+  if (stored.startsWith('$2')) {
+    return await bcrypt.compare(password, stored);
+  }
+  return false;
+}
+
+/**
+ * Whether a stored hash should be migrated to scrypt on next successful login
+ *
+ * @param {string} stored - Stored hash
+ * @returns {boolean} True if the hash is in legacy bcrypt format
+ */
+function needsRehash(stored) {
+  return typeof stored === 'string' && !stored.startsWith('scrypt$');
 }
 
 /**
@@ -1062,6 +1092,17 @@ app.post("/api/signin", async (c) => {
       logger.debug('Password verification failed');
       recordFailedLogin(email);
       return c.json({ error: "Invalid credentials" }, 401);
+    }
+
+    // Lazy migrate legacy bcrypt hash to scrypt (best-effort, never blocks login)
+    if (needsRehash(auth.password)) {
+      try {
+        const newHash = await hashPassword(password);
+        await db.updateAuth({ email }, { password: newHash });
+        logger.debug('Password hash migrated to scrypt');
+      } catch (e) {
+        logger.warn('Password rehash failed', { error: e.message });
+      }
     }
 
     // Get user
