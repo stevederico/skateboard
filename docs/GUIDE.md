@@ -1,14 +1,27 @@
-# Skateboard Architecture Documentation
+# Skateboard Guide
 
-## Overview
+Complete reference for the Skateboard boilerplate. Quick links:
+
+- [Architecture](#architecture) — Application Shell pattern, structure, scaling
+- [API Reference](#api-reference) — REST endpoints
+- [Database Schema](#database-schema) — Tables, fields, multi-DB adapters
+- [Deployment](#deployment) — Vercel, Render, Netlify, Docker
+- [Migration](#migration) — Upgrade prompt for AI agents
+
+---
+
+## Architecture
+
+
+### Overview
 
 Skateboard uses an **Application Shell Architecture** (also known as **Inversion of Control** or **Template Method Pattern**), where the framework (skateboard-ui) provides the structure, and your app provides the content.
 
 **Philosophy**: "Convention over configuration with escape hatches everywhere"
 
-## Core Concept
+### Core Concept
 
-### Traditional React App Architecture
+#### Traditional React App Architecture
 
 ```
 ┌─────────────────────────────────────┐
@@ -27,7 +40,7 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 └─────────────────────────────────────┘
 ```
 
-### Skateboard Application Shell Architecture
+#### Skateboard Application Shell Architecture
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -74,9 +87,9 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 
 **Result**: Apps are just routes + components + config
 
-## Three-Part Architecture
+### Three-Part Architecture
 
-### 1. Shell (skateboard-ui package)
+#### 1. Shell (skateboard-ui package)
 
 **Exports**:
 - `Context` - User state management
@@ -94,7 +107,7 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 - Build configuration
 - Common utilities
 
-### 2. Content (your app)
+#### 2. Content (your app)
 
 **Files**:
 - `src/main.jsx` (~16 lines) - Route definitions
@@ -107,7 +120,7 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 - Create UI components
 - Handle app-specific data
 
-### 3. Config (constants.json)
+#### 3. Config (constants.json)
 
 **Structure**:
 ```json
@@ -137,9 +150,9 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 - Feature configuration
 - Legal content
 
-## File Structure Comparison
+### File Structure Comparison
 
-### Before (0.9.x)
+#### Before (0.9.x)
 
 ```
 my-app/
@@ -159,7 +172,7 @@ my-app/
 Total boilerplate: ~550 lines
 ```
 
-### After (1.0.0)
+#### After (1.0.0)
 
 ```
 my-app/
@@ -178,9 +191,9 @@ my-app/
 Total boilerplate: ~26 lines (95% reduction)
 ```
 
-## How It Works
+### How It Works
 
-### 1. Entry Point (main.jsx)
+#### 1. Entry Point (main.jsx)
 
 **What you write** (~16 lines):
 ```javascript
@@ -252,7 +265,7 @@ export function createSkateboardApp({ constants, appRoutes, defaultRoute }) {
 **You define**: Custom routes
 **Framework provides**: Everything else
 
-### 2. Context Management
+#### 2. Context Management
 
 **Import from skateboard-ui**:
 ```javascript
@@ -327,7 +340,7 @@ function MyComponent() {
 }
 ```
 
-### 3. Styling System
+#### 3. Styling System
 
 **App imports base theme**:
 ```css
@@ -356,7 +369,7 @@ function MyComponent() {
 }
 ```
 
-### 4. Build Configuration
+#### 4. Build Configuration
 
 Apps own their `vite.config.js` directly. skateboard-ui is a pure component library.
 
@@ -377,9 +390,9 @@ export default defineConfig({
 
 See the reference implementation for full config with SEO plugins: [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
 
-## API Reference
+### API Reference
 
-### createSkateboardApp(config)
+#### createSkateboardApp(config)
 
 Creates and mounts a complete Skateboard application.
 
@@ -418,13 +431,13 @@ createSkateboardApp({
 - `/app/payment` - Payment page
 - `/terms`, `/privacy`, `/eula`, `/subs` - Legal pages
 
-### Vite Configuration
+#### Vite Configuration
 
 Apps own their `vite.config.js`. Copy from the reference implementation and customize as needed.
 
 See: [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
 
-### Context API
+#### Context API
 
 **ContextProvider({ children, constants })**
 
@@ -442,7 +455,7 @@ const { state, dispatch } = getState();
 // dispatch({ type: 'CLEAR_USER' })
 ```
 
-### API Utilities
+#### API Utilities
 
 **apiRequest(endpoint, options)**
 
@@ -486,7 +499,7 @@ const results = await apiRequestWithParams('/search', {
 // Calls: /search?query=test&page=1&limit=10
 ```
 
-### React Hooks
+#### React Hooks
 
 **useListData(endpoint, sortFn?)**
 
@@ -551,7 +564,7 @@ return (
 }
 ```
 
-### Vite Config Utilities
+#### Vite Config Utilities
 
 Individual plugins available for custom configurations:
 
@@ -582,11 +595,11 @@ console.log(`🖥️  React is running on http://localhost:5173`);
 // Generates manifest.json for PWA from constants.json
 ```
 
-## Override Mechanisms
+### Override Mechanisms
 
 Every part of the shell can be overridden:
 
-### 1. Vite Configuration
+#### 1. Vite Configuration
 
 Apps own their `vite.config.js` - customize directly:
 
@@ -605,7 +618,7 @@ export default defineConfig({
 });
 ```
 
-### 2. Styles
+#### 2. Styles
 
 **Default** (inherit everything):
 ```css
@@ -634,7 +647,7 @@ export default defineConfig({
 /* Your complete custom theme */
 ```
 
-### 3. Components
+#### 3. Components
 
 **Default** (use skateboard-ui components):
 ```javascript
@@ -646,7 +659,7 @@ import Header from '@stevederico/skateboard-ui/Header';
 import Header from './components/CustomHeader';
 ```
 
-### 4. Routing
+#### 4. Routing
 
 **Default** (use createSkateboardApp):
 ```javascript
@@ -669,7 +682,7 @@ root.render(
 );
 ```
 
-### 5. Context
+#### 5. Context
 
 **Default** (use skateboard-ui Context):
 ```javascript
@@ -693,9 +706,9 @@ function MyContextProvider({ children }) {
 }
 ```
 
-## Best Practices
+### Best Practices
 
-### 1. Use Hooks for Data Fetching
+#### 1. Use Hooks for Data Fetching
 
 **Good** (use useListData):
 ```javascript
@@ -711,7 +724,7 @@ useEffect(() => {
 }, []);
 ```
 
-### 2. Use apiRequest for All API Calls
+#### 2. Use apiRequest for All API Calls
 
 **Good**:
 ```javascript
@@ -734,7 +747,7 @@ const response = await fetch(`${getBackendURL()}/deals`, {
 });
 ```
 
-### 3. Import Context from skateboard-ui
+#### 3. Import Context from skateboard-ui
 
 **Good**:
 ```javascript
@@ -746,7 +759,7 @@ import { getState } from '@stevederico/skateboard-ui/Context';
 import { getState } from '../context.jsx';
 ```
 
-### 4. Keep main.jsx Minimal
+#### 4. Keep main.jsx Minimal
 
 **Good** (just routes):
 ```javascript
@@ -762,7 +775,7 @@ createSkateboardApp({ constants, appRoutes });
 // Don't add business logic, API calls, or complex state here
 ```
 
-### 5. Override Only What You Need
+#### 5. Override Only What You Need
 
 **Good** (minimal override):
 ```javascript
@@ -776,9 +789,9 @@ export default getSkateboardViteConfig({
 // Don't duplicate the entire config, just override what changes
 ```
 
-## Extension Points
+### Extension Points
 
-### Adding Custom Middleware
+#### Adding Custom Middleware
 
 ```javascript
 // Not directly supported - extend at component level
@@ -788,7 +801,7 @@ function MyAuthWrapper({ children }) {
 }
 ```
 
-### Adding Custom Providers
+#### Adding Custom Providers
 
 Wrap ContextProvider:
 ```javascript
@@ -802,7 +815,7 @@ import { ThemeProvider } from './MyThemeProvider';
 </ContextProvider>
 ```
 
-### Adding Global State
+#### Adding Global State
 
 Use composition:
 ```javascript
@@ -825,43 +838,43 @@ const { state, dispatch } = getSkateboardState();  // Skateboard state
 const { myState } = useContext(MyContext);         // Your state
 ```
 
-## Benefits
+### Benefits
 
-### 1. Extreme Code Reduction
+#### 1. Extreme Code Reduction
 - **95% less boilerplate** per app
 - Focus on features, not infrastructure
 - Faster development
 
-### 2. Consistency Across Apps
+#### 2. Consistency Across Apps
 - Same patterns everywhere
 - Easier onboarding
 - Shared knowledge
 
-### 3. Centralized Updates
+#### 3. Centralized Updates
 - Fix bug once, all apps get fix
 - Add feature once, all apps can use it
 - Update dependencies once
 
-### 4. Flexibility
+#### 4. Flexibility
 - Override anything you need
 - Escape hatches everywhere
 - Not locked in
 
-### 5. Learning Curve
+#### 5. Learning Curve
 - Simple mental model
 - Less to learn
 - Faster ramp-up
 
-## Trade-offs
+### Trade-offs
 
-### Benefits
+#### Benefits
 ✅ 95% less boilerplate
 ✅ Centralized maintenance
 ✅ Consistency across apps
 ✅ Faster development
 ✅ Easy to learn
 
-### Considerations
+#### Considerations
 ⚠️ Less explicit (magic happens in package)
 ⚠️ Debugging requires understanding package
 ⚠️ Breaking changes in package affect all apps
@@ -869,9 +882,9 @@ const { myState } = useContext(MyContext);         // Your state
 
 **Verdict**: Benefits far outweigh trade-offs for most apps
 
-## Examples
+### Examples
 
-### Minimal App
+#### Minimal App
 
 ```javascript
 // main.jsx
@@ -900,7 +913,7 @@ export default function HomeView() {
 }
 ```
 
-### Complex App with Overrides
+#### Complex App with Overrides
 
 ```javascript
 // vite.config.js
@@ -944,38 +957,38 @@ export default defineConfig({
 }
 ```
 
-## Production Configuration
+### Production Configuration
 
 For production deployments, override the default config using environment variables.
 
-### Environment Variables
+#### Environment Variables
 
 ```bash
-# Database (overrides config.json database settings)
+## Database (overrides config.json database settings)
 DATABASE_URL=postgresql://user:pass@host:5432/prod_db
-# or
+## or
 MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/prod_db
 
-# CORS - Comma-separated list of allowed origins
+## CORS - Comma-separated list of allowed origins
 CORS_ORIGINS=https://yourapp.com,https://www.yourapp.com
 
-# Frontend URL - Used for Stripe redirects (success/cancel URLs)
+## Frontend URL - Used for Stripe redirects (success/cancel URLs)
 FRONTEND_URL=https://yourapp.com
 
-# Application
+## Application
 NODE_ENV=production
 PORT=8000
 
-# Required for all environments
+## Required for all environments
 STRIPE_KEY=sk_live_your_stripe_key
 STRIPE_ENDPOINT_SECRET=whsec_your_webhook_secret
 JWT_SECRET=your_secure_jwt_secret
 
-# Usage limits (optional)
+## Usage limits (optional)
 FREE_USAGE_LIMIT=20
 ```
 
-### Development vs Production
+#### Development vs Production
 
 | Setting | Development | Production |
 |---------|-------------|------------|
@@ -983,9 +996,9 @@ FREE_USAGE_LIMIT=20
 | CORS | localhost | CORS_ORIGINS env var |
 | Redirects | localhost:5173 | FRONTEND_URL env var |
 
-### Docker Deployment
+#### Docker Deployment
 
-The included Dockerfile uses Deno runtime:
+The included Dockerfile uses the Node.js runtime:
 
 ```bash
 docker build -t skateboard .
@@ -996,11 +1009,11 @@ The multi-stage build produces a minimal production image with only the compiled
 
 ---
 
-## Summary
+### Summary
 
-Skateboard's Application Shell Architecture (v1.1.1+) transforms React apps from 500+ lines of boilerplate to 20 lines of routes and components. The framework handles infrastructure, you focus on features.
+Skateboard's Application Shell Architecture transforms React apps from 500+ lines of boilerplate to 20 lines of routes and components. The framework handles infrastructure, you focus on features.
 
-**Architecture (v1.1.1):**
+**Architecture:**
 - **skateboard-ui** - Pure component and utility library (no build tools)
 - **Your app** - Owns vite.config.js, main.jsx, constants.json
 - **Separation of concerns** - Build config ≠ Runtime library
@@ -1014,27 +1027,23 @@ Skateboard's Application Shell Architecture (v1.1.1+) transforms React apps from
 
 **Update Pattern**:
 ```bash
-# Update package
-deno install npm:@stevederico/skateboard-ui@latest
-
-# Copy vite.config.js from reference if upgrading from 1.0.x
-# All other code works as-is
+npm install @stevederico/skateboard-ui@latest
 ```
+See the [Migration](#migration) section below for the full upgrade prompt to hand to an agent.
 
-**Benefits in v1.1.1:**
+**Benefits:**
 - ✅ Error boundary for robust error handling
 - ✅ Automatic constants validation
-- ✅ Full TailwindCSS v4 support (native bindings excluded)
+- ✅ Full TailwindCSS v4 support
 - ✅ Build configuration in your app (better control)
 - ✅ Pure component library (smaller package, simpler)
-- ✅ No ESM/CommonJS conversion issues
 - ✅ Cleaner separation of concerns
 
 ---
 
-## Scaling
+### Scaling
 
-### Single Instance (Default)
+#### Single Instance (Default)
 
 The default configuration uses in-memory stores:
 
@@ -1047,7 +1056,7 @@ const csrfTokenStore = new Map();  // CSRF tokens
 - Development environments
 - Small to medium traffic apps
 
-### Horizontal Scaling (Multiple Instances)
+#### Horizontal Scaling (Multiple Instances)
 
 For multiple server instances behind a load balancer:
 
@@ -1074,7 +1083,7 @@ await redis.set(`csrf:${userID}`, token, 'EX', 86400); // 24 hours
 - Store CSRF tokens in user table
 - Use database for rate limiting (slower)
 
-### Current Limits
+#### Current Limits
 
 | Store | Max Entries | Cleanup |
 |-------|-------------|---------|
@@ -1088,3 +1097,863 @@ These limits handle significant traffic on a single instance.
 For migration instructions, see `MIGRATION.md`
 
 For the reference implementation, see [github.com/stevederico/skateboard](https://github.com/stevederico/skateboard)
+
+---
+
+## API Reference
+
+
+### Overview
+
+The Skateboard backend provides a RESTful API for authentication, user management, payments, and usage tracking. All endpoints are prefixed with `/api`.
+
+### Authentication
+
+Authentication uses JWT tokens stored in HttpOnly cookies with CSRF protection.
+
+#### Headers
+
+State-changing requests (POST, PUT, DELETE) require a CSRF token:
+```
+X-CSRF-Token: <csrf_token>
+```
+
+#### Cookie Authentication
+
+The `token` cookie is automatically sent with credentials. No manual token handling required.
+
+---
+
+### Endpoints
+
+#### Authentication
+
+##### POST /api/signup
+Create a new user account.
+
+**Request Body:**
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securepassword"
+}
+```
+
+**Validation:**
+- `name`: 1-100 characters
+- `email`: Valid email, max 254 characters
+- `password`: 6-72 characters
+
+**Response (200):**
+```json
+{
+  "_id": "uuid",
+  "email": "john@example.com",
+  "name": "John Doe",
+  "created_at": 1704067200,
+  "subscription": null,
+  "usage": { "count": 0, "reset_at": null }
+}
+```
+
+**Cookies Set:**
+- `token`: JWT token (HttpOnly, 30 days)
+- `<appname>_csrf`: CSRF token (24 hours)
+
+---
+
+##### POST /api/signin
+Sign in to existing account.
+
+**Request Body:**
+```json
+{
+  "email": "john@example.com",
+  "password": "securepassword"
+}
+```
+
+**Response (200):**
+```json
+{
+  "_id": "uuid",
+  "email": "john@example.com",
+  "name": "John Doe",
+  "created_at": 1704067200,
+  "subscription": {
+    "stripeID": "cus_xxx",
+    "status": "active",
+    "expires": 1735689600
+  }
+}
+```
+
+**Cookies Set:** Same as signup
+
+---
+
+##### POST /api/signout
+Sign out current user.
+
+**Response (200):**
+```json
+{ "message": "Signed out successfully" }
+```
+
+**Cookies Cleared:** `token`, `<appname>_csrf`
+
+---
+
+#### User Management
+
+##### GET /api/me
+Get current authenticated user.
+
+**Response (200):**
+```json
+{
+  "_id": "uuid",
+  "email": "john@example.com",
+  "name": "John Doe",
+  "created_at": 1704067200,
+  "subscription": { ... },
+  "usage": { "count": 5, "reset_at": 1706745600 }
+}
+```
+
+---
+
+##### PUT /api/me
+Update current user profile.
+
+**Request Body:**
+```json
+{
+  "name": "New Name"
+}
+```
+
+**Response (200):**
+```json
+{
+  "_id": "uuid",
+  "email": "john@example.com",
+  "name": "New Name",
+  ...
+}
+```
+
+---
+
+#### Subscription
+
+##### GET /api/isSubscriber
+Check if current user has active subscription.
+
+**Response (200):**
+```json
+{ "isSubscriber": true }
+```
+or
+```json
+{ "isSubscriber": false }
+```
+
+---
+
+#### Usage Tracking
+
+##### POST /api/usage
+Check or track usage for free users.
+
+**Request Body:**
+```json
+{
+  "operation": "check"
+}
+```
+or
+```json
+{
+  "operation": "track"
+}
+```
+
+**Response (200) - Free User:**
+```json
+{
+  "remaining": 15,
+  "total": 20,
+  "isSubscriber": false,
+  "used": 5,
+  "subscription": null
+}
+```
+
+**Response (200) - Subscriber:**
+```json
+{
+  "remaining": -1,
+  "total": -1,
+  "isSubscriber": true,
+  "subscription": {
+    "status": "active",
+    "expiresAt": "2025-01-01T00:00:00.000Z"
+  }
+}
+```
+
+**Response (429) - Limit Reached:**
+```json
+{
+  "error": "Usage limit reached",
+  "remaining": 0,
+  "total": 20,
+  "isSubscriber": false
+}
+```
+
+---
+
+#### Payments (Stripe)
+
+##### POST /api/checkout
+Create Stripe checkout session.
+
+**Request Body:**
+```json
+{
+  "email": "john@example.com",
+  "lookup_key": "premium_monthly"
+}
+```
+
+**Response (200):**
+```json
+{
+  "url": "https://checkout.stripe.com/...",
+  "id": "cs_xxx",
+  "customerID": "cus_xxx"
+}
+```
+
+---
+
+##### POST /api/portal
+Create Stripe billing portal session.
+
+**Request Body:**
+```json
+{
+  "customerID": "cus_xxx"
+}
+```
+
+**Response (200):**
+```json
+{
+  "url": "https://billing.stripe.com/...",
+  "id": "bps_xxx"
+}
+```
+
+---
+
+##### POST /api/payment
+Stripe webhook endpoint. Handles subscription events.
+
+**Events Handled:**
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+
+---
+
+#### Health Check
+
+##### GET /api/health
+Health check endpoint.
+
+**Response (200):**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-01-01T00:00:00.000Z",
+  "database": "connected"
+}
+```
+
+---
+
+### Rate Limiting
+
+| Route Type | Limit | Window |
+|------------|-------|--------|
+| Auth routes (`/signin`, `/signup`) | 10 requests | 15 minutes |
+| Payment routes (`/checkout`, `/portal`) | 5 requests | 15 minutes |
+| All other routes | 300 requests | 15 minutes |
+
+Rate limit headers:
+- `X-RateLimit-Remaining`: Requests remaining
+- `Retry-After`: Seconds until limit resets (on 429)
+
+---
+
+### Error Responses
+
+All errors return JSON with an `error` field:
+
+```json
+{ "error": "Error message here" }
+```
+
+#### Status Codes
+
+| Code | Meaning |
+|------|---------|
+| 400 | Bad Request - Invalid input |
+| 401 | Unauthorized - Not authenticated |
+| 403 | Forbidden - Invalid CSRF or permission denied |
+| 404 | Not Found - Resource doesn't exist |
+| 429 | Too Many Requests - Rate limited |
+| 500 | Internal Server Error |
+| 503 | Service Unavailable - Auth disabled |
+
+---
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `JWT_SECRET` | Secret for JWT signing | Yes |
+| `STRIPE_KEY` | Stripe secret key | Yes |
+| `STRIPE_ENDPOINT_SECRET` | Stripe webhook secret | Yes |
+| `FREE_USAGE_LIMIT` | Monthly limit for free users | No (default: 20) |
+| `CORS_ORIGINS` | Comma-separated allowed origins | No |
+| `FRONTEND_URL` | Frontend URL for redirects | No |
+| `PORT` | Server port | No (default: 8000) |
+
+---
+
+### Known Limitations
+
+#### Password Reset
+
+Password reset functionality is not yet implemented. Users who forget their password must contact support for manual account recovery.
+
+**Planned for future release:** Self-service password reset via email with time-limited tokens.
+
+---
+
+## Database Schema
+
+
+### Overview
+
+Skateboard supports three database types through a unified adapter pattern:
+- **SQLite** (default) - File-based, zero configuration
+- **PostgreSQL** - Production-ready relational database
+- **MongoDB** - Document-based NoSQL database
+
+### Tables/Collections
+
+#### Users
+
+Stores user profile and subscription information.
+
+##### SQLite / PostgreSQL
+
+```sql
+CREATE TABLE Users (
+  _id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  subscription_stripeID TEXT,
+  subscription_expires BIGINT,
+  subscription_status TEXT,
+  usage_count INTEGER DEFAULT 0,
+  usage_reset_at BIGINT
+);
+
+CREATE UNIQUE INDEX idx_users_email ON Users(email);
+```
+
+##### MongoDB
+
+```javascript
+{
+  _id: String,           // UUID
+  email: String,         // Unique
+  name: String,
+  created_at: Number,    // Unix timestamp
+  subscription: {
+    stripeID: String,    // Stripe customer ID
+    expires: Number,     // Unix timestamp
+    status: String       // "active", "canceled", etc.
+  },
+  usage: {
+    count: Number,       // Usage count this period
+    reset_at: Number     // When usage resets (Unix timestamp)
+  }
+}
+```
+
+**Note:** SQL databases flatten nested objects (e.g., `subscription.stripeID` → `subscription_stripeID`). Adapters handle transformation.
+
+---
+
+#### Auths
+
+Stores authentication credentials separately from user data.
+
+##### SQLite / PostgreSQL
+
+```sql
+CREATE TABLE Auths (
+  email TEXT PRIMARY KEY,
+  password TEXT NOT NULL,
+  userID TEXT NOT NULL REFERENCES Users(_id)
+);
+```
+
+##### MongoDB
+
+```javascript
+{
+  email: String,    // Primary key
+  password: String, // bcrypt hash
+  userID: String    // Reference to Users._id
+}
+```
+
+---
+
+### Field Descriptions
+
+#### Users Table
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `_id` | String (UUID) | Unique identifier |
+| `email` | String | User's email (unique) |
+| `name` | String | Display name |
+| `created_at` | Unix timestamp | Account creation time |
+| `subscription.stripeID` | String | Stripe customer ID |
+| `subscription.expires` | Unix timestamp | When subscription ends |
+| `subscription.status` | String | Stripe subscription status |
+| `usage.count` | Integer | Actions used this period |
+| `usage.reset_at` | Unix timestamp | When usage counter resets |
+
+#### Auths Table
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `email` | String | User's email (primary key) |
+| `password` | String | bcrypt hash (10 rounds) |
+| `userID` | String | Reference to Users._id |
+
+---
+
+### Subscription Status Values
+
+| Status | Description |
+|--------|-------------|
+| `active` | Subscription is active and paid |
+| `canceled` | Canceled but access until period ends |
+| `past_due` | Payment failed, grace period |
+| `unpaid` | Payment failed, access revoked |
+| `trialing` | In trial period |
+
+---
+
+### Usage Tracking
+
+Free users have a monthly usage limit (default: 20).
+
+- `usage.count` - Incremented on each tracked action
+- `usage.reset_at` - Set to 30 days after first action
+- When `now > reset_at`, counter resets to 0
+- Subscribers (`subscription.status === 'active'`) get unlimited usage
+
+---
+
+### Database Configuration
+
+Configuration in `backend/config.json`:
+
+```json
+{
+  "database": {
+    "db": "MyApp",
+    "dbType": "sqlite",
+    "connectionString": "./databases/MyApp.db"
+  }
+}
+```
+
+#### Connection Strings
+
+**SQLite:**
+```
+./databases/MyApp.db
+```
+
+**PostgreSQL:**
+```
+postgresql://user:password@localhost:5432/myapp
+${DATABASE_URL}
+```
+
+**MongoDB:**
+```
+mongodb://localhost:27017
+${MONGODB_URL}
+```
+
+Environment variable syntax `${VAR_NAME}` is supported for production deployments.
+
+---
+
+### Indexes
+
+#### Recommended Indexes
+
+```sql
+-- Users table
+CREATE UNIQUE INDEX idx_users_email ON Users(email);
+CREATE INDEX idx_users_subscription ON Users(subscription_status);
+
+-- Auths table
+CREATE INDEX idx_auths_userid ON Auths(userID);
+```
+
+MongoDB automatically indexes `_id`. Create email index:
+
+```javascript
+db.Users.createIndex({ email: 1 }, { unique: true });
+```
+
+---
+
+### Data Transformation
+
+Adapters transform between nested and flat structures:
+
+**API Response (nested):**
+```json
+{
+  "subscription": {
+    "stripeID": "cus_xxx",
+    "status": "active"
+  }
+}
+```
+
+**SQL Storage (flat):**
+```sql
+subscription_stripeID = 'cus_xxx'
+subscription_status = 'active'
+```
+
+This is handled automatically by the database adapters in `backend/adapters/`.
+
+---
+
+### Migration Notes
+
+When switching database types:
+
+1. Export data from current database
+2. Transform nested ↔ flat structure as needed
+3. Import to new database
+4. Update `config.json` with new `dbType` and `connectionString`
+
+The adapter pattern ensures API compatibility regardless of database backend.
+
+---
+
+## Deployment
+
+
+Deploy your Skateboard app to production.
+
+### Prerequisites
+
+- GitHub repository with your Skateboard app
+- Stripe account (for payments)
+- Hosting account (Vercel, Render, or Netlify)
+
+### Environment Variables
+
+All platforms require these environment variables:
+
+```bash
+## Required
+JWT_SECRET=your_super_secure_jwt_secret_here
+STRIPE_KEY=sk_test_your_stripe_secret_key
+STRIPE_ENDPOINT_SECRET=whsec_your_webhook_secret
+CORS_ORIGINS=https://yourapp.com
+FRONTEND_URL=https://yourapp.com
+
+## Optional
+POSTGRES_URL=postgresql://...  # If using PostgreSQL
+MONGODB_URL=mongodb://...      # If using MongoDB
+FREE_USAGE_LIMIT=20            # Monthly limit for free users
+```
+
+### Stripe Webhook Setup
+
+For all platforms, configure your Stripe webhook:
+
+1. Go to [dashboard.stripe.com](https://dashboard.stripe.com) → Developers → Webhooks
+2. Click "Add endpoint"
+3. URL: `https://your-backend-url/api/payment`
+4. Select events:
+   - `customer.subscription.created`
+   - `customer.subscription.deleted`
+   - `customer.subscription.updated`
+5. Copy the signing secret to `STRIPE_ENDPOINT_SECRET`
+
+---
+
+### Vercel (Recommended)
+
+Single deployment for both frontend and backend.
+
+#### 1. Create vercel.json
+
+```json
+{
+  "version": 2,
+  "builds": [
+    { "src": "backend/server.js", "use": "@vercel/node" },
+    { "src": "package.json", "use": "@vercel/static-build" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "backend/server.js" },
+    { "src": "/(.*)", "dest": "$1" }
+  ],
+  "buildCommand": "npm run build"
+}
+```
+
+#### 2. Update Backend for Vercel
+
+Add to end of `backend/server.js`:
+
+```javascript
+export default app;
+```
+
+#### 3. Deploy
+
+1. Go to [vercel.com](https://vercel.com) → New Project
+2. Import your GitHub repository
+3. Configure:
+   - Framework Preset: Other
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+4. Add environment variables
+5. Deploy
+
+#### 4. Update Configuration
+
+Update `src/constants.json`:
+```json
+{ "backendURL": "/api" }
+```
+
+Update `backend/config.json`:
+```json
+{
+  "client": "https://yourproject.vercel.app",
+  "database": { ... }
+}
+```
+
+---
+
+### Render
+
+Separate services for frontend (Static Site) and backend (Web Service).
+
+#### 1. Deploy Backend
+
+1. Go to [render.com](https://render.com) → New → Web Service
+2. Connect your GitHub repository
+3. Configure:
+   - Name: `skateboard-backend`
+   - Root Directory: `backend`
+   - Runtime: Node
+   - Build Command: `npm install`
+   - Start Command: `npm start`
+4. Add environment variables
+5. Deploy and copy the backend URL
+
+#### 2. Deploy Frontend
+
+1. Go to Render → New → Static Site
+2. Connect the same repository
+3. Configure:
+   - Name: `skateboard-frontend`
+   - Build Command: `npm run build`
+   - Publish Directory: `dist`
+4. Deploy
+
+#### 3. Update Configuration
+
+Update `src/constants.json`:
+```json
+{ "backendURL": "https://skateboard-backend.onrender.com" }
+```
+
+Update `backend/config.json`:
+```json
+{
+  "client": "https://skateboard-frontend.onrender.com",
+  "database": { ... }
+}
+```
+
+---
+
+### Netlify + Railway
+
+Netlify for frontend, Railway for backend.
+
+#### 1. Deploy Backend to Railway
+
+1. Go to [railway.app](https://railway.app) → New Project
+2. Deploy from GitHub repo
+3. Configure:
+   - Build Command: `npm install --workspace=backend`
+   - Start Command: `npm run --workspace=backend start`
+4. Add environment variables
+5. Deploy and copy the backend URL
+
+#### 2. Deploy Frontend to Netlify
+
+1. Go to [netlify.com](https://netlify.com) → New site from Git
+2. Connect your GitHub repository
+3. Configure:
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+4. Deploy
+
+#### 3. Update Configuration
+
+Update `src/constants.json`:
+```json
+{ "backendURL": "https://yourapp.up.railway.app" }
+```
+
+Update `backend/config.json`:
+```json
+{
+  "client": "https://random-name.netlify.app",
+  "database": { ... }
+}
+```
+
+---
+
+### Docker Deployment
+
+Use the included Dockerfile for container deployments.
+
+```bash
+docker build -t skateboard .
+docker run -p 8000:8000 --env-file .env skateboard
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md#production-configuration) for environment configuration.
+
+---
+
+### Go Live Checklist
+
+- [ ] Environment variables set on hosting platform
+- [ ] `constants.json` backendURL updated
+- [ ] `config.json` client URL updated
+- [ ] Stripe webhook configured with production URL
+- [ ] Live Stripe keys configured (`sk_live_...`)
+- [ ] Test sign up / sign in flow
+- [ ] Test payment flow
+- [ ] Monitor logs for errors
+
+### Troubleshooting
+
+**API routes not working?**
+- Check CORS_ORIGINS includes your frontend URL
+- Verify backendURL in constants.json
+
+**Stripe webhooks failing?**
+- Verify webhook URL ends with `/api/payment`
+- Check STRIPE_ENDPOINT_SECRET matches
+
+**Auth not persisting?**
+- Check FRONTEND_URL is set correctly
+- Verify cookies are being sent (credentials: include)
+
+---
+
+## Migration
+
+
+Paste the prompt below into Claude Code (or any coding agent) from the root of your skateboard 2.x or 3.0.x–3.1.x project. It upgrades to the current latest (3.1.7).
+
+---
+
+```
+Upgrade this skateboard project to the latest version (3.1.7). Do not skip steps, do not guess — verify each change.
+
+1. Read package.json. Note the current skateboardVersion. Update dependencies to these exact pins:
+   - "@stevederico/skateboard-ui": "3.0.2"
+   - "react": "19.2.6"
+   - "react-dom": "19.2.6"
+   - "react-router-dom": "7.15.0"
+   Remove "react-router" if present — it's pulled in transitively by react-router-dom and no longer needs to be a direct dep.
+   Update devDependencies to these exact pins:
+   - "@tailwindcss/vite": "4.3.0"
+   - "@vitejs/plugin-react-swc": "4.3.0"
+   - "tailwindcss": "4.3.0"
+   - "vite": "7.3.3"
+   Bump "version" and "skateboardVersion" to 3.1.7.
+
+2. Read backend/package.json. Backend deps in 3.1.7 are only:
+   - "@hono/node-server"
+   - "hono"
+   - "stripe"
+   Remove "jsonwebtoken" (replaced by native node:crypto HMAC in server.js).
+   Remove "bcryptjs" (replaced by node:crypto scrypt for new hashes; legacy bcrypt verification is vendored at backend/vendor/legacy-bcrypt.js).
+   Remove "pg" and "mongodb" UNLESS this app actually uses them — grep with:
+   `grep -r "from 'pg'\|from 'mongodb'\|require('pg')\|require('mongodb')" backend/`.
+
+3. Grep src/ for these imports — they were removed in 3.0:
+   - `@stevederico/skateboard-ui/DataTable`
+   - `@stevederico/skateboard-ui/Chart` or `ChartAreaInteractive`
+   - `@stevederico/skateboard-ui/shadcn/ui/sonner` or `Toaster` from skateboard-ui
+   If found, tell the user — these need manual replacement (they were demo-only and are gone in 3.0+).
+
+4. Grep src/ for these — they're now optional peer deps (only install if imported):
+   - `embla-carousel-react`
+   - `react-resizable-panels`
+   - `recharts`
+   For each one found in src/, add to package.json dependencies with the latest version pinned exact.
+
+5. Grep src/ for `from "lucide-react"`. If found, rewrite all such imports to `from "@stevederico/skateboard-ui/icons"` and remove `lucide-react` from package.json dependencies — icons are vendored in skateboard-ui 3.0+.
+
+6. Read vite.config.js. Ensure resolve.dedupe includes 'react-router-dom'. The 'react-router' entry can stay (it resolves transitively) but isn't required.
+
+7. (Optional, 3.1.0+) If the user wants the refined landing variant, copy `src/components/LandingSpecSheet.jsx` from the skateboard reference repo (https://github.com/stevederico/skateboard) and wire it in `src/main.jsx` via `createSkateboardApp`'s `landingPage` prop. Skip if the user prefers the default LandingView.
+
+8. Run `npm install` at the project root. Then `npm run build`. If build fails, read the error and fix it — common issues:
+   - Missing import → add to package.json per step 4
+   - "X is not exported by Y" → check skateboard-ui 3.0+ changelog, the export may have moved
+
+9. Update skateboard-changelog.md: add a "3.1.7" entry above the current top entry, with one line: "Upgrade to skateboard 3.1.7".
+
+10. Report back: list every file you changed and confirm `npm run build` passed. Do NOT commit — leave that to the user.
+```
