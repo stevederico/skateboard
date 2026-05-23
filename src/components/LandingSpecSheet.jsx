@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { getState } from '@stevederico/skateboard-ui/Context';
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 import ThemeToggle from '@stevederico/skateboard-ui/ThemeToggle';
