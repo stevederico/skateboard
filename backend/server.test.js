@@ -10,9 +10,35 @@ import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+
+// Local HS256 JWT helpers (mirror server.js implementation)
+function jwtSign(payload, secret) {
+  const head = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
+  return `${head}.${body}.${sig}`;
+}
+function jwtVerify(token, secret) {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('Invalid token');
+  const [head, body, sig] = parts;
+  if (!head || !body || !sig) throw new Error('Invalid token');
+  const expected = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+    throw new Error('Invalid signature');
+  }
+  const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+  if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
+    const err = new Error('Token expired');
+    err.name = 'TokenExpiredError';
+    throw err;
+  }
+  return payload;
+}
 import { DatabaseSync as Database } from 'node:sqlite';
 import { mkdir, rm } from 'node:fs/promises';
 
@@ -61,14 +87,14 @@ function createTestApp() {
   const generateUUID = () => crypto.randomUUID();
   const hashPassword = async (password) => await bcrypt.hash(password, 10);
   const verifyPassword = async (password, hash) => await bcrypt.compare(password, hash);
-  const generateToken = (userID) => jwt.sign({ userID, exp: Math.floor(Date.now() / 1000) + 86400 }, JWT_SECRET);
+  const generateToken = (userID) => jwtSign({ userID, exp: Math.floor(Date.now() / 1000) + 86400 }, JWT_SECRET);
 
   // Auth middleware
   const authMiddleware = async (c, next) => {
     const token = getCookie(c, 'token');
     if (!token) return c.json({ error: 'Unauthorized' }, 401);
     try {
-      const payload = jwt.verify(token, JWT_SECRET);
+      const payload = jwtVerify(token, JWT_SECRET);
       c.set('userID', String(payload.userID));
       await next();
     } catch (e) {
@@ -443,7 +469,7 @@ describe('Authentication Flow', () => {
 
     it('rejects request with expired token', async () => {
       // Create expired token
-      const expiredToken = jwt.sign(
+      const expiredToken = jwtSign(
         { userID: 'test-user', exp: Math.floor(Date.now() / 1000) - 3600 },
         JWT_SECRET
       );
