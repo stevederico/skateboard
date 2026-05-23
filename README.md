@@ -12,15 +12,6 @@
     a react starter with auth, stripe, shadcn, and sqlite
   </h3>
 
-## 🎬 Demo
-
-<div align="center">
-  <img width="75%" alt="skateboard dark mode demo" src="public/skateboard-dark.png" />
-</div>
-
-  <br />
- 
-
 </div>
 
 <br />
