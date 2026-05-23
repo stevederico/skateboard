@@ -10,7 +10,7 @@ import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
-import bcrypt from 'bcryptjs';
+import { compare as legacyBcryptCompare } from './vendor/legacy-bcrypt.js';
 import crypto from 'crypto';
 import { promisify } from 'node:util';
 
@@ -102,7 +102,7 @@ function createTestApp() {
       const candidate = await scryptAsync(password, salt, 64);
       return expected.length === candidate.length && crypto.timingSafeEqual(expected, candidate);
     }
-    if (stored.startsWith('$2')) return await bcrypt.compare(password, stored);
+    if (stored.startsWith('$2')) return await legacyBcryptCompare(password, stored);
     return false;
   };
   const needsRehash = (stored) => typeof stored === 'string' && !stored.startsWith('scrypt$');
