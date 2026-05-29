@@ -1,776 +1,405 @@
 ---
 layout: default
 title: Examples
-description: Real-world examples and code snippets for building with Skateboard
+description: Real-world examples and code snippets for building with Skateboard v3.4.0
 ---
 
 # Examples
 
 Real-world examples and code snippets to help you build with Skateboard.
 
-## Complete App Examples
+All examples follow the Application Shell Architecture: views live in `src/components/`, import shadcn primitives and icons from the `@stevederico/skateboard-ui` package, and talk to the backend through the `apiRequest` utility (which auto-includes credentials and the CSRF token — never read a token from `localStorage`). See [Components](/components), [API](/api), and [Authentication](/authentication) for the full reference.
 
-### Todo App
+## View Examples
 
-A simple todo application using Skateboard components.
+### Empty-state View (BlankView)
+
+The boilerplate ships `BlankView`, a reusable empty-state template used by the Analytics, Projects, and Team routes in `src/main.jsx`. It composes the shell `<Header>` with the shadcn `Empty` compound component.
 
 ```jsx
-// src/components/TodoApp.jsx
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@stevederico/skateboard-ui/shadcn/ui/card';
+// src/components/BlankView.jsx
+import Header from '@stevederico/skateboard-ui/Header';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
-import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
-import { Trash2, Plus, Check } from '@stevederico/skateboard-ui/lucide-react';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
+import { LayoutDashboard, Plus } from '@stevederico/skateboard-ui/icons';
 
-export function TodoApp() {
-  const [todos, setTodos] = useState([]);
-  const [newTodo, setNewTodo] = useState('');
-
-  const addTodo = () => {
-    if (newTodo.trim()) {
-      setTodos([...todos, {
-        id: Date.now(),
-        text: newTodo,
-        completed: false
-      }]);
-      setNewTodo('');
-    }
-  };
-
-  const toggleTodo = (id) => {
-    setTodos(todos.map(todo =>
-      todo.id === id ? { ...todo, completed: !todo.completed } : todo
-    ));
-  };
-
-  const deleteTodo = (id) => {
-    setTodos(todos.filter(todo => todo.id !== id));
-  };
-
+export default function BlankView({ title = "Blank", description, buttonTitle, onButtonClick, icon, children }) {
   return (
-    <div className="max-w-md mx-auto p-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Todo List</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              value={newTodo}
-              onChange={(e) => setNewTodo(e.target.value)}
-              placeholder="Add a new todo..."
-              onKeyPress={(e) => e.key === 'Enter' && addTodo()}
-            />
-            <Button onClick={addTodo} size="sm">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <div className="space-y-2">
-            {todos.map(todo => (
-              <div key={todo.id} className="flex items-center gap-2 p-2 border rounded">
-                <Button
-                  variant={todo.completed ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleTodo(todo.id)}
-                >
-                  <Check className="h-4 w-4" />
+    <>
+      <Header title={title} />
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        {children || (
+          <div className="flex flex-1 items-center justify-center">
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  {icon || <LayoutDashboard size={24} />}
+                </EmptyMedia>
+                <EmptyTitle>No {title.toLowerCase()} yet</EmptyTitle>
+                <EmptyDescription>
+                  {description || `${title} will appear here once you get started.`}
+                </EmptyDescription>
+              </EmptyHeader>
+              {buttonTitle && (
+                <Button onClick={onButtonClick}>
+                  <Plus size={18} />
+                  {buttonTitle}
                 </Button>
-                <span className={`flex-1 ${todo.completed ? 'line-through text-muted-foreground' : ''}`}>
-                  {todo.text}
-                </span>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => deleteTodo(todo.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+              )}
+            </Empty>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 ```
 
-### E-commerce Product Card
-
-Product card with Stripe integration.
+Wire it up in `src/main.jsx` via `appRoutes`. `appRoutes` is an **array** of `{ path, element }` objects (paths are relative — no leading slash):
 
 ```jsx
-// src/components/ProductCard.jsx
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@stevederico/skateboard-ui/shadcn/ui/card';
+// src/main.jsx
+import BlankView from './components/BlankView.jsx';
+
+const appRoutes = [
+  {
+    path: 'projects',
+    element: <BlankView
+      title="Projects"
+      description="Create your first project to get started."
+      buttonTitle="Create Project"
+    />,
+  },
+];
+```
+
+### Data-fetching View
+
+Every data view handles three states — loading, error, and data — and fetches with `useListData` (never fetch in `useEffect` directly). `useListData` returns `{ data, loading, error, refetch }` and calls the backend through `apiRequest`.
+
+```jsx
+// src/components/ProjectsView.jsx
+import Header from '@stevederico/skateboard-ui/Header';
+import { useListData } from '@stevederico/skateboard-ui/Utilities';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
-import { ShoppingCart, Heart } from '@stevederico/skateboard-ui/lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@stevederico/skateboard-ui/shadcn/ui/card';
+import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
+import { CircleAlert, Folder } from '@stevederico/skateboard-ui/icons';
 
-export function ProductCard({ product }) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFavorited, setIsFavorited] = useState(false);
+export default function ProjectsView() {
+  const { data, loading, error, refetch } = useListData('/projects');
 
-  const handlePurchase = async () => {
-    setIsLoading(true);
-    
-    try {
-      const response = await fetch('/api/stripe/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          priceId: product.priceId,
-          mode: 'payment',
-          successUrl: `${window.location.origin}/success`,
-          cancelUrl: `${window.location.origin}/cancel`
-        })
-      });
+  if (loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
 
-      const { url } = await response.json();
-      window.location.href = url;
-    } catch (error) {
-      console.error('Purchase failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  if (error) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon"><CircleAlert size={24} /></EmptyMedia>
+          <EmptyTitle>Failed to load projects</EmptyTitle>
+          <EmptyDescription>{error}</EmptyDescription>
+        </EmptyHeader>
+        <Button onClick={refetch}>Try again</Button>
+      </Empty>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon"><Folder size={24} /></EmptyMedia>
+          <EmptyTitle>No projects yet</EmptyTitle>
+          <EmptyDescription>Create your first project to get started.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="p-0">
-        <div className="relative">
-          <img 
-            src={product.image} 
-            alt={product.name}
-            className="w-full h-48 object-cover rounded-t-lg"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="absolute top-2 right-2 bg-white/80 hover:bg-white"
-            onClick={() => setIsFavorited(!isFavorited)}
-          >
-            <Heart 
-              className={`h-4 w-4 ${isFavorited ? 'fill-red-500 text-red-500' : ''}`} 
-            />
-          </Button>
-        </div>
-      </CardHeader>
-      
-      <CardContent className="p-4">
-        <CardTitle className="text-lg mb-2">{product.name}</CardTitle>
-        <p className="text-muted-foreground text-sm mb-4">{product.description}</p>
-        
-        <div className="flex items-center justify-between">
-          <span className="text-2xl font-bold">${product.price}</span>
-          <Button 
-            onClick={handlePurchase}
-            disabled={isLoading}
-            className="flex items-center gap-2"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            {isLoading ? 'Processing...' : 'Buy Now'}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <>
+      <Header title="Projects" />
+      <div className="grid grid-cols-1 gap-4 p-6 md:grid-cols-2 lg:grid-cols-3">
+        {data.map(project => (
+          <Card key={project.id}>
+            <CardHeader>
+              <CardTitle>{project.name}</CardTitle>
+            </CardHeader>
+            <CardContent>{project.description}</CardContent>
+          </Card>
+        ))}
+      </div>
+    </>
   );
 }
+```
 
-// Usage
-const products = [
-  {
-    id: 1,
-    name: "Premium Widget",
-    description: "A high-quality widget for all your needs",
-    price: 29.99,
-    priceId: "price_1234567890",
-    image: "https://example.com/widget.jpg"
-  }
-];
+### Dashboard with Metric Cards
 
-function ProductGrid() {
+The boilerplate ships `SectionCards`, a static metric grid using the shadcn `Card` and `Badge` primitives with Lucide trend icons. `HomeView` renders it inside an `@container/main` layout.
+
+```jsx
+// src/components/SectionCards.jsx
+import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '@stevederico/skateboard-ui/shadcn/ui/card';
+import { Badge } from '@stevederico/skateboard-ui/shadcn/ui/badge';
+import { TrendingUp, TrendingDown } from '@stevederico/skateboard-ui/icons';
+
+export function SectionCards() {
+  const cards = [
+    { title: "Total Revenue", value: "$1,250.00", trend: "+12.5%", up: true },
+    { title: "New Customers", value: "1,234", trend: "-20%", up: false },
+    { title: "Active Accounts", value: "45,678", trend: "+12.5%", up: true },
+    { title: "Growth Rate", value: "4.5%", trend: "+4.5%", up: true },
+  ];
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
-      {products.map(product => (
-        <ProductCard key={product.id} product={product} />
+    <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+      {cards.map(card => (
+        <Card key={card.title}>
+          <CardHeader>
+            <CardDescription>{card.title}</CardDescription>
+            <CardTitle className="text-2xl font-semibold tabular-nums">{card.value}</CardTitle>
+          </CardHeader>
+          <CardFooter>
+            <Badge variant="outline">
+              {card.up ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+              {card.trend}
+            </Badge>
+          </CardFooter>
+        </Card>
       ))}
     </div>
   );
 }
 ```
 
-### Dashboard with Charts
-
-Analytics dashboard using Chart.js.
-
 ```jsx
-// src/components/Dashboard.jsx
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@stevederico/skateboard-ui/shadcn/ui/card';
-import { Skeleton } from '@stevederico/skateboard-ui/shadcn/ui/skeleton';
-import { TrendingUp, Users, DollarSign, ShoppingCart } from '@stevederico/skateboard-ui/lucide-react';
+// src/components/HomeView.jsx
+import Header from '@stevederico/skateboard-ui/Header';
+import { SectionCards } from './SectionCards.jsx';
 
-export function Dashboard() {
-  const [stats, setStats] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const fetchStats = async () => {
-    try {
-      const response = await fetch('/api/dashboard/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const data = await response.json();
-      setStats(data);
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6">
-        {[1, 2, 3, 4].map(i => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-4 w-24" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  const statCards = [
-    {
-      title: "Total Revenue",
-      value: `$${stats?.revenue?.toLocaleString() || 0}`,
-      icon: DollarSign,
-      trend: "+12.5%"
-    },
-    {
-      title: "Total Users",
-      value: stats?.users?.toLocaleString() || 0,
-      icon: Users,
-      trend: "+8.2%"
-    },
-    {
-      title: "Orders",
-      value: stats?.orders?.toLocaleString() || 0,
-      icon: ShoppingCart,
-      trend: "+15.3%"
-    },
-    {
-      title: "Growth Rate",
-      value: "24.5%",
-      icon: TrendingUp,
-      trend: "+2.1%"
-    }
-  ];
-
+export default function HomeView() {
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Dashboard</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat, index) => (
-          <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">
-                <span className="text-green-600">{stat.trend}</span> from last month
-              </p>
-            </CardContent>
-          </Card>
-        ))}
+    <>
+      <Header title="Documents" />
+      <div className="@container/main flex flex-1 flex-col gap-4 p-6">
+        <SectionCards />
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {stats?.recentActivity?.map((activity, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{activity.title}</p>
-                    <p className="text-sm text-muted-foreground">{activity.description}</p>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{activity.time}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Products</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {stats?.topProducts?.map((product, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-muted rounded flex items-center justify-center text-sm font-medium">
-                      {index + 1}
-                    </div>
-                    <div>
-                      <p className="font-medium">{product.name}</p>
-                      <p className="text-sm text-muted-foreground">{product.sales} sales</p>
-                    </div>
-                  </div>
-                  <span className="font-medium">${product.revenue}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    </>
   );
 }
 ```
 
 ## Form Examples
 
-### Contact Form
+### Form with useForm
+
+Use the shell `useForm` hook for form state. It returns `{ values, handleChange, handleSubmit, reset, submitting, error }`. Validate on submit, pair every `Input` with a `Label`, wrap pairs in `Field`, use `gap-*` for spacing, and keep submit enabled until submission.
 
 ```jsx
-// src/components/ContactForm.jsx
-import { useState } from 'react';
+// src/components/SettingsForm.jsx
+import Header from '@stevederico/skateboard-ui/Header';
+import { useForm, apiRequest } from '@stevederico/skateboard-ui/Utilities';
 import { Card, CardContent, CardHeader, CardTitle } from '@stevederico/skateboard-ui/shadcn/ui/card';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Label } from '@stevederico/skateboard-ui/shadcn/ui/label';
-import { Textarea } from '@stevederico/skateboard-ui/shadcn/ui/textarea';
-import { Send } from '@stevederico/skateboard-ui/lucide-react';
+import { Field } from '@stevederico/skateboard-ui/shadcn/ui/field';
+import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
 
-export function ContactForm() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: ''
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch('/api/contact', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
+export default function SettingsForm({ user }) {
+  const { values, handleChange, handleSubmit, submitting, error } = useForm(
+    { name: user?.name ?? '' },
+    async (formValues) => {
+      // PUT /api/me whitelists only `name`
+      await apiRequest('/me', {
+        method: 'PUT',
+        body: JSON.stringify({ name: formValues.name }),
       });
-
-      if (response.ok) {
-        setSubmitted(true);
-        setFormData({ name: '', email: '', subject: '', message: '' });
-      }
-    } catch (error) {
-      console.error('Failed to send message:', error);
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+  );
 
-  if (submitted) {
-    return (
-      <Card className="max-w-md mx-auto">
-        <CardContent className="text-center p-6">
-          <div className="text-green-600 mb-4">
-            <Send className="h-12 w-12 mx-auto" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">Message Sent!</h3>
-          <p className="text-muted-foreground">
-            Thank you for your message. We'll get back to you soon.
-          </p>
-          <Button 
-            className="mt-4" 
-            onClick={() => setSubmitted(false)}
-          >
-            Send Another Message
-          </Button>
+  return (
+    <>
+      <Header title="Settings" />
+      <Card className="mx-auto max-w-md">
+        <CardHeader>
+          <CardTitle>Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Field>
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                name="name"
+                value={values.name}
+                onChange={handleChange('name')}
+              />
+            </Field>
+
+            {error && <p className="text-destructive text-sm">{error}</p>}
+
+            <div className="flex justify-end gap-2">
+              <Button type="submit" disabled={submitting}>
+                {submitting ? <Spinner /> : 'Save'}
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
-    );
-  }
-
-  return (
-    <Card className="max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Contact Us</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="subject">Subject</Label>
-            <Input
-              id="subject"
-              name="subject"
-              value={formData.subject}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="message">Message</Label>
-            <Textarea
-              id="message"
-              name="message"
-              value={formData.message}
-              onChange={handleChange}
-              rows={4}
-              required
-            />
-          </div>
-
-          <Button 
-            type="submit" 
-            className="w-full"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Sending...' : 'Send Message'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    </>
   );
 }
 ```
 
-### Multi-step Form
+> Note: the shell's `useForm` exposes `handleChange` as a curried helper — call `handleChange('name')` to get the `onChange` handler for the `name` field.
+
+> Authentication forms (sign up / sign in) are provided by the shell. `createSkateboardApp` auto-mounts `/signin` and `/signup`, which post to `POST /api/signup` (`{ email, password, name }`) and `POST /api/signin` (`{ email, password }`) and set the HttpOnly `token` and `csrf_token` cookies. You don't build these yourself — see [Authentication](/authentication).
+
+## Stripe / Checkout Example
+
+The shell handles checkout end to end. The app only displays pricing from `constants.stripeProducts`; the upgrade flow lives in `@stevederico/skateboard-ui`. To trigger checkout from your own UI, call `showCheckout` — it posts `{ lookup_key, email }` to `POST /api/checkout` (with CSRF + credentials) and redirects to the returned Stripe URL.
 
 ```jsx
-// src/components/MultiStepForm.jsx
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@stevederico/skateboard-ui/shadcn/ui/card';
+// src/components/UpgradeButton.jsx
+import { showCheckout } from '@stevederico/skateboard-ui/Utilities';
+import { useUser } from '@stevederico/skateboard-ui/Context';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
-import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
-import { Label } from '@stevederico/skateboard-ui/shadcn/ui/label';
-import { ChevronLeft, ChevronRight, Check } from '@stevederico/skateboard-ui/lucide-react';
 
-export function MultiStepForm() {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({
-    // Step 1
-    firstName: '',
-    lastName: '',
-    email: '',
-    // Step 2
-    company: '',
-    position: '',
-    // Step 3
-    plan: 'basic'
-  });
+export default function UpgradeButton() {
+  const user = useUser();
 
-  const totalSteps = 3;
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const nextStep = () => {
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const handleSubmit = async () => {
-    try {
-      const response = await fetch('/api/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-      });
-      
-      if (response.ok) {
-        console.log('Signup successful!');
-      }
-    } catch (error) {
-      console.error('Signup failed:', error);
-    }
-  };
-
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="firstName">First Name</Label>
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="lastName">Last Name</Label>
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          </div>
-        );
-
-      case 2:
-        return (
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="company">Company</Label>
-              <Input
-                id="company"
-                name="company"
-                value={formData.company}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="position">Position</Label>
-              <Input
-                id="position"
-                name="position"
-                value={formData.position}
-                onChange={handleChange}
-              />
-            </div>
-          </div>
-        );
-
-      case 3:
-        return (
-          <div className="space-y-4">
-            <Label>Choose a plan</Label>
-            <div className="space-y-2">
-              {[
-                { id: 'basic', name: 'Basic', price: '$9/month' },
-                { id: 'pro', name: 'Pro', price: '$19/month' },
-                { id: 'enterprise', name: 'Enterprise', price: '$49/month' }
-              ].map(plan => (
-                <label key={plan.id} className="flex items-center space-x-3 border rounded-lg p-4 cursor-pointer hover:bg-accent">
-                  <input
-                    type="radio"
-                    name="plan"
-                    value={plan.id}
-                    checked={formData.plan === plan.id}
-                    onChange={handleChange}
-                    className="sr-only"
-                  />
-                  <div className={`w-4 h-4 rounded-full border-2 ${formData.plan === plan.id ? 'bg-primary border-primary' : 'border-gray-300'}`} />
-                  <div className="flex-1">
-                    <div className="font-medium">{plan.name}</div>
-                    <div className="text-sm text-muted-foreground">{plan.price}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
+  // showCheckout(email, productIndex = 0) reads
+  // constants.stripeProducts[productIndex].lookup_key for you.
   return (
-    <Card className="max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Sign Up</CardTitle>
-        <div className="flex space-x-2">
-          {[1, 2, 3].map(step => (
-            <div
-              key={step}
-              className={`flex-1 h-2 rounded ${
-                step <= currentStep ? 'bg-primary' : 'bg-gray-200'
-              }`}
-            />
-          ))}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Step {currentStep} of {totalSteps}
-        </p>
-      </CardHeader>
-
-      <CardContent className="space-y-6">
-        {renderStep()}
-
-        <div className="flex justify-between">
-          <Button
-            variant="outline"
-            onClick={prevStep}
-            disabled={currentStep === 1}
-          >
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            Previous
-          </Button>
-
-          {currentStep === totalSteps ? (
-            <Button onClick={handleSubmit}>
-              <Check className="h-4 w-4 mr-2" />
-              Complete
-            </Button>
-          ) : (
-            <Button onClick={nextStep}>
-              Next
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <Button onClick={() => showCheckout(user?.email)}>
+      Upgrade
+    </Button>
   );
 }
 ```
+
+`stripeProducts` are referenced by Stripe **lookup_key**, not a hard-coded price ID. The default `constants.json` ships one product:
+
+```json
+{
+  "stripeProducts": [
+    {
+      "price": "$5.00",
+      "title": "Unlimited",
+      "interval": "month",
+      "lookup_key": "my_lookup_key",
+      "features": ["Unlimited Todos", "Unlimited Messages", "All Premium Features"]
+    }
+  ]
+}
+```
+
+To open the Stripe customer portal for an existing subscriber, call `showManage(stripeID)` (posts `{ customerID }` to `POST /api/portal`). See [Stripe](/stripe) for the full setup, including the webhook endpoint `POST /api/payment`.
+
+## Usage Tracking Example
+
+The boilerplate's `ChatView` demonstrates freemium gating: free users get a usage limit (`FREE_USAGE_LIMIT`, default 20, over a rolling 30-day window), subscribers (`subscription.status === 'active'`) are unlimited (`remaining: -1`). Usage flows through `getRemainingUsage` / `trackUsage`, which call `POST /api/usage` with `{ operation: 'check' }` or `{ operation: 'track' }`.
+
+```jsx
+// src/components/UsageGatedAction.jsx
+import { useState, useEffect, useRef } from 'react';
+import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
+import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
+import { useUser } from '@stevederico/skateboard-ui/Context';
+import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
+
+export default function UsageGatedAction() {
+  const user = useUser();
+  const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
+  const upgradeSheetRef = useRef();
+
+  useEffect(() => {
+    getRemainingUsage('messages')
+      .then(setUsageInfo)
+      .catch(() => console.error("Couldn't load usage"));
+  }, []);
+
+  const handleAction = async () => {
+    // Gate non-subscribers who hit the limit
+    if (!usageInfo.isSubscriber && usageInfo.remaining <= 0) {
+      showUpgradeSheet(upgradeSheetRef);
+      return;
+    }
+
+    // Do the work, then record usage
+    const updated = await trackUsage('messages');
+    setUsageInfo(updated);
+  };
+
+  return (
+    <>
+      <Button onClick={handleAction}>
+        Run action
+        {!usageInfo.isSubscriber && usageInfo.remaining >= 0 && ` (${usageInfo.remaining} left)`}
+      </Button>
+      <UpgradeSheet ref={upgradeSheetRef} userEmail={user?.email} />
+    </>
+  );
+}
+```
+
+When a free user exceeds the limit on `track`, the backend responds `429` with `{ error, remaining: 0, total, isSubscriber: false }`.
 
 ## API Integration Examples
 
-### Custom Hook for API Calls
+### apiRequest
+
+`apiRequest(endpoint, options)` is the standard way to call the backend. It auto-includes credentials, auto-adds the CSRF token on mutations (POST/PUT/DELETE), auto-redirects to `/signout` on 401, parses JSON, throws on error, and has a 30-second timeout. Endpoints are relative to `constants.backendURL` (the `/api` prefix is configured there).
 
 ```jsx
-// src/hooks/useApi.js
-import { useState, useEffect } from 'react';
+import { apiRequest } from '@stevederico/skateboard-ui/Utilities';
 
-export function useApi(url, options = {}) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+// GET the current user (GET /api/me)
+const me = await apiRequest('/me');
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('token');
-        
-        const response = await fetch(url, {
-          ...options,
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { Authorization: `Bearer ${token}` }),
-            ...options.headers,
-          },
-        });
+// POST with a body — CSRF token added automatically
+const project = await apiRequest('/projects', {
+  method: 'POST',
+  body: JSON.stringify({ name: 'New Project' }),
+});
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+// PUT /api/me — only `name` is whitelisted by the backend
+await apiRequest('/me', {
+  method: 'PUT',
+  body: JSON.stringify({ name: 'Ada Lovelace' }),
+});
+```
 
-        const result = await response.json();
-        setData(result);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+### Context (current user)
 
-    fetchData();
-  }, [url]);
+Read the authenticated user and dispatch actions from the shell context.
 
-  return { data, loading, error };
-}
+```jsx
+import { getState } from '@stevederico/skateboard-ui/Context';
 
-// Usage
-function UserProfile() {
-  const { data: user, loading, error } = useApi('/api/users/profile');
+function Profile() {
+  const { state, dispatch } = getState();
+  const user = state.user;
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  if (!user) return null;
 
   return (
     <div>
-      <h1>Welcome, {user?.name}!</h1>
-      <p>Email: {user?.email}</p>
+      <h1 className="text-heading-lg">Welcome, {user.name}!</h1>
+      <p className="text-copy-md text-muted-foreground">{user.email}</p>
+      <button onClick={() => dispatch({ type: 'CLEAR_USER' })}>Sign out</button>
     </div>
   );
 }
 ```
 
-These examples show real-world usage patterns and can be copied directly into your Skateboard project. Each example demonstrates different aspects of building modern web applications with React and the Skateboard component library.
+These examples reflect the real component, utility, and endpoint surface in Skateboard v3.4.0. Copy them into `src/components/` and adapt — the shell handles routing, auth, and theming so you can focus on views.

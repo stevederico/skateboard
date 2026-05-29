@@ -1,35 +1,86 @@
 ---
 layout: default
 title: API Reference
-description: Complete backend API documentation with endpoints, examples, and SDK
+description: Complete backend API reference for the Skateboard Hono server — every endpoint with method, path, auth, request, and response.
 ---
 
 # API Reference
 
-Complete API reference for the Skateboard backend server.
+Complete reference for the Skateboard backend, a [Hono](https://hono.dev) server running on Node.js (`>=22.5.0`, ES modules). The server is defined entirely in `backend/server.js` and started with:
+
+```bash
+node --experimental-sqlite server.js
+```
+
+The `--experimental-sqlite` flag is required because the default SQLite adapter imports `node:sqlite` (`DatabaseSync`). From the repo root, `npm run server` delegates to the backend workspace's `start` script, and `npm run start` runs the Vite frontend and backend concurrently.
 
 ## Base URL
 
+The server listens on the `PORT` env var (default `8000`) on both IPv4 and IPv6 (`hostname: '::'`). All API routes are prefixed with `/api`.
+
 ```
-Development: http://localhost:3001
-Production: https://your-api-domain.com
+Development: http://localhost:8000
 ```
+
+In the frontend, the API base is configured in `src/constants.json`:
+
+- `devBackendURL`: `http://localhost:8000/api`
+- `backendURL`: `/api` (production, same-origin)
 
 ## Authentication
 
-Most endpoints require authentication via JWT token in the Authorization header:
+Authentication uses a **JWT stored in an HttpOnly cookie named `token`** — there is no `Authorization: Bearer` header path. The cookie is set by the server on sign up / sign in and read by `authMiddleware` via the request cookies. Requests from the frontend must send credentials (`credentials: 'include'`).
 
-```
-Authorization: Bearer <jwt-token>
-```
+- **JWT**: hand-rolled HS256 using `node:crypto` HMAC-SHA256 (no `jsonwebtoken` dependency). Payload is `{ userID, exp }`. Expiry is 30 days.
+- **Cookie**: `token`, HttpOnly, `sameSite: 'Strict'`, `secure` in production, `maxAge` 30 days.
+- If `JWT_SECRET` is unset, protected endpoints return `503`. A missing, expired, or invalid token returns `401`.
+
+### CSRF protection
+
+State-changing requests on protected routes require a CSRF token. A non-HttpOnly cookie `csrf_token` (`sameSite: 'Lax'`) is set alongside `token`, and the matching value must be sent in the `x-csrf-token` header.
+
+- CSRF tokens are generated with `crypto.randomBytes(32)`, stored in an in-memory map (24-hour expiry, hourly cleanup, LRU eviction at 50,000 entries), and validated with `crypto.timingSafeEqual`.
+- The CSRF middleware skips `GET` requests and the `/api/signup` / `/api/signin` paths.
+- CSRF is only attached to: `PUT /api/me`, `POST /api/signout`, `POST /api/checkout`, `POST /api/portal`. (`POST /api/usage` is **not** CSRF-protected — it has `authMiddleware` only.)
+
+### Account lockout
+
+Sign-in failures are tracked in memory per email. After 5 failed attempts the account is locked for 15 minutes; locked requests return `429` with a `Retry-After` header.
 
 ## Endpoints
 
+| Method | Path | Auth | CSRF |
+|---|---|---|---|
+| `GET` | `/api/health` | No | No |
+| `POST` | `/api/signup` | No | No |
+| `POST` | `/api/signin` | No | No |
+| `POST` | `/api/signout` | Yes | Yes |
+| `GET` | `/api/me` | Yes | No (GET) |
+| `PUT` | `/api/me` | Yes | Yes |
+| `POST` | `/api/usage` | Yes | No |
+| `POST` | `/api/checkout` | Yes | Yes |
+| `POST` | `/api/portal` | Yes | Yes |
+| `POST` | `/api/payment` | No (Stripe signature) | No |
+
+### Health
+
+#### GET /api/health
+
+Health check. No authentication.
+
+**Response (200):**
+```json
+{
+  "status": "ok",
+  "timestamp": 1748390400000
+}
+```
+
 ### Authentication
 
-#### POST /api/auth/register
+#### POST /api/signup
 
-Register a new user account.
+Register a new user. Sets the `token` and `csrf_token` cookies on success.
 
 **Request Body:**
 ```json
@@ -40,31 +91,21 @@ Register a new user account.
 }
 ```
 
-**Response (200):**
+**Response (201):**
 ```json
 {
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "user_123",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "createdAt": "2025-06-14T10:00:00Z"
-  }
+  "id": "user_123",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "tokenExpires": 1750982400000
 }
 ```
 
-**Response (400):**
-```json
-{
-  "success": false,
-  "error": "Email already exists"
-}
-```
+> Signup inserts the user, then the auth record. If the auth insert fails, the user row is rolled back (`DELETE FROM Users WHERE _id = ?` on SQL adapters).
 
-#### POST /api/auth/login
+#### POST /api/signin
 
-Authenticate an existing user.
+Authenticate an existing user. Sets the `token` and `csrf_token` cookies on success. Subject to account lockout after 5 failed attempts.
 
 **Request Body:**
 ```json
@@ -77,483 +118,273 @@ Authenticate an existing user.
 **Response (200):**
 ```json
 {
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "user_123",
-    "email": "user@example.com",
-    "name": "John Doe"
-  }
+  "id": "user_123",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "subscription": {
+    "stripeID": "cus_1234567890",
+    "expires": 1750982400,
+    "status": "active"
+  },
+  "tokenExpires": 1750982400000
 }
 ```
 
-**Response (401):**
-```json
-{
-  "success": false,
-  "error": "Invalid credentials"
-}
-```
+The `subscription` object is present only when the user has one.
 
-#### GET /api/auth/me
+**Response (429):** Returned when the account is locked. Includes a `Retry-After` header.
 
-Get current user information.
+#### POST /api/signout
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Sign out the current user. Clears the `token` and `csrf_token` cookies.
+
+**Auth:** `token` cookie + `x-csrf-token` header.
 
 **Response (200):**
 ```json
 {
-  "user": {
-    "id": "user_123",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "createdAt": "2025-06-14T10:00:00Z"
-  }
+  "message": "Signed out successfully"
 }
 ```
 
-#### POST /api/auth/logout
+### User
 
-Logout current user (invalidate token).
+#### GET /api/me
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Get the authenticated user.
+
+**Auth:** `token` cookie.
 
 **Response (200):**
 ```json
 {
-  "success": true,
-  "message": "Logged out successfully"
-}
-```
-
-### User Management
-
-#### GET /api/users/profile
-
-Get user profile information.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200):**
-```json
-{
-  "user": {
-    "id": "user_123",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "avatar": "https://example.com/avatar.jpg",
-    "subscription": {
-      "plan": "pro",
-      "status": "active",
-      "expiresAt": "2025-07-14T10:00:00Z"
-    }
+  "_id": "user_123",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "created_at": 1748390400000,
+  "subscription": {
+    "stripeID": "cus_1234567890",
+    "expires": 1750982400,
+    "status": "active"
+  },
+  "usage": {
+    "count": 3,
+    "reset_at": 1750982400000
   }
 }
 ```
 
-#### PUT /api/users/profile
+**Response (404):** User not found.
 
-Update user profile.
+#### PUT /api/me
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Update the authenticated user. Only `name` is whitelisted (`UPDATEABLE_USER_FIELDS`); any other fields are ignored.
+
+**Auth:** `token` cookie + `x-csrf-token` header.
 
 **Request Body:**
 ```json
 {
-  "name": "John Smith",
-  "avatar": "https://example.com/new-avatar.jpg"
+  "name": "John Smith"
 }
 ```
 
-**Response (200):**
+**Response (200):** The updated user object.
+
+**Response (400):** No valid fields supplied, or no changes made.
+
+**Response (404):** User not found.
+
+### Usage / Freemium
+
+#### POST /api/usage
+
+Check or track usage for the freemium model. Subscribers (`subscription.status === 'active'` and not expired) get unlimited usage. Free users are limited by `FREE_USAGE_LIMIT` (default `20`) over a rolling 30-day window.
+
+**Auth:** `token` cookie. (No CSRF.)
+
+**Request Body:**
 ```json
 {
-  "success": true,
-  "user": {
-    "id": "user_123",
-    "email": "user@example.com",
-    "name": "John Smith",
-    "avatar": "https://example.com/new-avatar.jpg"
+  "operation": "check"
+}
+```
+
+`operation` is `"check"` or `"track"`. `track` atomically increments usage.
+
+**Response (200) — subscriber:**
+```json
+{
+  "remaining": -1,
+  "total": -1,
+  "isSubscriber": true,
+  "subscription": {
+    "stripeID": "cus_1234567890",
+    "expires": 1750982400,
+    "status": "active"
   }
 }
 ```
 
-#### DELETE /api/users/account
-
-Delete user account.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Response (200):**
+**Response (200) — free user:**
 ```json
 {
-  "success": true,
-  "message": "Account deleted successfully"
+  "remaining": 17,
+  "total": 20,
+  "isSubscriber": false,
+  "used": 3,
+  "subscription": null
 }
 ```
 
-### Stripe Integration
-
-#### POST /api/stripe/create-payment-intent
-
-Create a payment intent for one-time payments.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
+**Response (429):** Limit reached on a `track` operation.
 ```json
 {
-  "amount": 2000,
-  "currency": "usd",
-  "description": "Product purchase"
+  "error": "Usage limit exceeded",
+  "remaining": 0,
+  "total": 20,
+  "isSubscriber": false
 }
 ```
 
-**Response (200):**
-```json
-{
-  "clientSecret": "pi_1234_secret_5678",
-  "paymentIntentId": "pi_1234567890"
-}
-```
+### Stripe
 
-#### POST /api/stripe/create-checkout-session
+Stripe is optional: the SDK only initializes when `STRIPE_KEY` is set, otherwise these flows are disabled with a startup warning. See the [Stripe guide](/stripe) for setup. Redirect URLs use `FRONTEND_URL` (or the request `origin`, or `http://localhost:<port>`) as the base.
 
-Create a Stripe Checkout session.
+#### POST /api/checkout
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Create a Stripe Checkout session for a subscription. The product is resolved by Stripe **lookup key**, not a hardcoded price ID.
 
-**Request Body:**
-```json
-{
-  "priceId": "price_1234567890",
-  "mode": "payment",
-  "successUrl": "https://yourapp.com/success",
-  "cancelUrl": "https://yourapp.com/cancel"
-}
-```
-
-**Response (200):**
-```json
-{
-  "sessionId": "cs_1234567890",
-  "url": "https://checkout.stripe.com/pay/cs_1234567890"
-}
-```
-
-#### POST /api/stripe/create-customer
-
-Create a Stripe customer.
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+**Auth:** `token` cookie + `x-csrf-token` header.
 
 **Request Body:**
 ```json
 {
   "email": "user@example.com",
-  "name": "John Doe"
+  "lookup_key": "my_lookup_key"
 }
 ```
 
 **Response (200):**
 ```json
 {
-  "customerId": "cus_1234567890"
+  "url": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "id": "cs_test_1234567890",
+  "customerID": "cus_1234567890"
 }
 ```
 
-#### POST /api/stripe/create-subscription
+**Errors:** `400` missing `email`/`lookup_key` or no price found for the lookup key; `403` if `email` does not match the authenticated user; `500` `{ "error": "Stripe session failed" }`.
 
-Create a subscription.
+#### POST /api/portal
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Create a Stripe Billing Portal session.
+
+**Auth:** `token` cookie + `x-csrf-token` header.
 
 **Request Body:**
 ```json
 {
-  "customerId": "cus_1234567890",
-  "priceId": "price_1234567890"
+  "customerID": "cus_1234567890"
 }
 ```
 
 **Response (200):**
 ```json
 {
-  "subscriptionId": "sub_1234567890",
-  "status": "active",
-  "currentPeriodEnd": "2025-07-14T10:00:00Z"
+  "url": "https://billing.stripe.com/p/session/...",
+  "id": "bps_1234567890"
 }
 ```
 
-#### GET /api/stripe/subscriptions
+**Errors:** `400` missing `customerID`; `403` if the user's stored `subscription.stripeID` exists and does not match `customerID`; `500` `{ "error": "Stripe portal failed" }`.
 
-Get user subscriptions.
+#### POST /api/payment
+
+Stripe webhook endpoint. **No auth middleware** — verified instead by the `stripe-signature` header against `STRIPE_ENDPOINT_SECRET` using `stripe.webhooks.constructEventAsync`. Idempotent: each `event.id` is recorded before processing and skipped if already seen.
 
 **Headers:**
 ```
-Authorization: Bearer <token>
+stripe-signature: t=...,v1=...
 ```
 
-**Response (200):**
-```json
-{
-  "subscriptions": [
-    {
-      "id": "sub_1234567890",
-      "status": "active",
-      "plan": "pro",
-      "currentPeriodStart": "2025-06-14T10:00:00Z",
-      "currentPeriodEnd": "2025-07-14T10:00:00Z"
-    }
-  ]
-}
-```
+Configure the webhook URL as `https://your-backend-url/api/payment`.
 
-#### POST /api/stripe/cancel-subscription
+**Handled events:**
 
-Cancel a subscription.
+- `customer.subscription.created` / `.updated` / `.deleted` — patches `subscription` (`stripeID`, `expires`, `status`).
+- `checkout.session.completed` — retrieves the subscription and patches `subscription`.
+- `invoice.paid` — patches `subscription`.
+- `invoice.payment_failed` — sets `subscription.paymentFailed` and `subscription.paymentFailedAt`.
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+**Response:** `200` on success or skip (empty body); `400` on signature/data failure; `500` on processing error.
 
-**Request Body:**
-```json
-{
-  "subscriptionId": "sub_1234567890"
-}
-```
+### Static / SPA fallback
 
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Subscription cancelled successfully"
-}
-```
+Non-`/api` routes serve static files from `config.staticDir` (`../dist`). Any non-asset, non-`/api` path returns `index.html` (SPA fallback). `/api/*` paths and paths ending in a file extension that aren't found return `404`. If `index.html` is missing, the server returns the text `Welcome to Skateboard API`.
 
-#### POST /api/stripe/webhook
+## Database
 
-Stripe webhook endpoint (no authentication required).
+The backend uses a unified adapter pattern (`backend/adapters/manager.js`, exported as `databaseManager`). The active database is selected by `backend/config.json` → `database.dbType` (default `"sqlite"`) — it is **not** chosen by an env var. Env vars (`MONGODB_URL`, `POSTGRES_URL`, `DATABASE_URL`) only substitute into the `connectionString` via `${VAR}` placeholders. Switching databases requires editing `config.json`.
 
-**Headers:**
-```
-stripe-signature: webhook-signature-here
-```
+| dbType | Adapter | Driver |
+|---|---|---|
+| `sqlite` (default) | `adapters/sqlite.js` | `node:sqlite` (`DatabaseSync`), WAL mode |
+| `postgresql` / `postgres` | `adapters/postgres.js` (dynamic import) | `pg` Pool |
+| `mongodb` / `mongo` | `adapters/mongodb.js` (dynamic import) | `mongodb` driver |
 
-**Response (200):**
-```json
-{
-  "received": true
-}
-```
+> `pg` and `mongodb` are **not** declared in `backend/package.json` dependencies; they are loaded lazily and resolved from the hoisted root `node_modules`. SQLite-only deployments work without them.
 
-### Content Management
+**Schema (logical):**
 
-#### GET /api/content/pages
+- **Users** — `_id`, `email` (unique), `name`, `created_at`, `subscription_stripeID`, `subscription_expires`, `subscription_status`, `usage_count`, `usage_reset_at`.
+- **Auths** — `email` (PK), `password` (hash), `userID` → `Users(_id)`.
+- **WebhookEvents** — `event_id` (PK), `event_type`, `processed_at`.
 
-Get static pages (privacy, terms, etc.).
+SQL adapters flatten `subscription`/`usage` into columns and reconstruct nested objects on read; MongoDB stores them as native nested objects.
 
-**Response (200):**
-```json
-{
-  "pages": [
-    {
-      "slug": "privacy",
-      "title": "Privacy Policy",
-      "content": "Your privacy policy content...",
-      "updatedAt": "2025-06-14T10:00:00Z"
-    },
-    {
-      "slug": "terms",
-      "title": "Terms of Service", 
-      "content": "Your terms content...",
-      "updatedAt": "2025-06-14T10:00:00Z"
-    }
-  ]
-}
-```
+### Password hashing
 
-#### GET /api/content/pages/:slug
+New password hashes use **node:crypto scrypt** in the format `scrypt$<base64url salt>$<base64url key>` (salt 16 bytes, key 64 bytes). Verification dispatches on the stored prefix: `scrypt$` uses a timing-safe scrypt compare; `$2` (legacy bcrypt) is verified by the vendored verify-only module at `backend/vendor/legacy-bcrypt.js` and lazily re-hashed to scrypt on successful sign in.
 
-Get a specific page.
+## Environment Variables
 
-**Response (200):**
-```json
-{
-  "page": {
-    "slug": "privacy",
-    "title": "Privacy Policy",
-    "content": "Your privacy policy content...",
-    "updatedAt": "2025-06-14T10:00:00Z"
-  }
-}
-```
+Loaded manually (no dotenv) from `backend/.env` then `backend/.env.local` when not in production; a missing `.env` is created from `.env.example`.
 
-## Error Responses
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `PORT` | No | `8000` | HTTP listen port |
+| `JWT_SECRET` | Yes | — | HS256 JWT signing secret (`503` if missing) |
+| `STRIPE_KEY` | No | — | Stripe secret key; if unset, Stripe is disabled |
+| `STRIPE_ENDPOINT_SECRET` | No | — | Stripe webhook signature secret |
+| `FREE_USAGE_LIMIT` | No | `20` | Free-tier usage limit |
+| `NODE_ENV` | No | — | `production` enables secure cookies, disables env file loading |
+| `CORS_ORIGINS` | No | localhost fallback | Comma-separated allowed origins |
+| `FRONTEND_URL` | No | — | Base for Stripe success/cancel/return URLs |
+| `MONGODB_URL` | No | — | MongoDB connection string (`${VAR}` substitution) |
+| `POSTGRES_URL` | No | — | PostgreSQL connection string (`${VAR}` substitution) |
+| `DATABASE_URL` | No | — | Generic DB connection (validation hint only) |
 
-All error responses follow this format:
+`validateEnvironmentVariables()` warns (does not exit) if `JWT_SECRET`, `STRIPE_KEY`, or `STRIPE_ENDPOINT_SECRET` are missing, or if the DB connection string contains an unresolved `${VAR}`.
 
-```json
-{
-  "success": false,
-  "error": "Error message",
-  "code": "ERROR_CODE"
-}
-```
+## HTTP Status Codes
 
-### HTTP Status Codes
+- `200` — Success
+- `201` — Created (sign up)
+- `400` — Bad request (missing/invalid fields, no changes)
+- `401` — Unauthorized (missing/expired/invalid token)
+- `403` — Forbidden (email or customer ID mismatch)
+- `404` — Not found
+- `429` — Too many requests (account lockout, usage limit)
+- `500` — Internal server error
+- `503` — Auth disabled (`JWT_SECRET` not set)
 
-- `200` - Success
-- `201` - Created
-- `400` - Bad Request
-- `401` - Unauthorized
-- `403` - Forbidden
-- `404` - Not Found
-- `409` - Conflict
-- `429` - Too Many Requests
-- `500` - Internal Server Error
+## Dependencies
 
-### Error Codes
+`backend/package.json` declares only three runtime dependencies:
 
-- `INVALID_EMAIL` - Email format is invalid
-- `WEAK_PASSWORD` - Password doesn't meet requirements
-- `EMAIL_EXISTS` - Email already registered
-- `INVALID_CREDENTIALS` - Login credentials are incorrect
-- `TOKEN_EXPIRED` - JWT token has expired
-- `TOKEN_INVALID` - JWT token is invalid
-- `USER_NOT_FOUND` - User doesn't exist
-- `STRIPE_ERROR` - Stripe payment error
-- `SUBSCRIPTION_NOT_FOUND` - Subscription doesn't exist
-- `INSUFFICIENT_PERMISSIONS` - User lacks required permissions
+- `@hono/node-server` `^1.14.1`
+- `hono` `^4.7.11`
+- `stripe` `^18.5.0`
 
-## Rate Limiting
-
-API endpoints are rate limited:
-
-- **Authentication endpoints**: 5 requests per minute per IP
-- **Payment endpoints**: 10 requests per minute per user
-- **General endpoints**: 100 requests per minute per user
-
-Rate limit headers are included in responses:
-
-```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1640995200
-```
-
-## Pagination
-
-List endpoints support pagination:
-
-**Query Parameters:**
-```
-?page=1&limit=10&sort=createdAt&order=desc
-```
-
-**Response:**
-```json
-{
-  "data": [...],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 50,
-    "pages": 5,
-    "hasNext": true,
-    "hasPrev": false
-  }
-}
-```
-
-## SDK Examples
-
-### JavaScript/Node.js
-
-```javascript
-const API_BASE = 'http://localhost:3001';
-
-class SkateboardAPI {
-  constructor(token = null) {
-    this.token = token;
-  }
-
-  async request(endpoint, options = {}) {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
-    if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
-    }
-
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
-    }
-
-    return response.json();
-  }
-
-  async login(email, password) {
-    const result = await this.request('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    
-    this.token = result.token;
-    return result;
-  }
-
-  async getProfile() {
-    return this.request('/api/users/profile');
-  }
-
-  async createPaymentIntent(amount, currency = 'usd') {
-    return this.request('/api/stripe/create-payment-intent', {
-      method: 'POST',
-      body: JSON.stringify({ amount, currency }),
-    });
-  }
-}
-
-// Usage
-const api = new SkateboardAPI();
-await api.login('user@example.com', 'password');
-const profile = await api.getProfile();
-```
+There are no backend devDependencies; tests run with Node's built-in test runner (`node --test --experimental-sqlite server.test.js`).

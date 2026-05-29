@@ -1,378 +1,202 @@
 ---
 layout: default
 title: Deployment
-description: Deploy your Skateboard application to production with comprehensive guides
+description: Deploy your Skateboard app to production — Vercel, Render, Netlify + Railway, or Docker, with exact commands and config
 ---
 
 # Deployment
 
-Deploy your Skateboard application to production with these deployment guides.
+Skateboard is a monorepo: a Vite-built React frontend (served as static files from `dist`) and a Node.js + Hono backend (`backend/server.js`) that defaults to SQLite. Pick one of the supported paths below — a single combined deployment (Vercel or Docker) or a split frontend/backend deployment (Render, or Netlify + Railway).
 
-## Quick Deploy Options
+## Before You Deploy
 
-### Vercel (Recommended for Frontend)
-
-1. **Connect Repository**
-   ```bash
-   npm install -g vercel
-   vercel
-   ```
-
-2. **Configure Build Settings**
-   - Build Command: `npm run prod`
-   - Output Directory: `dist`
-   - Install Command: `npm install`
-
-3. **Environment Variables**
-   Add in Vercel dashboard:
-   ```
-   VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
-   VITE_API_URL=https://your-backend.com
-   ```
-
-### Railway (Recommended for Backend)
-
-1. **Deploy Backend**
-   ```bash
-   npm install -g @railway/cli
-   railway login
-   railway init
-   railway up
-   ```
-
-2. **Environment Variables**
-   ```bash
-   railway add STRIPE_SECRET_KEY=sk_live_...
-   railway add MONGODB_URL=mongodb://...
-   railway add JWT_SECRET=your-secret
-   ```
-
-### Netlify
-
-1. **Deploy**
-   ```bash
-   npm install -g netlify-cli
-   netlify init
-   netlify deploy --prod
-   ```
-
-2. **Build Settings**
-   - Build command: `npm run prod`
-   - Publish directory: `dist`
-
-## Production Checklist
-
-### Frontend
-
-- [ ] Update `VITE_API_URL` to production backend
-- [ ] Use production Stripe publishable key
-- [ ] Enable HTTPS
-- [ ] Configure custom domain
-- [ ] Set up analytics (Google Analytics, etc.)
-- [ ] Test all routes and features
-- [ ] Optimize images and assets
-- [ ] Enable gzip compression
-
-### Backend
-
-- [ ] Use production MongoDB database
-- [ ] Use production Stripe secret key
-- [ ] Set secure JWT secret
-- [ ] Configure CORS for production domain
-- [ ] Enable HTTPS/SSL
-- [ ] Set up environment variables
-- [ ] Configure rate limiting
-- [ ] Set up logging and monitoring
-- [ ] Test webhook endpoints
-- [ ] Configure backups
-
-## Detailed Deployment Guides
-
-### Vercel Deployment
-
-#### 1. Prepare for Deployment
+Set these on whichever host runs the **backend**:
 
 ```bash
-# Build for production
-npm run prod
+JWT_SECRET=your_secure_jwt_secret        # required — HS256 signing key; auth returns 503 if unset
+STRIPE_KEY=sk_live_your_stripe_key       # required for payments — Stripe self-disables if unset
+STRIPE_ENDPOINT_SECRET=whsec_...         # required for webhooks
+CORS_ORIGINS=https://yourapp.com,https://www.yourapp.com   # allowed frontend origins (CORS)
+FRONTEND_URL=https://yourapp.com         # base for Stripe success/cancel/return URLs
+PORT=8000                                # default 8000
+FREE_USAGE_LIMIT=20                      # optional, default 20
 
-# Test production build locally
-npm install -g serve
-serve -s dist
+# Database — only if not using the default SQLite (set the matching dbType in backend/config.json):
+# POSTGRES_URL=postgresql://user:pass@host:5432/db
+# MONGODB_URL=mongodb+srv://...
 ```
 
-#### 2. Deploy to Vercel
+Notes:
 
-```bash
-# Install Vercel CLI
-npm install -g vercel
+- There is **no client-side Stripe** and **no `VITE_*` build vars**. The frontend reaches the backend via `backendURL` in `src/constants.json`, not an env var.
+- CORS is controlled by the **`CORS_ORIGINS` env var** on the backend (comma-separated origins); it falls back to localhost defaults when unset. The backend does **not** read a `client` key from `backend/config.json` — that file only holds `staticDir` and the `database` block.
+- Database selection is driven by `backend/config.json` (`database.dbType`), not by env vars. Env vars only fill `${VAR}` placeholders in the `connectionString`. The default config is SQLite at `./databases/MyApp.db`.
+- Point your Stripe webhook at `https://your-backend-url/api/payment` and subscribe to `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `checkout.session.completed`, `invoice.paid`, and `invoice.payment_failed`.
 
-# Deploy
-vercel
+See [Configuration](/configuration) for the full `constants.json` / `config.json` reference, [Stripe](/stripe) for webhook setup, and [Authentication](/authentication) for the cookie/CSRF model.
 
-# Follow prompts:
-# ? Set up and deploy? Yes
-# ? Which scope? Your username
-# ? Link to existing project? No
-# ? What's your project's name? my-skateboard-app
-# ? In which directory is your code located? ./
-```
+## Vercel (single deployment, frontend + backend)
 
-#### 3. Configure Environment Variables
+The recommended path — frontend and backend ship together.
 
-In Vercel dashboard:
-```
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
-VITE_API_URL=https://your-backend-url.com
-```
+### 1. Add `vercel.json`
 
-#### 4. Custom Domain
-
-1. Go to Vercel dashboard → Domains
-2. Add your custom domain
-3. Configure DNS records as shown
-
-### Railway Backend Deployment
-
-#### 1. Prepare Backend
-
-```bash
-cd backend
-
-# Create Procfile
-echo "web: node server.js" > Procfile
-
-# Update package.json
+```json
 {
-  "scripts": {
-    "start": "node server.js"
-  }
+  "version": 2,
+  "builds": [
+    { "src": "backend/server.js", "use": "@vercel/node" },
+    { "src": "package.json", "use": "@vercel/static-build" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "backend/server.js" },
+    { "src": "/(.*)", "dest": "$1" }
+  ],
+  "buildCommand": "npm run build"
 }
 ```
 
-#### 2. Deploy to Railway
+### 2. Export the Hono app
 
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Login and deploy
-railway login
-railway init
-railway up
-```
-
-#### 3. Environment Variables
-
-```bash
-railway add STRIPE_SECRET_KEY=sk_live_...
-railway add STRIPE_WEBHOOK_SECRET=whsec_...
-railway add MONGODB_URL=mongodb+srv://...
-railway add JWT_SECRET=your-super-secret-key
-railway add NODE_ENV=production
-```
-
-#### 4. Custom Domain
-
-1. Railway dashboard → Settings → Domains
-2. Add custom domain
-3. Configure DNS
-
-### MongoDB Atlas Setup
-
-1. **Create Cluster**
-   - Go to [MongoDB Atlas](https://cloud.mongodb.com)
-   - Create new cluster
-   - Choose cloud provider and region
-
-2. **Configure Access**
-   - Database Access → Add user
-   - Network Access → Add IP address (0.0.0.0/0 for all IPs)
-
-3. **Get Connection String**
-   - Connect → Connect your application
-   - Copy connection string
-   - Replace `<password>` with your password
-
-### DigitalOcean App Platform
-
-#### 1. Create App
-
-```yaml
-# .do/app.yaml
-name: skateboard-app
-services:
-- name: frontend
-  source_dir: /
-  github:
-    repo: your-username/your-repo
-    branch: main
-  build_command: npm run prod
-  output_dir: dist
-  http_port: 8080
-  instance_count: 1
-  instance_size_slug: basic-xxs
-  routes:
-  - path: /
-  envs:
-  - key: VITE_STRIPE_PUBLISHABLE_KEY
-    value: pk_live_...
-  - key: VITE_API_URL
-    value: https://your-backend-url.com
-
-- name: backend
-  source_dir: /backend
-  build_command: npm install
-  run_command: node server.js
-  http_port: 3001
-  instance_count: 1
-  instance_size_slug: basic-xxs
-  routes:
-  - path: /api
-  envs:
-  - key: STRIPE_SECRET_KEY
-    value: sk_live_...
-  - key: MONGODB_URL
-    value: mongodb+srv://...
-```
-
-#### 2. Deploy
-
-```bash
-doctl apps create --spec .do/app.yaml
-```
-
-## Environment Configuration
-
-### Production Environment Variables
-
-#### Frontend (.env.production)
-```
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
-VITE_API_URL=https://api.yourapp.com
-VITE_ENVIRONMENT=production
-```
-
-#### Backend (.env)
-```
-NODE_ENV=production
-PORT=3001
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-MONGODB_URL=mongodb+srv://...
-JWT_SECRET=your-super-secret-key
-CORS_ORIGIN=https://yourapp.com
-```
-
-## SSL/HTTPS Setup
-
-### Cloudflare (Recommended)
-
-1. Add your domain to Cloudflare
-2. Update nameservers
-3. Enable "Full (strict)" SSL mode
-4. Turn on "Always Use HTTPS"
-
-### Let's Encrypt (Self-managed)
-
-```bash
-# Install certbot
-sudo apt-get install certbot
-
-# Get certificate
-sudo certbot certonly --standalone -d yourdomain.com
-
-# Configure nginx/apache with certificate
-```
-
-## Performance Optimization
-
-### Frontend Optimization
+Add this to the end of `backend/server.js` so Vercel can mount it:
 
 ```javascript
-// vite.config.js
-export default {
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          ui: ['@stevederico/skateboard-ui']
-        }
-      }
-    }
-  }
-}
+export default app;
 ```
 
-### Backend Optimization
+### 3. Import the project
 
-```javascript
-// Add compression
-app.use(compression());
+In the Vercel dashboard: New Project → import your GitHub repo → Framework Preset **Other**, Build Command `npm run build`, Output Directory `dist` → add the env vars listed above (including `CORS_ORIGINS=https://yourproject.vercel.app`) → Deploy.
 
-// Add rate limiting
-import rateLimit from 'express-rate-limit';
+### 4. Point the frontend at the backend
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
-});
-
-app.use('/api/', limiter);
+```jsonc
+// src/constants.json
+{ "backendURL": "/api" }
 ```
 
-## Monitoring & Analytics
+Frontend and backend share the same Vercel origin, so set `CORS_ORIGINS` to that origin on the backend. The `backend/config.json` `database` block stays as the SQLite default unless you switch databases.
 
-### Error Tracking
+## Render (static site + web service)
+
+Split deployment: a Static Site for the frontend and a Web Service for the backend.
+
+### Backend (Web Service)
+
+render.com → New → Web Service → connect repo:
+
+- Name: `skateboard-backend`
+- Root Directory: `backend`
+- Runtime: Node
+- Build Command: `npm install`
+- Start Command: `npm start`
+
+Add the env vars (set `CORS_ORIGINS=https://skateboard-frontend.onrender.com`), deploy, and copy the service URL.
+
+### Frontend (Static Site)
+
+New → Static Site → same repo:
+
+- Name: `skateboard-frontend`
+- Build Command: `npm run build`
+- Publish Directory: `dist`
+
+### Config
+
+```jsonc
+// src/constants.json
+{ "backendURL": "https://skateboard-backend.onrender.com" }
+```
 
 ```bash
-# Add Sentry
-npm install @sentry/react @sentry/node
+# backend env (CORS) — allow the static-site origin
+CORS_ORIGINS=https://skateboard-frontend.onrender.com
 ```
 
-```javascript
-// Frontend - main.jsx
-import * as Sentry from "@sentry/react";
+## Netlify + Railway (frontend on Netlify, backend on Railway)
 
-Sentry.init({
-  dsn: "YOUR_SENTRY_DSN",
-});
+### Backend (Railway)
+
+railway.app → New Project → Deploy from GitHub repo:
+
+- Build Command: `npm install --workspace=backend`
+- Start Command: `npm run --workspace=backend start`
+
+Add the env vars (set `CORS_ORIGINS` to your Netlify origin), deploy, and copy the public URL.
+
+### Frontend (Netlify)
+
+netlify.com → New site from Git → connect repo:
+
+- Build Command: `npm run build`
+- Publish Directory: `dist`
+
+### Config
+
+```jsonc
+// src/constants.json
+{ "backendURL": "https://yourapp.up.railway.app" }
 ```
 
-### Analytics
-
-```html
-<!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'GA_MEASUREMENT_ID');
-</script>
+```bash
+# backend env (CORS) — allow the Netlify origin
+CORS_ORIGINS=https://random-name.netlify.app
 ```
+
+## Docker
+
+A `Dockerfile` ships with the repo: a multi-stage build on `node:22-alpine` that builds the frontend, copies the backend, exposes port `8000`, and runs the server with the SQLite flag (`node --experimental-sqlite backend/server.js`). It includes a healthcheck against `/api/health`.
+
+```bash
+docker build -t skateboard .
+docker run -p 8000:8000 --env-file .env skateboard
+```
+
+The container serves both the static frontend (from `dist`) and the API on port `8000`.
+
+## Database Configuration
+
+The backend ships with three adapters (`backend/adapters/{sqlite,postgres,mongodb}.js`) selected by `backend/config.json`:
+
+```jsonc
+// SQLite (default)
+{ "dbType": "sqlite",     "connectionString": "./databases/MyApp.db" }
+
+// PostgreSQL
+{ "dbType": "postgresql", "connectionString": "${POSTGRES_URL}" }
+
+// MongoDB
+{ "dbType": "mongodb",    "connectionString": "${MONGODB_URL}", "db": "SkateboardApp" }
+```
+
+Switching databases requires editing both `dbType` and `connectionString` in `config.json`; setting `POSTGRES_URL` / `MONGODB_URL` alone does not auto-switch. The `pg` and `mongodb` drivers are loaded lazily, so SQLite-only deployments don't need them installed. See [Configuration](/configuration) and the [API reference](/api) for schema details.
+
+## Go-Live Checklist
+
+- [ ] Backend env vars set: `JWT_SECRET`, `STRIPE_KEY`, `STRIPE_ENDPOINT_SECRET`, `CORS_ORIGINS`, `FRONTEND_URL`
+- [ ] `src/constants.json` → `backendURL` points at the production backend (`/api` for Vercel, full URL otherwise)
+- [ ] `CORS_ORIGINS` includes the exact production frontend origin(s)
+- [ ] `backend/config.json` → `dbType` / `connectionString` set for your production database
+- [ ] Stripe webhook configured with the production URL `https://your-backend-url/api/payment`
+- [ ] Live Stripe keys in use (`sk_live_...`)
+- [ ] `GET /api/health` returns `{ "status": "ok", "timestamp": <ms> }`
+- [ ] Test signup / signin end to end
+- [ ] Test a checkout and the customer portal
+- [ ] Monitor backend logs after first deploy
 
 ## Troubleshooting
 
-### Common Issues
+**Auth returns 503**
+`JWT_SECRET` is not set on the backend. Set it and redeploy.
 
-**Build Failures:**
-- Check all environment variables are set
-- Verify all dependencies are installed
-- Check for syntax errors
+**CORS errors**
+`CORS_ORIGINS` must list the exact frontend origin, including scheme and subdomain. The backend reads this env var only (it does not read a `client` key from `backend/config.json`).
 
-**CORS Errors:**
-- Update backend CORS configuration
-- Verify frontend URL in backend config
+**401 redirects to /signout**
+The `token` HttpOnly cookie isn't being sent. Confirm the frontend and backend share a domain (or that cross-site cookies are allowed) and that requests use `credentials: 'include'` — `apiRequest` does this automatically.
 
-**Database Connection:**
-- Check MongoDB connection string
-- Verify network access settings
-- Test connection locally first
+**Stripe webhook failures**
+Verify the endpoint URL is `https://your-backend-url/api/payment`, that `STRIPE_ENDPOINT_SECRET` matches the signing secret, and that the endpoint is publicly reachable.
 
-**Stripe Webhooks:**
-- Verify webhook URL is accessible
-- Check webhook secret configuration
-- Test with Stripe CLI
+**Database connection issues**
+Confirm `dbType` and `connectionString` in `backend/config.json` match your provider, and that any `${VAR}` placeholder resolves to a set env var (an unresolved placeholder is logged as a warning at startup).
