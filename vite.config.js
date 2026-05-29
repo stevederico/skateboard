@@ -290,8 +290,10 @@ export default defineConfig({
     open: false,
     port: 5173,
     strictPort: false,
+    // Don't pin the HMR port — Vite derives it from the resolved server port.
+    // Hardcoding 5173 broke HMR ("WebSocket closed without opened") whenever
+    // 5173 was taken and the server fell back to 5174 while HMR still dialed 5173.
     hmr: {
-      port: 5173,
       overlay: false
     },
     watch: {
