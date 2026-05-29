@@ -57,7 +57,7 @@ export default function LandingSpecSheet() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle variant="landing" iconSize={14} />
-            <Button size="sm" onClick={goApp}>{constants.cta}</Button>
+            <Button size="default" onClick={goApp}>{constants.cta}</Button>
           </div>
         </nav>
       </header>
