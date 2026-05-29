@@ -12,6 +12,10 @@
     a react starter with auth, stripe, shadcn, and sqlite
   </h3>
 
+  <p align="center">
+    <a href="https://stevederico.github.io/skateboard/"><strong>📖 Documentation</strong></a>
+  </p>
+
 </div>
 
 <br />
@@ -228,7 +232,7 @@ createSkateboardApp({ constants, appRoutes });
 
 That's it! The shell handles routing, auth, layout, landing page, sign in/up, settings, payment, and all legal pages.
 
-**Learn more:** [Guide](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
+**Learn more:** [Documentation site](https://stevederico.github.io/skateboard/) for guides, or [docs/GUIDE.md](docs/GUIDE.md) for the consolidated reference (Architecture, API, Schema, Deployment, Migration).
 
 <br />
 
