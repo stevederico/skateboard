@@ -249,7 +249,7 @@ Check or track usage for the freemium model. Subscribers (`subscription.status =
 
 ### Stripe
 
-Stripe is optional: the SDK only initializes when `STRIPE_KEY` is set, otherwise these flows are disabled with a startup warning. See the [Stripe guide](/stripe) for setup. Redirect URLs use `FRONTEND_URL` (or the request `origin`, or `http://localhost:<port>`) as the base.
+Stripe is optional: the SDK only initializes when `STRIPE_KEY` is set, otherwise these flows are disabled with a startup warning. See the [Stripe guide]({{ '/stripe' | relative_url }}) for setup. Redirect URLs use `FRONTEND_URL` (or the request `origin`, or `http://localhost:<port>`) as the base.
 
 #### POST /api/checkout
 

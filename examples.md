@@ -8,7 +8,7 @@ description: Real-world examples and code snippets for building with Skateboard 
 
 Real-world examples and code snippets to help you build with Skateboard.
 
-All examples follow the Application Shell Architecture: views live in `src/components/`, import shadcn primitives and icons from the `@stevederico/skateboard-ui` package, and talk to the backend through the `apiRequest` utility (which auto-includes credentials and the CSRF token — never read a token from `localStorage`). See [Components](/components), [API](/api), and [Authentication](/authentication) for the full reference.
+All examples follow the Application Shell Architecture: views live in `src/components/`, import shadcn primitives and icons from the `@stevederico/skateboard-ui` package, and talk to the backend through the `apiRequest` utility (which auto-includes credentials and the CSRF token — never read a token from `localStorage`). See [Components]({{ '/components' | relative_url }}), [API]({{ '/api' | relative_url }}), and [Authentication]({{ '/authentication' | relative_url }}) for the full reference.
 
 ## View Examples
 
@@ -262,7 +262,7 @@ export default function SettingsForm({ user }) {
 
 > Note: the shell's `useForm` exposes `handleChange` as a curried helper — call `handleChange('name')` to get the `onChange` handler for the `name` field.
 
-> Authentication forms (sign up / sign in) are provided by the shell. `createSkateboardApp` auto-mounts `/signin` and `/signup`, which post to `POST /api/signup` (`{ email, password, name }`) and `POST /api/signin` (`{ email, password }`) and set the HttpOnly `token` and `csrf_token` cookies. You don't build these yourself — see [Authentication](/authentication).
+> Authentication forms (sign up / sign in) are provided by the shell. `createSkateboardApp` auto-mounts `/signin` and `/signup`, which post to `POST /api/signup` (`{ email, password, name }`) and `POST /api/signin` (`{ email, password }`) and set the HttpOnly `token` and `csrf_token` cookies. You don't build these yourself — see [Authentication]({{ '/authentication' | relative_url }}).
 
 ## Stripe / Checkout Example
 
@@ -303,7 +303,7 @@ export default function UpgradeButton() {
 }
 ```
 
-To open the Stripe customer portal for an existing subscriber, call `showManage(stripeID)` (posts `{ customerID }` to `POST /api/portal`). See [Stripe](/stripe) for the full setup, including the webhook endpoint `POST /api/payment`.
+To open the Stripe customer portal for an existing subscriber, call `showManage(stripeID)` (posts `{ customerID }` to `POST /api/portal`). See [Stripe]({{ '/stripe' | relative_url }}) for the full setup, including the webhook endpoint `POST /api/payment`.
 
 ## Usage Tracking Example
 

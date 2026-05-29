@@ -262,7 +262,7 @@ The `index.html` token replacements (`{{APP_NAME}}`, `{{TAGLINE}}`, `{{COMPANY_W
 
 ## Where to go next
 
-- [Authentication](/authentication) — JWT cookies, CSRF, scrypt hashing, lockout.
-- [API Reference](/api) — every backend endpoint.
-- [Stripe](/stripe) — products, checkout, portal, webhooks.
-- [Deployment](/deployment) — production env vars and platform setup.
+- [Authentication]({{ '/authentication' | relative_url }}) — JWT cookies, CSRF, scrypt hashing, lockout.
+- [API Reference]({{ '/api' | relative_url }}) — every backend endpoint.
+- [Stripe]({{ '/stripe' | relative_url }}) — products, checkout, portal, webhooks.
+- [Deployment]({{ '/deployment' | relative_url }}) — production env vars and platform setup.

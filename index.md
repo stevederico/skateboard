@@ -5,42 +5,42 @@ description: A React starter with auth, Stripe, shadcn/ui, and SQLite — ship y
 ---
 
 <div class="nav-cards">
-    <a href="/getting-started" class="nav-card">
+    <a href="{{ '/getting-started' | relative_url }}" class="nav-card">
         <div class="nav-card-title">🚀 Getting Started</div>
         <div class="nav-card-description">Scaffold Skateboard and run frontend + backend in minutes</div>
     </a>
 
-    <a href="/configuration" class="nav-card">
+    <a href="{{ '/configuration' | relative_url }}" class="nav-card">
         <div class="nav-card-title">⚙️ Configuration</div>
         <div class="nav-card-description">Set up constants.json, backend config.json, and environment variables</div>
     </a>
 
-    <a href="/components" class="nav-card">
+    <a href="{{ '/components' | relative_url }}" class="nav-card">
         <div class="nav-card-title">🎨 Components</div>
         <div class="nav-card-description">Shadcn/ui components from skateboard-ui, with semantic design tokens</div>
     </a>
 
-    <a href="/authentication" class="nav-card">
+    <a href="{{ '/authentication' | relative_url }}" class="nav-card">
         <div class="nav-card-title">🔐 Authentication</div>
         <div class="nav-card-description">Native HS256 JWT in HttpOnly cookies, CSRF protection, and scrypt hashing</div>
     </a>
 
-    <a href="/stripe" class="nav-card">
+    <a href="{{ '/stripe' | relative_url }}" class="nav-card">
         <div class="nav-card-title">💳 Stripe Integration</div>
         <div class="nav-card-description">Checkout, customer portal, and signature-verified webhooks</div>
     </a>
 
-    <a href="/deployment" class="nav-card">
+    <a href="{{ '/deployment' | relative_url }}" class="nav-card">
         <div class="nav-card-title">🚀 Deployment</div>
         <div class="nav-card-description">Deploy to Vercel, Render, Netlify + Railway, or Docker</div>
     </a>
 
-    <a href="/api" class="nav-card">
+    <a href="{{ '/api' | relative_url }}" class="nav-card">
         <div class="nav-card-title">📚 API Reference</div>
         <div class="nav-card-description">Backend endpoints, env vars, and the database adapter layer</div>
     </a>
 
-    <a href="/examples" class="nav-card">
+    <a href="{{ '/examples' | relative_url }}" class="nav-card">
         <div class="nav-card-title">💡 Examples</div>
         <div class="nav-card-description">Patterns for views, data fetching, and usage-gated features</div>
     </a>

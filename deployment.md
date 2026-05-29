@@ -33,7 +33,7 @@ Notes:
 - Database selection is driven by `backend/config.json` (`database.dbType`), not by env vars. Env vars only fill `${VAR}` placeholders in the `connectionString`. The default config is SQLite at `./databases/MyApp.db`.
 - Point your Stripe webhook at `https://your-backend-url/api/payment` and subscribe to `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `checkout.session.completed`, `invoice.paid`, and `invoice.payment_failed`.
 
-See [Configuration](/configuration) for the full `constants.json` / `config.json` reference, [Stripe](/stripe) for webhook setup, and [Authentication](/authentication) for the cookie/CSRF model.
+See [Configuration]({{ '/configuration' | relative_url }}) for the full `constants.json` / `config.json` reference, [Stripe]({{ '/stripe' | relative_url }}) for webhook setup, and [Authentication]({{ '/authentication' | relative_url }}) for the cookie/CSRF model.
 
 ## Vercel (single deployment, frontend + backend)
 
@@ -169,7 +169,7 @@ The backend ships with three adapters (`backend/adapters/{sqlite,postgres,mongod
 { "dbType": "mongodb",    "connectionString": "${MONGODB_URL}", "db": "SkateboardApp" }
 ```
 
-Switching databases requires editing both `dbType` and `connectionString` in `config.json`; setting `POSTGRES_URL` / `MONGODB_URL` alone does not auto-switch. The `pg` and `mongodb` drivers are loaded lazily, so SQLite-only deployments don't need them installed. See [Configuration](/configuration) and the [API reference](/api) for schema details.
+Switching databases requires editing both `dbType` and `connectionString` in `config.json`; setting `POSTGRES_URL` / `MONGODB_URL` alone does not auto-switch. The `pg` and `mongodb` drivers are loaded lazily, so SQLite-only deployments don't need them installed. See [Configuration]({{ '/configuration' | relative_url }}) and the [API reference]({{ '/api' | relative_url }}) for schema details.
 
 ## Go-Live Checklist
 
