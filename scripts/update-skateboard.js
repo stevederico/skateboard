@@ -45,6 +45,7 @@ const ALLOWLIST = [
   'backend/adapters/postgres.js',
   'backend/adapters/mongodb.js',
   'backend/vendor/legacy-bcrypt.js',
+  'backend/package.json',
   'vite.config.js',
   'Dockerfile',
   '.dockerignore',
@@ -254,6 +255,18 @@ async function mergePackageJson(baselineTag) {
     }
   }
 
+  // Scripts: add template-added scripts; update template-changed scripts the app
+  // hasn't customized (e.g. root `server` start → dev). Never pruned — apps add their own.
+  {
+    const appS = appPkg.scripts || {}, newS = newPkg.scripts || {}, baseS = basePkg?.scripts || {};
+    for (const [name, cmd] of Object.entries(newS)) {
+      if (!(name in appS)) adds[`scripts.${name}`] = cmd;
+      else if (basePkg && name in baseS && appS[name] === baseS[name] && appS[name] !== cmd) {
+        updates[`scripts.${name}`] = `${appS[name]} → ${cmd}`;
+      }
+    }
+  }
+
   const versionChanged = appPkg.skateboardVersion !== newPkg.version;
   if (!Object.keys(adds).length && !Object.keys(removes).length && !Object.keys(updates).length && !versionChanged) {
     console.log('\n[ok] package.json — no changes needed');
@@ -286,6 +299,13 @@ async function mergePackageJson(baselineTag) {
       for (const [name, version] of Object.entries(newD)) {
         if (name in appD && name in baseD && appD[name] === baseD[name]) appD[name] = version;
       }
+    }
+  }
+  {
+    const appS = appPkg.scripts || (appPkg.scripts = {}), newS = newPkg.scripts || {}, baseS = basePkg?.scripts || {};
+    for (const [name, cmd] of Object.entries(newS)) {
+      if (!(name in appS)) appS[name] = cmd;
+      else if (basePkg && name in baseS && appS[name] === baseS[name]) appS[name] = cmd;
     }
   }
   appPkg.skateboardVersion = newPkg.version;
