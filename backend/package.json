@@ -8,6 +8,7 @@
     },
     "scripts": {
         "start": "node --experimental-sqlite server.js",
+        "dev": "node --watch --experimental-sqlite server.js",
         "test": "node --test --experimental-sqlite server.test.js"
     },
     "dependencies": {

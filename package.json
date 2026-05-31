@@ -10,7 +10,7 @@
   "scripts": {
     "start": "npm run front & npm run server",
     "front": "vite --force --mode development",
-    "server": "npm run --workspace=backend start",
+    "server": "npm run --workspace=backend dev",
     "build": "vite build --mode production",
     "prod": "vite build --mode production",
     "install-all": "npm install && npm install --workspace=backend"
