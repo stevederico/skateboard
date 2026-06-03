@@ -9,7 +9,7 @@
  * Excludes hackathon archives by default. Target UI from each package.json.
  */
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { globSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +29,7 @@ const EXCLUDE_DIRS = new Set([
 const args = process.argv.slice(2);
 const doCommit = args.includes('--commit');
 const doBuild = args.includes('--build');
+const commitOnly = args.includes('--commit-only');
 const onlyArg = args.find((a) => a.startsWith('--only='));
 const onlyNames = onlyArg
   ? new Set(onlyArg.slice(7).split(',').map((s) => s.trim()))
@@ -42,6 +43,36 @@ function run(cmd, cwd) {
 
 function runQuiet(cmd, cwd) {
   execSync(cmd, { cwd, stdio: 'pipe', env: process.env });
+}
+
+/** Stop ignoring lockfiles; stage migration commit. */
+function stageMigrationCommit(dir) {
+  const gitignorePath = join(dir, '.gitignore');
+  if (existsSync(gitignorePath)) {
+    const lines = readFileSync(gitignorePath, 'utf8').split('\n');
+    const filtered = lines.filter((line) => {
+      const t = line.trim();
+      return t !== 'package-lock.json' && t !== 'backend/package-lock.json';
+    });
+    if (filtered.length !== lines.length) {
+      writeFileSync(gitignorePath, filtered.join('\n').replace(/\n+$/, '\n'));
+      runQuiet('git add .gitignore', dir);
+    }
+  }
+
+  runQuiet('git add package.json', dir);
+  for (const rel of ['package-lock.json', 'backend/package-lock.json']) {
+    if (existsSync(join(dir, rel))) {
+      runQuiet(`git add -f "${rel}"`, dir);
+    }
+  }
+  for (const rel of DENO_PATHS) {
+    try {
+      runQuiet(`git add -u "${rel}"`, dir);
+    } catch {
+      /* not tracked */
+    }
+  }
 }
 
 const packageFiles = globSync(`${ROOT}/**/package.json`).filter(
@@ -102,41 +133,36 @@ for (const { dir, name, version, pkg } of apps) {
     }
 
     const nm = join(dir, 'node_modules');
-    if (existsSync(join(nm, '.deno'))) {
-      rmSync(nm, { recursive: true, force: true });
-      process.stdout.write('  rm node_modules (.deno)\n');
-    }
+    if (!commitOnly) {
+      if (existsSync(join(nm, '.deno'))) {
+        rmSync(nm, { recursive: true, force: true });
+        process.stdout.write('  rm node_modules (.deno)\n');
+      }
 
-    run(
-      `npm install ${UI_PKG}@${version} --save-exact --min-release-age=0`,
-      dir,
-    );
-    run('npm install', dir);
+      run(
+        `npm install ${UI_PKG}@${version} --save-exact --min-release-age=0`,
+        dir,
+      );
+      run('npm install', dir);
 
-    const hasBackendWorkspace =
-      Array.isArray(pkg.workspaces) &&
-      pkg.workspaces.some((w) => w === 'backend' || String(w).includes('backend'));
-    if (hasBackendWorkspace && existsSync(join(dir, 'backend', 'package.json'))) {
-      run('npm install --workspace=backend', dir);
-    } else if (existsSync(join(dir, 'backend', 'package.json'))) {
-      run('npm install', join(dir, 'backend'));
-    }
+      const hasBackendWorkspace =
+        Array.isArray(pkg.workspaces) &&
+        pkg.workspaces.some((w) => w === 'backend' || String(w).includes('backend'));
+      if (hasBackendWorkspace && existsSync(join(dir, 'backend', 'package.json'))) {
+        run('npm install --workspace=backend', dir);
+      } else if (existsSync(join(dir, 'backend', 'package.json'))) {
+        run('npm install', join(dir, 'backend'));
+      }
 
-    run(`node "${VERIFY}"`, dir);
+      run(`node "${VERIFY}"`, dir);
 
-    if (doBuild && pkg.scripts?.build) {
-      run('npm run build', dir);
+      if (doBuild && pkg.scripts?.build) {
+        run('npm run build', dir);
+      }
     }
 
     if (doCommit && existsSync(join(dir, '.git'))) {
-      runQuiet('git add package-lock.json backend/package-lock.json package.json', dir);
-      for (const rel of DENO_PATHS) {
-        try {
-          runQuiet(`git add -u "${rel}"`, dir);
-        } catch {
-          /* not tracked */
-        }
-      }
+      stageMigrationCommit(dir);
       const status = execSync('git status --porcelain', {
         cwd: dir,
         encoding: 'utf8',
