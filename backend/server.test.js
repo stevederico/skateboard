@@ -4,7 +4,7 @@
  * Tests all auth endpoints: signup, signin, signout, CSRF, and JWT middleware.
  * Uses Node.js built-in test runner (node --test).
  *
- * Run with: node --test --experimental-sqlite server.test.js
+ * Run with: node --test server.test.js
  */
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';

@@ -1,9 +1,12 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "3.6.0",
-  "skateboardVersion": "3.6.0",
+  "version": "3.6.1",
+  "skateboardVersion": "3.6.1",
   "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "workspaces": [
     "backend"
   ],
