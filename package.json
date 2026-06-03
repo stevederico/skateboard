@@ -16,7 +16,10 @@
     "server": "npm run --workspace=backend dev",
     "build": "vite build --mode production",
     "prod": "vite build --mode production",
-    "install-all": "npm install && npm install --workspace=backend"
+    "install-all": "npm install && npm install --workspace=backend",
+    "verify:ui": "node scripts/verify-ui-version.mjs",
+    "fleet:migrate": "node scripts/fleet-migrate.mjs",
+    "fleet:migrate:commit": "node scripts/fleet-migrate.mjs --commit"
   },
   "dependencies": {
     "@stevederico/skateboard-ui": "3.8.0",
