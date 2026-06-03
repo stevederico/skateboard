@@ -19,7 +19,8 @@
     "install-all": "npm install && npm install --workspace=backend",
     "verify:ui": "node scripts/verify-ui-version.mjs",
     "fleet:migrate": "node scripts/fleet-migrate.mjs",
-    "fleet:migrate:commit": "node scripts/fleet-migrate.mjs --commit"
+    "fleet:migrate:commit": "node scripts/fleet-migrate.mjs --commit",
+    "fleet:commit": "node scripts/fleet-commit-dirty.mjs"
   },
   "dependencies": {
     "@stevederico/skateboard-ui": "3.8.0",
