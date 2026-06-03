@@ -20,7 +20,7 @@
     "verify:ui": "node scripts/verify-ui-version.mjs"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "3.8.0",
+    "@stevederico/skateboard-ui": "3.8.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-router": "7.15.0"
