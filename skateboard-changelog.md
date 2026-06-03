@@ -14,6 +14,12 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+3.6.1
+
+  Require Node 24+
+  Drop --experimental-sqlite (stable in Node 24)
+  Dockerfile node:24-alpine
+
 3.1.3
 
   Retarget migrate doc

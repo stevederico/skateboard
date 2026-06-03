@@ -201,7 +201,7 @@ Built with the latest and greatest:
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.15+ | Routing |
 | **Hono** | v4.7+ | Backend Server |
-| **Node.js** | v22+ | Runtime |
+| **Node.js** | v24+ | Runtime |
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
 | **Stripe** | v18+ | Payments |
 | **node:crypto** | built-in | JWT + scrypt password hashing |

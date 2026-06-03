@@ -4,12 +4,12 @@
     "description": "Skateboard application backend",
     "type": "module",
     "engines": {
-        "node": ">=22.5.0"
+        "node": ">=24.0.0"
     },
     "scripts": {
-        "start": "node --experimental-sqlite server.js",
-        "dev": "node --watch --experimental-sqlite server.js",
-        "test": "node --test --experimental-sqlite server.test.js"
+        "start": "node server.js",
+        "dev": "node --watch server.js",
+        "test": "node --test server.test.js"
     },
     "dependencies": {
         "@hono/node-server": "^1.14.1",
