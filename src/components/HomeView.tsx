@@ -1,11 +1,11 @@
 import Header from '@stevederico/skateboard-ui/Header';
-import { SectionCards } from './SectionCards.jsx';
+import { SectionCards } from './SectionCards';
 
 /**
  * Dashboard view with metric cards.
  *
  * @component
- * @returns {JSX.Element} Dashboard view
+ * @returns Dashboard view
  */
 export default function HomeView() {
   return (

@@ -13,6 +13,13 @@ import {
 } from '@stevederico/skateboard-ui/shadcn/ui/command';
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 
+/** Page entry from constants.json's pages array. */
+interface PageEntry {
+  title: string;
+  url: string;
+  icon: string;
+}
+
 /**
  * Global command menu activated via Cmd+K (Mac) or Ctrl+K (Windows).
  *
@@ -24,7 +31,7 @@ import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
  * of which route is currently active.
  *
  * @component
- * @returns {JSX.Element} Command dialog with page navigation
+ * @returns Command dialog with page navigation
  *
  * @example
  * // Add to any layout or view — keyboard shortcut is global
@@ -34,14 +41,14 @@ export default function CommandMenu() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { state } = getState();
-  const pages = state.constants?.pages || [];
+  const pages: PageEntry[] = state.constants?.pages || [];
 
   useEffect(() => {
     /**
      * Toggle command menu on Cmd+K / Ctrl+K keydown.
-     * @param {KeyboardEvent} e - Native keyboard event
+     * @param e - Native keyboard event
      */
-    function handleKeyDown(e) {
+    function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setOpen((prev) => !prev);
@@ -54,10 +61,10 @@ export default function CommandMenu() {
 
   /**
    * Navigate to the selected page and close the menu.
-   * @param {string} url - Route path relative to /app/
+   * @param url - Route path relative to /app/
    */
   const handleSelect = useCallback(
-    (url) => {
+    (url: string) => {
       navigate(`/app/${url}`);
       setOpen(false);
     },

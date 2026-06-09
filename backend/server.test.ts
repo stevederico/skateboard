@@ -4,26 +4,29 @@
  * Tests all auth endpoints: signup, signin, signout, CSRF, and JWT middleware.
  * Uses Node.js built-in test runner (node --test).
  *
- * Run with: node --test server.test.js
+ * Run with: node --test server.test.ts
  */
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
+import type { MiddlewareHandler } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { compare as legacyBcryptCompare } from './vendor/legacy-bcrypt.js';
 import crypto from 'crypto';
 import { promisify } from 'node:util';
+import type { AuthRecord, CsrfTokenEntry, JwtPayload, Logger, User, UserQuery } from './types.ts';
 
-const scryptAsync = promisify(crypto.scrypt);
+// crypto.scrypt's overloads defeat promisify's typings; assert the 3-arg promise form used here
+const scryptAsync = promisify(crypto.scrypt) as (password: string | Buffer, salt: Buffer, keylen: number) => Promise<Buffer>;
 
-// Local HS256 JWT helpers (mirror server.js implementation)
-function jwtSign(payload, secret) {
+// Local HS256 JWT helpers (mirror server.ts implementation)
+function jwtSign(payload: JwtPayload, secret: string): string {
   const head = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const sig = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
   return `${head}.${body}.${sig}`;
 }
-function jwtVerify(token, secret) {
+function jwtVerify(token: string, secret: string): JwtPayload {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('Invalid token');
   const [head, body, sig] = parts;
@@ -34,7 +37,7 @@ function jwtVerify(token, secret) {
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
     throw new Error('Invalid signature');
   }
-  const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+  const payload = JSON.parse(Buffer.from(body, 'base64url').toString()) as JwtPayload;
   if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
     const err = new Error('Token expired');
     err.name = 'TokenExpiredError';
@@ -44,6 +47,7 @@ function jwtVerify(token, secret) {
 }
 import { DatabaseSync as Database } from 'node:sqlite';
 import { mkdir, rm } from 'node:fs/promises';
+import { SQLiteProvider } from './adapters/sqlite.ts';
 
 // Test configuration
 const TEST_DB_PATH = './databases/test.db';
@@ -54,16 +58,26 @@ const TEST_USER = {
   password: 'validpassword123'
 };
 
+/** Hono environment for the test app: authMiddleware stores the JWT's userID. */
+type TestEnv = { Variables: { userID: string } };
+
+/** JSON body accepted by the signup/signin routes (fields validated at runtime). */
+interface CredentialsBody {
+  email?: string;
+  password?: string;
+  name?: string;
+}
+
 // Minimal test server setup (mirrors production server structure)
-let app;
-let db;
-let csrfTokenStore;
+let app: Hono<TestEnv>;
+let db: Database;
+let csrfTokenStore: Map<string, CsrfTokenEntry>;
 
 /**
  * Create test app with minimal auth routes
  */
-function createTestApp() {
-  app = new Hono();
+function createTestApp(): Hono<TestEnv> {
+  app = new Hono<TestEnv>();
   csrfTokenStore = new Map();
 
   // Initialize test database
@@ -88,12 +102,12 @@ function createTestApp() {
   // Helper functions
   const generateCSRFToken = () => crypto.randomBytes(32).toString('hex');
   const generateUUID = () => crypto.randomUUID();
-  const hashPassword = async (password) => {
+  const hashPassword = async (password: string): Promise<string> => {
     const salt = crypto.randomBytes(16);
     const key = await scryptAsync(password, salt, 64);
     return `scrypt$${salt.toString('base64url')}$${key.toString('base64url')}`;
   };
-  const verifyPassword = async (password, stored) => {
+  const verifyPassword = async (password: string, stored: unknown): Promise<boolean> => {
     if (typeof stored !== 'string') return false;
     if (stored.startsWith('scrypt$')) {
       const [, saltB64, keyB64] = stored.split('$');
@@ -105,11 +119,11 @@ function createTestApp() {
     if (stored.startsWith('$2')) return await legacyBcryptCompare(password, stored);
     return false;
   };
-  const needsRehash = (stored) => typeof stored === 'string' && !stored.startsWith('scrypt$');
-  const generateToken = (userID) => jwtSign({ userID, exp: Math.floor(Date.now() / 1000) + 86400 }, JWT_SECRET);
+  const needsRehash = (stored: unknown): boolean => typeof stored === 'string' && !stored.startsWith('scrypt$');
+  const generateToken = (userID: string): string => jwtSign({ userID, exp: Math.floor(Date.now() / 1000) + 86400 }, JWT_SECRET);
 
   // Auth middleware
-  const authMiddleware = async (c, next) => {
+  const authMiddleware: MiddlewareHandler<TestEnv> = async (c, next) => {
     const token = getCookie(c, 'token');
     if (!token) return c.json({ error: 'Unauthorized' }, 401);
     try {
@@ -117,13 +131,13 @@ function createTestApp() {
       c.set('userID', String(payload.userID));
       await next();
     } catch (e) {
-      if (e.name === 'TokenExpiredError') return c.json({ error: 'Token expired' }, 401);
+      if ((e as Error).name === 'TokenExpiredError') return c.json({ error: 'Token expired' }, 401);
       return c.json({ error: 'Invalid token' }, 401);
     }
   };
 
   // CSRF middleware
-  const csrfProtection = async (c, next) => {
+  const csrfProtection: MiddlewareHandler<TestEnv> = async (c, next) => {
     if (c.req.method === 'GET') return next();
     const csrfToken = c.req.header('x-csrf-token');
     const userID = c.get('userID');
@@ -137,7 +151,7 @@ function createTestApp() {
   // Signup
   app.post('/api/signup', async (c) => {
     try {
-      const body = await c.req.json();
+      const body = await c.req.json<CredentialsBody>();
       let { email, password, name } = body;
 
       if (!email || typeof email !== 'string' || !email.includes('@')) {
@@ -158,7 +172,7 @@ function createTestApp() {
         db.prepare('INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)').run(insertID, email, name, Date.now());
         db.prepare('INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)').run(email, hash, insertID);
       } catch (e) {
-        if (e.message?.includes('UNIQUE constraint failed')) {
+        if ((e as Error).message?.includes('UNIQUE constraint failed')) {
           return c.json({ error: 'Unable to create account with provided credentials' }, 400);
         }
         throw e;
@@ -183,7 +197,7 @@ function createTestApp() {
   // Signin
   app.post('/api/signin', async (c) => {
     try {
-      const body = await c.req.json();
+      const body = await c.req.json<CredentialsBody>();
       let { email, password } = body;
 
       if (!email || typeof email !== 'string' || !email.includes('@')) {
@@ -194,7 +208,7 @@ function createTestApp() {
       }
 
       email = email.toLowerCase().trim();
-      const auth = db.prepare('SELECT * FROM Auths WHERE email = ?').get(email);
+      const auth = db.prepare('SELECT * FROM Auths WHERE email = ?').get(email) as AuthRecord | undefined;
       if (!auth) return c.json({ error: 'Invalid credentials' }, 401);
       if (!(await verifyPassword(password, auth.password))) {
         return c.json({ error: 'Invalid credentials' }, 401);
@@ -208,7 +222,7 @@ function createTestApp() {
         } catch (e) { /* best-effort */ }
       }
 
-      const user = db.prepare('SELECT * FROM Users WHERE email = ?').get(email);
+      const user = db.prepare('SELECT * FROM Users WHERE email = ?').get(email) as User | undefined;
       if (!user) return c.json({ error: 'Invalid credentials' }, 401);
 
       const token = generateToken(user._id);
@@ -244,10 +258,37 @@ function createTestApp() {
   return app;
 }
 
+/** Options accepted by the request() test helper. */
+interface TestRequestOptions {
+  /** Extra request headers. */
+  headers?: Record<string, string>;
+  /** Cookie header value sent with the request. */
+  cookies?: string;
+  /** JSON-serializable request body. */
+  body?: unknown;
+}
+
+/** Union of every JSON body the auth routes under test return (success and error fields). */
+interface AuthResponseBody {
+  id: string;
+  email: string;
+  name: string;
+  message: string;
+  error: string;
+}
+
+/** Normalized response captured by the request() test helper. */
+interface TestResponse {
+  status: number;
+  json: AuthResponseBody;
+  headers: Headers;
+  cookies: string | null;
+}
+
 /**
  * Make test request to app
  */
-async function request(method, path, options = {}) {
+async function request(method: string, path: string, options: TestRequestOptions = {}): Promise<TestResponse> {
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
 
@@ -262,7 +303,7 @@ async function request(method, path, options = {}) {
   });
 
   const res = await app.fetch(req);
-  const json = await res.json().catch(() => null);
+  const json = await res.json().catch(() => null) as AuthResponseBody;
 
   return {
     status: res.status,
@@ -423,7 +464,7 @@ describe('Authentication Flow', () => {
       password: 'validpassword123'
     };
 
-    function seedLegacyUser() {
+    function seedLegacyUser(): string {
       const userId = crypto.randomUUID();
       db.prepare('INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)')
         .run(userId, LEGACY_USER.email, LEGACY_USER.name, Date.now());
@@ -451,7 +492,7 @@ describe('Authentication Flow', () => {
 
     it('rehashes bcrypt hash to scrypt on successful login', async () => {
       seedLegacyUser();
-      const before = db.prepare('SELECT password FROM Auths WHERE email = ?').get(LEGACY_USER.email);
+      const before = db.prepare('SELECT password FROM Auths WHERE email = ?').get(LEGACY_USER.email) as { password: string };
       assert.ok(before.password.startsWith('$2'), 'fixture should be bcrypt');
 
       const res = await request('POST', '/api/signin', {
@@ -459,7 +500,7 @@ describe('Authentication Flow', () => {
       });
       assert.equal(res.status, 200);
 
-      const after = db.prepare('SELECT password FROM Auths WHERE email = ?').get(LEGACY_USER.email);
+      const after = db.prepare('SELECT password FROM Auths WHERE email = ?').get(LEGACY_USER.email) as { password: string };
       assert.ok(after.password.startsWith('scrypt$'), 'hash should be migrated to scrypt');
 
       // And the migrated hash itself verifies correctly
@@ -498,9 +539,9 @@ describe('Authentication Flow', () => {
   });
 
   describe('CSRF Protection', () => {
-    let token;
-    let csrfToken;
-    let userID;
+    let token: string | undefined;
+    let csrfToken: string | undefined;
+    let userID: string;
 
     beforeEach(async () => {
       const res = await request('POST', '/api/signup', { body: TEST_USER });
@@ -514,7 +555,7 @@ describe('Authentication Flow', () => {
     it('allows request with valid CSRF token', async () => {
       const res = await request('PUT', '/api/me', {
         cookies: `token=${token}`,
-        headers: { 'x-csrf-token': csrfToken }
+        headers: { 'x-csrf-token': csrfToken! }
       });
       assert.equal(res.status, 200);
     });
@@ -580,21 +621,92 @@ describe('Authentication Flow', () => {
 
 // ==== STRIPE WEBHOOK TESTS ====
 
-const noopLogger = {
+const noopLogger: Logger = {
   info: () => {},
   warn: () => {},
   error: () => {},
   debug: () => {}
 };
 
+/** Fields the webhook handler reads off a Stripe event's data.object. */
+interface StripeEventObject {
+  /** Stripe customer ID; absent on malformed events. */
+  customer?: string;
+  /** Unix timestamp (seconds) the current period ends (pre-basil top-level shape). */
+  current_period_end?: number | null;
+  /** Basil shape: period end lives on each subscription item. */
+  items?: { data?: Array<{ current_period_end?: number | null }> };
+  /** Stripe subscription status. */
+  status?: string;
+  /** Email captured on checkout sessions, when collected. */
+  customer_email?: string;
+  /** Subscription ID on checkout/invoice events (pre-basil top-level shape). */
+  subscription?: string;
+  /** Basil shape: invoice's subscription id lives under parent.subscription_details. */
+  parent?: { subscription_details?: { subscription?: string } };
+}
+
+/** Minimal Stripe webhook event envelope. */
+interface StripeEvent {
+  id: string;
+  type: string;
+  data: { object: StripeEventObject };
+}
+
+/** Customer fields read off stripe.customers.retrieve results. */
+interface StripeCustomer {
+  email: string | null;
+}
+
+/** Subscription fields read off stripe.subscriptions.retrieve results (both API shapes). */
+interface StripeSubscriptionInfo {
+  current_period_end?: number | null;
+  items?: { data?: Array<{ current_period_end?: number | null }> };
+  status: string;
+}
+
+/** Subscription patch assembled from webhook event fields (absent on malformed events). */
+interface SubscriptionPatch {
+  stripeID: string;
+  expires?: number | null;
+  status?: string;
+}
+
+/** $set payloads the webhook handler writes via applyUserPatch. */
+interface WebhookSetPayload {
+  subscription?: SubscriptionPatch;
+  'subscription.paymentFailed'?: boolean;
+  'subscription.paymentFailedAt'?: number;
+}
+
+/** Update document the webhook handler passes to updateUser. */
+interface WebhookUpdate {
+  $set: WebhookSetPayload;
+}
+
+/** Stripe client surface the webhook handler touches. */
+interface WebhookStripe {
+  webhooks: { constructEventAsync(body: Buffer, signature: string | undefined, secret: string): Promise<StripeEvent> };
+  customers: { retrieve(stripeID: string): Promise<StripeCustomer | null | undefined> };
+  subscriptions: { retrieve(subscriptionId: string): Promise<StripeSubscriptionInfo> };
+}
+
+/** Database surface the webhook handler touches (loose returns fit the test doubles). */
+interface WebhookDb {
+  findWebhookEvent(eventId: string): Promise<unknown>;
+  insertWebhookEvent(eventId: string, eventType: string, processedAt: number): Promise<unknown>;
+  findUser(query: UserQuery): Promise<unknown>;
+  updateUser(query: UserQuery, update: WebhookUpdate): Promise<unknown>;
+}
+
 /**
  * Build a Hono app with /api/payment wired to the given stripe and db mocks.
- * Mirrors the helper structure in server.js so refactors stay in lockstep.
+ * Mirrors the helper structure in server.ts so refactors stay in lockstep.
  */
-function createWebhookApp({ stripe, db, logger = noopLogger }) {
+function createWebhookApp({ stripe, db, logger = noopLogger }: { stripe: WebhookStripe; db: WebhookDb; logger?: Logger }): Hono {
   const webhookApp = new Hono();
 
-  async function resolveCustomerEmail(stripeID) {
+  async function resolveCustomerEmail(stripeID: string): Promise<string | null> {
     const customer = await stripe.customers.retrieve(stripeID);
     if (!customer?.email) {
       logger.warn('Webhook: Customer has no email', { stripeID });
@@ -603,15 +715,19 @@ function createWebhookApp({ stripe, db, logger = noopLogger }) {
     return customer.email.toLowerCase();
   }
 
-  function buildSubscriptionPatch(stripeID, stripeSub) {
+  function getSubscriptionPeriodEnd(sub: StripeSubscriptionInfo | StripeEventObject): number | null {
+    return sub.current_period_end ?? sub.items?.data?.[0]?.current_period_end ?? null;
+  }
+
+  function buildSubscriptionPatch(stripeID: string, stripeSub: StripeSubscriptionInfo): SubscriptionPatch {
     return {
       stripeID,
-      expires: stripeSub.current_period_end,
+      expires: getSubscriptionPeriodEnd(stripeSub),
       status: stripeSub.status
     };
   }
 
-  async function applyUserPatch(email, $set) {
+  async function applyUserPatch(email: string, $set: WebhookSetPayload): Promise<boolean> {
     const user = await db.findUser({ email });
     if (!user) {
       logger.warn('Webhook: No user found for email', { email });
@@ -626,7 +742,7 @@ function createWebhookApp({ stripe, db, logger = noopLogger }) {
     const rawBody = await c.req.arrayBuffer();
     const body = Buffer.from(rawBody);
 
-    let event;
+    let event: StripeEvent;
     try {
       event = await stripe.webhooks.constructEventAsync(body, signature, 'test-secret');
     } catch (e) {
@@ -641,11 +757,11 @@ function createWebhookApp({ stripe, db, logger = noopLogger }) {
       const eventObject = event.data.object;
 
       if (['customer.subscription.deleted', 'customer.subscription.updated', 'customer.subscription.created'].includes(event.type)) {
-        const { customer: stripeID, current_period_end, status } = eventObject;
+        const { customer: stripeID, status } = eventObject;
         if (!stripeID) return c.body(null, 400);
         const email = await resolveCustomerEmail(stripeID);
         if (!email) return c.body(null, 400);
-        await applyUserPatch(email, { subscription: { stripeID, expires: current_period_end, status } });
+        await applyUserPatch(email, { subscription: { stripeID, expires: getSubscriptionPeriodEnd(eventObject), status } });
       }
 
       if (event.type === 'checkout.session.completed') {
@@ -662,7 +778,8 @@ function createWebhookApp({ stripe, db, logger = noopLogger }) {
       }
 
       if (event.type === 'invoice.paid') {
-        const { customer: stripeID, subscription: subscriptionId } = eventObject;
+        const stripeID = eventObject.customer;
+        const subscriptionId = eventObject.subscription ?? eventObject.parent?.subscription_details?.subscription;
         if (subscriptionId && stripeID) {
           const [subscription, email] = await Promise.all([
             stripe.subscriptions.retrieve(subscriptionId),
@@ -696,20 +813,29 @@ function createWebhookApp({ stripe, db, logger = noopLogger }) {
   return webhookApp;
 }
 
+/** Async stub produced by spy(): callable, plus a record of every call's arguments. */
+interface Spy<TArgs extends unknown[] = unknown[], TResult = never> {
+  (...args: TArgs): Promise<TResult>;
+  /** Argument lists captured per invocation, in order. */
+  calls: TArgs[];
+}
+
 /**
  * Stub builder that records every call so tests can assert on them.
  */
-function spy(impl = () => {}) {
-  const calls = [];
-  const fn = async (...args) => {
+function spy<TArgs extends unknown[] = unknown[], TResult = never>(
+  impl: (...args: TArgs) => TResult = (() => {}) as unknown as (...args: TArgs) => TResult
+): Spy<TArgs, TResult> {
+  const calls: TArgs[] = [];
+  const fn = (async (...args: TArgs) => {
     calls.push(args);
     return impl(...args);
-  };
+  }) as Spy<TArgs, TResult>;
   fn.calls = calls;
   return fn;
 }
 
-async function postWebhook(webhookApp, body = '{}', signature = 'test-sig') {
+async function postWebhook(webhookApp: Hono, body = '{}', signature = 'test-sig'): Promise<Response> {
   const req = new Request('http://localhost/api/payment', {
     method: 'POST',
     headers: { 'stripe-signature': signature, 'Content-Type': 'application/json' },
@@ -757,7 +883,7 @@ describe('Stripe Webhook', () => {
   });
 
   it('records event before processing to prevent races', async () => {
-    const order = [];
+    const order: string[] = [];
     const stripe = {
       webhooks: { constructEventAsync: spy(() => ({
         id: 'evt_1',
@@ -769,7 +895,7 @@ describe('Stripe Webhook', () => {
     };
     const db = {
       findWebhookEvent: spy(),
-      insertWebhookEvent: async (...a) => { order.push('insertWebhookEvent'); },
+      insertWebhookEvent: async (...a: unknown[]) => { order.push('insertWebhookEvent'); },
       findUser: async () => { order.push('findUser'); return { _id: 'u1' }; },
       updateUser: async () => { order.push('updateUser'); }
     };
@@ -779,7 +905,7 @@ describe('Stripe Webhook', () => {
   });
 
   describe('customer.subscription.* events', () => {
-    function setup({ customerEmail = 'user@example.com', userExists = true } = {}) {
+    function setup({ customerEmail = 'user@example.com', userExists = true }: { customerEmail?: string; userExists?: boolean } = {}) {
       const stripe = {
         webhooks: { constructEventAsync: spy(() => ({
           id: 'evt_sub_1',
@@ -792,8 +918,8 @@ describe('Stripe Webhook', () => {
       const db = {
         findWebhookEvent: spy(() => null),
         insertWebhookEvent: spy(),
-        findUser: spy(() => userExists ? { _id: 'u1', email: customerEmail.toLowerCase() } : null),
-        updateUser: spy()
+        findUser: spy<[UserQuery], { _id: string; email: string } | null>(() => userExists ? { _id: 'u1', email: customerEmail.toLowerCase() } : null),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
       };
       return { stripe, db, app: createWebhookApp({ stripe, db }) };
     }
@@ -847,6 +973,50 @@ describe('Stripe Webhook', () => {
       assert.equal(res.status, 200);
       assert.equal(db.updateUser.calls.length, 0);
     });
+
+    it('reads item-level current_period_end on basil-shaped events', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_basil_1',
+          type: 'customer.subscription.updated',
+          data: { object: { customer: 'cus_42', status: 'active', items: { data: [{ current_period_end: 1850000000 }] } } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'basil@example.com' })) },
+        subscriptions: { retrieve: spy() }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u1' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(db.updateUser.calls[0][1].$set.subscription!.expires, 1850000000);
+    });
+
+    it('stores expires null without throwing when no period end exists anywhere', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_basil_2',
+          type: 'customer.subscription.updated',
+          data: { object: { customer: 'cus_42', status: 'active' } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'basil@example.com' })) },
+        subscriptions: { retrieve: spy() }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u1' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(db.updateUser.calls[0][1].$set.subscription!.expires, null);
+    });
   });
 
   describe('checkout.session.completed', () => {
@@ -863,15 +1033,15 @@ describe('Stripe Webhook', () => {
       const db = {
         findWebhookEvent: spy(),
         insertWebhookEvent: spy(),
-        findUser: spy(() => ({ _id: 'u1' })),
-        updateUser: spy()
+        findUser: spy<[UserQuery], { _id: string }>(() => ({ _id: 'u1' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
       };
       const app = createWebhookApp({ stripe, db });
       const res = await postWebhook(app);
       assert.equal(res.status, 200);
       assert.equal(stripe.customers.retrieve.calls.length, 0, 'should not fetch customer when email is on the event');
       assert.equal(db.findUser.calls[0][0].email, 'buyer@test.com');
-      assert.equal(db.updateUser.calls[0][1].$set.subscription.stripeID, 'cus_1');
+      assert.equal(db.updateUser.calls[0][1].$set.subscription!.stripeID, 'cus_1');
     });
 
     it('falls back to fetching customer when customer_email is missing', async () => {
@@ -888,12 +1058,38 @@ describe('Stripe Webhook', () => {
         findWebhookEvent: spy(),
         insertWebhookEvent: spy(),
         findUser: spy(() => ({ _id: 'u2' })),
-        updateUser: spy()
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
       };
       const app = createWebhookApp({ stripe, db });
       await postWebhook(app);
       assert.equal(stripe.customers.retrieve.calls.length, 1);
       assert.equal(db.updateUser.calls[0][0].email, 'fetched@example.com');
+    });
+
+    it('reads item-level current_period_end from basil-shaped subscription retrievals', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_co_basil',
+          type: 'checkout.session.completed',
+          data: { object: { customer: 'cus_b', customer_email: 'basil@buy.com', subscription: 'sub_b' } }
+        })) },
+        customers: { retrieve: spy() },
+        subscriptions: { retrieve: spy(() => ({ status: 'active', items: { data: [{ current_period_end: 1900000001 }] } })) }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'ub' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.deepEqual(db.updateUser.calls[0][1].$set.subscription, {
+        stripeID: 'cus_b',
+        expires: 1900000001,
+        status: 'active'
+      });
     });
   });
 
@@ -912,7 +1108,7 @@ describe('Stripe Webhook', () => {
         findWebhookEvent: spy(),
         insertWebhookEvent: spy(),
         findUser: spy(() => ({ _id: 'u3' })),
-        updateUser: spy()
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
       };
       const app = createWebhookApp({ stripe, db });
       const res = await postWebhook(app);
@@ -920,6 +1116,33 @@ describe('Stripe Webhook', () => {
       assert.deepEqual(db.updateUser.calls[0][1].$set.subscription, {
         stripeID: 'cus_3',
         expires: 2000000000,
+        status: 'active'
+      });
+    });
+
+    it('resolves the subscription id from parent.subscription_details on basil-shaped invoices', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_inv_basil',
+          type: 'invoice.paid',
+          data: { object: { customer: 'cus_4', parent: { subscription_details: { subscription: 'sub_4' } } } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'renew@example.com' })) },
+        subscriptions: { retrieve: spy<[string], StripeSubscriptionInfo>(() => ({ current_period_end: 2100000000, status: 'active' })) }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u4' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(stripe.subscriptions.retrieve.calls[0][0], 'sub_4');
+      assert.deepEqual(db.updateUser.calls[0][1].$set.subscription, {
+        stripeID: 'cus_4',
+        expires: 2100000000,
         status: 'active'
       });
     });
@@ -940,7 +1163,7 @@ describe('Stripe Webhook', () => {
         findWebhookEvent: spy(),
         insertWebhookEvent: spy(),
         findUser: spy(() => ({ _id: 'u9' })),
-        updateUser: spy()
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
       };
       const app = createWebhookApp({ stripe, db });
       const res = await postWebhook(app);
@@ -948,6 +1171,81 @@ describe('Stripe Webhook', () => {
       const [, patch] = db.updateUser.calls[0];
       assert.equal(patch.$set['subscription.paymentFailed'], true);
       assert.ok(typeof patch.$set['subscription.paymentFailedAt'] === 'number');
+    });
+  });
+});
+
+// ==== DATABASE ADAPTER TESTS ====
+
+describe('database adapters', () => {
+  const ADAPTER_DB_PATH = './databases/adapter-test.db';
+  let provider: SQLiteProvider;
+  let adapterDb: Database;
+
+  before(async () => {
+    provider = new SQLiteProvider();
+    await provider.initialize();
+    adapterDb = provider.getDatabase('AdapterTest', ADAPTER_DB_PATH);
+  });
+
+  beforeEach(() => {
+    adapterDb.exec('DELETE FROM Auths');
+    adapterDb.exec('DELETE FROM WebhookEvents');
+    adapterDb.exec('DELETE FROM Users');
+  });
+
+  after(async () => {
+    provider.closeAll();
+    await rm(ADAPTER_DB_PATH, { force: true });
+    await rm(`${ADAPTER_DB_PATH}-wal`, { force: true });
+    await rm(`${ADAPTER_DB_PATH}-shm`, { force: true });
+  });
+
+  /** Insert a fresh user through the provider and return it. */
+  async function seedUser(): Promise<User> {
+    const user: User = {
+      _id: crypto.randomUUID(),
+      email: `adapter-${crypto.randomUUID()}@example.com`,
+      name: 'Adapter User',
+      created_at: Date.now()
+    };
+    await provider.insertUser(adapterDb, user);
+    return user;
+  }
+
+  describe('SQLiteProvider null normalization', () => {
+    it('findUser resolves exactly null for a missing id', async () => {
+      const found = await provider.findUser(adapterDb, { _id: 'missing-user-id' });
+      assert.equal(found, null);
+    });
+
+    it('findAuth resolves exactly null for a missing email', async () => {
+      const found = await provider.findAuth(adapterDb, { email: 'missing@example.com' });
+      assert.equal(found, null);
+    });
+
+    it('findWebhookEvent resolves exactly null for a missing event id', async () => {
+      const found = await provider.findWebhookEvent(adapterDb, 'evt_missing');
+      assert.equal(found, null);
+    });
+  });
+
+  describe('SQLiteProvider deleteUser', () => {
+    it('returns deletedCount 1 when deleting an existing user by _id', async () => {
+      const user = await seedUser();
+      const result = await provider.deleteUser(adapterDb, { _id: user._id });
+      assert.equal(result.deletedCount, 1);
+    });
+
+    it('removes the user row', async () => {
+      const user = await seedUser();
+      await provider.deleteUser(adapterDb, { _id: user._id });
+      assert.equal(await provider.findUser(adapterDb, { _id: user._id }), null);
+    });
+
+    it('returns deletedCount 0 for a missing id', async () => {
+      const result = await provider.deleteUser(adapterDb, { _id: 'missing-user-id' });
+      assert.equal(result.deletedCount, 0);
     });
   });
 });

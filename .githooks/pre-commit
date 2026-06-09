@@ -1,0 +1,22 @@
+#!/bin/sh
+# Pre-commit hook: type-check before committing.
+#
+# Known limitation: tsc reads the working tree, not the git index. If you
+# stage a partial change (git add -p) the check runs against unstaged edits
+# too. Acceptable trade-off; do not attempt to check out the index.
+
+# Skip entirely when no staged file is type-check relevant.
+if ! git diff --cached --name-only | grep -E '\.(ts|tsx)$|tsconfig|package\.json' >/dev/null 2>&1; then
+  exit 0
+fi
+
+# If tsc is unavailable (node_modules missing), warn but never block commits.
+if ! npx --no-install tsc --version >/dev/null 2>&1; then
+  printf '%s\n' "pre-commit: tsc unavailable (run npm install) — skipping typecheck."
+  exit 0
+fi
+
+npm run typecheck || {
+  printf '\n%s\n' "pre-commit: type check failed — commit aborted. Fix errors or run 'npm run typecheck' to see them."
+  exit 1
+}
