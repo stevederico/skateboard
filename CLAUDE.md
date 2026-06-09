@@ -20,7 +20,7 @@ npm install-all        # Install all dependencies (root + workspace)
 
 **Testing:**
 ```bash
-npm run test           # Run all tests (vitest run)
+npm run test           # Run all tests (node --test, backend workspace)
 npm run test:watch     # Watch mode for development
 ```
 
@@ -272,8 +272,8 @@ When a project uses `constants.json`, include a `design` block:
 
 ### Test Runner
 
-- **Vitest** is the standard test runner — never use Jest, Mocha, or Jasmine
-- Config lives in `vite.config.js` under `test` key
+- **Node's built-in test runner** (`node --test`) is the standard — never use Jest, Mocha, or Jasmine; no test framework dependency
+- Backend tests run via the workspace: root `npm run test` delegates to `backend` (`node --test server.test.js`)
 - Use `npm run test` for CI; `npm run test:watch` for development
 
 ### What to Test
@@ -291,16 +291,17 @@ When a project uses `constants.json`, include a `design` block:
 ### Test Structure
 
 ```javascript
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 
 describe('fetchUser', () => {
   it('returns user object for valid id', async () => {
     const user = await fetchUser('123');
-    expect(user).toHaveProperty('id', '123');
+    assert.equal(user.id, '123');
   });
 
   it('throws on non-existent id', async () => {
-    await expect(fetchUser('bad')).rejects.toThrow('Not found');
+    await assert.rejects(fetchUser('bad'), /Not found/);
   });
 });
 ```
@@ -606,8 +607,8 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@3.4.0
-- skateboard-ui@3.7.0
+- skateboard@3.7.0
+- skateboard-ui@3.9.0
 
 ## Updating from Skateboard Boilerplate
 
