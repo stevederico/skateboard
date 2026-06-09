@@ -65,7 +65,6 @@ const ALLOWLIST = [
   'backend/vendor/legacy-bcrypt.d.ts',
   'backend/package.json',
   'tsconfig.json',
-  'src/skateboard-ui.d.ts',
   'vite.config.ts',
   'Dockerfile',
   '.dockerignore',
@@ -75,9 +74,11 @@ const ALLOWLIST = [
 ];
 
 // Files the template deleted that apps should drop too. A stale copy is harmful
-// (e.g. backend/ambient.d.ts shadows the real pg/mongodb driver types).
+// (ambient declarations shadow the real types: backend/ambient.d.ts hid pg/mongodb
+// driver types; src/skateboard-ui.d.ts would hide skateboard-ui's own .d.ts ≥3.10.0).
 const REMOVED = [
-  'backend/ambient.d.ts'
+  'backend/ambient.d.ts',
+  'src/skateboard-ui.d.ts'
 ];
 
 // Template renames: new path at HEAD → old path apps may still have. Apps with the

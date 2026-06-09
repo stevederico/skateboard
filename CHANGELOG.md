@@ -1,3 +1,9 @@
+3.9.0
+
+  Pin skateboard-ui 3.11.0
+  Drop ui shim
+  Updater removes shim
+
 3.8.0
 
   Convert to TypeScript
