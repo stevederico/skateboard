@@ -9,7 +9,7 @@
   </p>
   <h1 align="center" style="border-bottom: none; margin-bottom: 0;">Skateboard</h1>
   <h3 align="center" style="margin-top: 0; font-weight: normal;">
-    a react starter with auth, stripe, shadcn, and sqlite
+    a react + typescript starter with auth, stripe, shadcn, and sqlite
   </h3>
 
   <p align="center">
@@ -38,7 +38,7 @@ Everything you need to ship a production-ready app:
 - **95% less boilerplate** - Focus on features, not infrastructure
 - **Shell + Content + Config** - Framework provides structure, you provide content
 - **Update once, fix everywhere** - All apps inherit improvements from skateboard-ui
-- **16-line main.jsx** - Just define your routes
+- **16-line main.tsx** - Just define your routes
 - **Convention over configuration** - Sensible defaults with escape hatches everywhere
 
 ### 🔐 **Authentication & User Management**
@@ -68,7 +68,8 @@ Everything you need to ship a production-ready app:
 - **Zero config** - just works out of the box
 - **Multi-database support** - SQLite (default), MongoDB, PostgreSQL
 - **constants.json** - customize everything in one place
-- **Modern JavaScript** - no TypeScript complexity
+- **TypeScript without a build step** - strict mode, Node 24 runs `.ts` natively, Vite compiles `.tsx`
+- **Typecheck gates** - `npm run typecheck` wired into build, test, and a pre-commit hook
 - **Built-in hooks** - useListData, useForm for common patterns
 - **API utilities** - apiRequest with automatic auth and error handling
 
@@ -187,6 +188,8 @@ Backend `pg` and `mongodb` are not hard deps — `create-skateboard-app` injects
 
 The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui), which itself runs on a single hard dep (`@base-ui/react`) plus optional peer deps for heavy components users opt into.
 
+v3.8.0 adds `typescript` and `@types/*` as dev-only dependencies for the strict typecheck — zero runtime additions, and no build step: Node 24 strips types natively and Vite compiles `.tsx` directly.
+
 <br />
 
 ## 🏗️ Tech Stack
@@ -201,7 +204,8 @@ Built with the latest and greatest:
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.15+ | Routing |
 | **Hono** | v4.7+ | Backend Server |
-| **Node.js** | v24+ | Runtime |
+| **TypeScript** | v6 | Types (strict, no build step) |
+| **Node.js** | v24+ | Runtime (native type-stripping) |
 | **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
 | **Stripe** | v18+ | Payments |
 | **node:crypto** | built-in | JWT + scrypt password hashing |
@@ -217,11 +221,11 @@ Skateboard uses an **Application Shell Architecture** where the framework (skate
 2. **Content** (your code) - Components and business logic
 3. **Config** (constants.json) - App-specific settings
 
-**Example main.jsx** (complete app):
-```javascript
+**Example main.tsx** (complete app):
+```typescript
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
 import constants from './constants.json';
-import HomeView from './components/HomeView.jsx';
+import HomeView from './components/HomeView';
 
 const appRoutes = [
   { path: 'home', element: <HomeView /> }
@@ -251,7 +255,9 @@ node scripts/update-skateboard.js          # interactive — diff per file
 node scripts/update-skateboard.js --yes    # apply all without prompts
 ```
 
-Updates only files in the safe allowlist (`backend/server.js`, `backend/adapters/*`, `vite.config.js`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
+Updates only files in the safe allowlist (`backend/server.ts`, `backend/adapters/*`, `vite.config.ts`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
+
+Upgrading a pre-TypeScript app? The updater migrates renamed files (`backend/server.js` → `backend/server.ts`) with a 3-way merge that preserves your edits, then walks you through the typecheck. See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide and an agent prompt that automates the whole upgrade.
 
 <br />
 
