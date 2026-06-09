@@ -47,6 +47,7 @@ function jwtVerify(token: string, secret: string): JwtPayload {
 }
 import { DatabaseSync as Database } from 'node:sqlite';
 import { mkdir, rm } from 'node:fs/promises';
+import { SQLiteProvider } from './adapters/sqlite.ts';
 
 // Test configuration
 const TEST_DB_PATH = './databases/test.db';
@@ -631,14 +632,18 @@ const noopLogger: Logger = {
 interface StripeEventObject {
   /** Stripe customer ID; absent on malformed events. */
   customer?: string;
-  /** Unix timestamp (seconds) the current period ends. */
+  /** Unix timestamp (seconds) the current period ends (pre-basil top-level shape). */
   current_period_end?: number | null;
+  /** Basil shape: period end lives on each subscription item. */
+  items?: { data?: Array<{ current_period_end?: number | null }> };
   /** Stripe subscription status. */
   status?: string;
   /** Email captured on checkout sessions, when collected. */
   customer_email?: string;
-  /** Subscription ID on checkout/invoice events. */
+  /** Subscription ID on checkout/invoice events (pre-basil top-level shape). */
   subscription?: string;
+  /** Basil shape: invoice's subscription id lives under parent.subscription_details. */
+  parent?: { subscription_details?: { subscription?: string } };
 }
 
 /** Minimal Stripe webhook event envelope. */
@@ -653,9 +658,10 @@ interface StripeCustomer {
   email: string | null;
 }
 
-/** Subscription fields read off stripe.subscriptions.retrieve results. */
+/** Subscription fields read off stripe.subscriptions.retrieve results (both API shapes). */
 interface StripeSubscriptionInfo {
-  current_period_end: number;
+  current_period_end?: number | null;
+  items?: { data?: Array<{ current_period_end?: number | null }> };
   status: string;
 }
 
@@ -709,10 +715,14 @@ function createWebhookApp({ stripe, db, logger = noopLogger }: { stripe: Webhook
     return customer.email.toLowerCase();
   }
 
+  function getSubscriptionPeriodEnd(sub: StripeSubscriptionInfo | StripeEventObject): number | null {
+    return sub.current_period_end ?? sub.items?.data?.[0]?.current_period_end ?? null;
+  }
+
   function buildSubscriptionPatch(stripeID: string, stripeSub: StripeSubscriptionInfo): SubscriptionPatch {
     return {
       stripeID,
-      expires: stripeSub.current_period_end,
+      expires: getSubscriptionPeriodEnd(stripeSub),
       status: stripeSub.status
     };
   }
@@ -747,11 +757,11 @@ function createWebhookApp({ stripe, db, logger = noopLogger }: { stripe: Webhook
       const eventObject = event.data.object;
 
       if (['customer.subscription.deleted', 'customer.subscription.updated', 'customer.subscription.created'].includes(event.type)) {
-        const { customer: stripeID, current_period_end, status } = eventObject;
+        const { customer: stripeID, status } = eventObject;
         if (!stripeID) return c.body(null, 400);
         const email = await resolveCustomerEmail(stripeID);
         if (!email) return c.body(null, 400);
-        await applyUserPatch(email, { subscription: { stripeID, expires: current_period_end, status } });
+        await applyUserPatch(email, { subscription: { stripeID, expires: getSubscriptionPeriodEnd(eventObject), status } });
       }
 
       if (event.type === 'checkout.session.completed') {
@@ -768,7 +778,8 @@ function createWebhookApp({ stripe, db, logger = noopLogger }: { stripe: Webhook
       }
 
       if (event.type === 'invoice.paid') {
-        const { customer: stripeID, subscription: subscriptionId } = eventObject;
+        const stripeID = eventObject.customer;
+        const subscriptionId = eventObject.subscription ?? eventObject.parent?.subscription_details?.subscription;
         if (subscriptionId && stripeID) {
           const [subscription, email] = await Promise.all([
             stripe.subscriptions.retrieve(subscriptionId),
@@ -962,6 +973,50 @@ describe('Stripe Webhook', () => {
       assert.equal(res.status, 200);
       assert.equal(db.updateUser.calls.length, 0);
     });
+
+    it('reads item-level current_period_end on basil-shaped events', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_basil_1',
+          type: 'customer.subscription.updated',
+          data: { object: { customer: 'cus_42', status: 'active', items: { data: [{ current_period_end: 1850000000 }] } } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'basil@example.com' })) },
+        subscriptions: { retrieve: spy() }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u1' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(db.updateUser.calls[0][1].$set.subscription!.expires, 1850000000);
+    });
+
+    it('stores expires null without throwing when no period end exists anywhere', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_basil_2',
+          type: 'customer.subscription.updated',
+          data: { object: { customer: 'cus_42', status: 'active' } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'basil@example.com' })) },
+        subscriptions: { retrieve: spy() }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u1' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(db.updateUser.calls[0][1].$set.subscription!.expires, null);
+    });
   });
 
   describe('checkout.session.completed', () => {
@@ -1010,6 +1065,32 @@ describe('Stripe Webhook', () => {
       assert.equal(stripe.customers.retrieve.calls.length, 1);
       assert.equal(db.updateUser.calls[0][0].email, 'fetched@example.com');
     });
+
+    it('reads item-level current_period_end from basil-shaped subscription retrievals', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_co_basil',
+          type: 'checkout.session.completed',
+          data: { object: { customer: 'cus_b', customer_email: 'basil@buy.com', subscription: 'sub_b' } }
+        })) },
+        customers: { retrieve: spy() },
+        subscriptions: { retrieve: spy(() => ({ status: 'active', items: { data: [{ current_period_end: 1900000001 }] } })) }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'ub' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.deepEqual(db.updateUser.calls[0][1].$set.subscription, {
+        stripeID: 'cus_b',
+        expires: 1900000001,
+        status: 'active'
+      });
+    });
   });
 
   describe('invoice.paid', () => {
@@ -1038,6 +1119,33 @@ describe('Stripe Webhook', () => {
         status: 'active'
       });
     });
+
+    it('resolves the subscription id from parent.subscription_details on basil-shaped invoices', async () => {
+      const stripe = {
+        webhooks: { constructEventAsync: spy(() => ({
+          id: 'evt_inv_basil',
+          type: 'invoice.paid',
+          data: { object: { customer: 'cus_4', parent: { subscription_details: { subscription: 'sub_4' } } } }
+        })) },
+        customers: { retrieve: spy(() => ({ email: 'renew@example.com' })) },
+        subscriptions: { retrieve: spy<[string], StripeSubscriptionInfo>(() => ({ current_period_end: 2100000000, status: 'active' })) }
+      };
+      const db = {
+        findWebhookEvent: spy(),
+        insertWebhookEvent: spy(),
+        findUser: spy(() => ({ _id: 'u4' })),
+        updateUser: spy<[UserQuery, WebhookUpdate]>()
+      };
+      const app = createWebhookApp({ stripe, db });
+      const res = await postWebhook(app);
+      assert.equal(res.status, 200);
+      assert.equal(stripe.subscriptions.retrieve.calls[0][0], 'sub_4');
+      assert.deepEqual(db.updateUser.calls[0][1].$set.subscription, {
+        stripeID: 'cus_4',
+        expires: 2100000000,
+        status: 'active'
+      });
+    });
   });
 
   describe('invoice.payment_failed', () => {
@@ -1063,6 +1171,81 @@ describe('Stripe Webhook', () => {
       const [, patch] = db.updateUser.calls[0];
       assert.equal(patch.$set['subscription.paymentFailed'], true);
       assert.ok(typeof patch.$set['subscription.paymentFailedAt'] === 'number');
+    });
+  });
+});
+
+// ==== DATABASE ADAPTER TESTS ====
+
+describe('database adapters', () => {
+  const ADAPTER_DB_PATH = './databases/adapter-test.db';
+  let provider: SQLiteProvider;
+  let adapterDb: Database;
+
+  before(async () => {
+    provider = new SQLiteProvider();
+    await provider.initialize();
+    adapterDb = provider.getDatabase('AdapterTest', ADAPTER_DB_PATH);
+  });
+
+  beforeEach(() => {
+    adapterDb.exec('DELETE FROM Auths');
+    adapterDb.exec('DELETE FROM WebhookEvents');
+    adapterDb.exec('DELETE FROM Users');
+  });
+
+  after(async () => {
+    provider.closeAll();
+    await rm(ADAPTER_DB_PATH, { force: true });
+    await rm(`${ADAPTER_DB_PATH}-wal`, { force: true });
+    await rm(`${ADAPTER_DB_PATH}-shm`, { force: true });
+  });
+
+  /** Insert a fresh user through the provider and return it. */
+  async function seedUser(): Promise<User> {
+    const user: User = {
+      _id: crypto.randomUUID(),
+      email: `adapter-${crypto.randomUUID()}@example.com`,
+      name: 'Adapter User',
+      created_at: Date.now()
+    };
+    await provider.insertUser(adapterDb, user);
+    return user;
+  }
+
+  describe('SQLiteProvider null normalization', () => {
+    it('findUser resolves exactly null for a missing id', async () => {
+      const found = await provider.findUser(adapterDb, { _id: 'missing-user-id' });
+      assert.equal(found, null);
+    });
+
+    it('findAuth resolves exactly null for a missing email', async () => {
+      const found = await provider.findAuth(adapterDb, { email: 'missing@example.com' });
+      assert.equal(found, null);
+    });
+
+    it('findWebhookEvent resolves exactly null for a missing event id', async () => {
+      const found = await provider.findWebhookEvent(adapterDb, 'evt_missing');
+      assert.equal(found, null);
+    });
+  });
+
+  describe('SQLiteProvider deleteUser', () => {
+    it('returns deletedCount 1 when deleting an existing user by _id', async () => {
+      const user = await seedUser();
+      const result = await provider.deleteUser(adapterDb, { _id: user._id });
+      assert.equal(result.deletedCount, 1);
+    });
+
+    it('removes the user row', async () => {
+      const user = await seedUser();
+      await provider.deleteUser(adapterDb, { _id: user._id });
+      assert.equal(await provider.findUser(adapterDb, { _id: user._id }), null);
+    });
+
+    it('returns deletedCount 0 for a missing id', async () => {
+      const result = await provider.deleteUser(adapterDb, { _id: 'missing-user-id' });
+      assert.equal(result.deletedCount, 0);
     });
   });
 });

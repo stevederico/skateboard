@@ -9,6 +9,11 @@
   Add pre-commit hook
   Migrate update script
   Add upgrade prompt
+  Fix basil webhooks
+  Add deleteUser rollback
+  Lazy-load db drivers
+  Fix typecheck gates
+  Harden update script
 
 3.7.0
 

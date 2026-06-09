@@ -436,6 +436,7 @@ const db: BoundDatabase = {
   findUser: (query, projection) => databaseManager.findUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query, projection),
   insertUser: (userData) => databaseManager.insertUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, userData),
   updateUser: (query, update) => databaseManager.updateUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query, update),
+  deleteUser: (query) => databaseManager.deleteUser(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query),
   findAuth: (query) => databaseManager.findAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query),
   insertAuth: (authData) => databaseManager.insertAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, authData),
   updateAuth: (query, update) => databaseManager.updateAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query, update),
@@ -815,8 +816,27 @@ function setAuthCookies(c: Context<AppEnv>, userID: string, jwtToken: string): s
 
 // ==== STRIPE WEBHOOK (raw body needed) ====
 
-/** Subscription fields this server reads from Stripe webhook payloads and subscription retrievals (current_period_end is top-level on pre-basil Stripe API versions). */
-type StripeSubscriptionFields = { current_period_end: number; status: string };
+/**
+ * Subscription fields this server reads from Stripe webhook payloads and
+ * subscription retrievals. Pre-basil Stripe API versions expose
+ * current_period_end at the top level; basil (2025-03-31+) moved it onto each
+ * subscription item.
+ */
+type StripeSubscriptionLike = {
+  current_period_end?: number | null;
+  status: string;
+  items?: { data?: Array<{ current_period_end?: number | null }> };
+};
+
+/**
+ * Resolve a subscription's period end across Stripe API versions: top-level
+ * (pre-basil) first, then the first subscription item (basil). Returns null
+ * when absent so callers store a NULL expires instead of binding undefined
+ * (node:sqlite throws on undefined parameters).
+ */
+function getSubscriptionPeriodEnd(sub: StripeSubscriptionLike): number | null {
+  return sub.current_period_end ?? sub.items?.data?.[0]?.current_period_end ?? null;
+}
 
 /**
  * Resolve a Stripe customer ID to a normalized lowercase email.
@@ -841,9 +861,13 @@ async function resolveCustomerEmail(stripeID: string): Promise<string | null> {
  * @param stripeSub - Stripe subscription object
  */
 function buildSubscriptionPatch(stripeID: string, stripeSub: Stripe.Subscription): Subscription {
+  const expires = getSubscriptionPeriodEnd(stripeSub as unknown as StripeSubscriptionLike);
+  if (expires === null) {
+    logger.error('Webhook: subscription has no current_period_end at top level or item level', { stripeID });
+  }
   return {
     stripeID,
-    expires: (stripeSub as unknown as StripeSubscriptionFields).current_period_end,
+    expires,
     status: stripeSub.status
   };
 }
@@ -896,14 +920,19 @@ app.post("/api/payment", async (c) => {
     const eventObject = event.data.object;
 
     if (["customer.subscription.deleted", "customer.subscription.updated", "customer.subscription.created"].includes(event.type)) {
-      const { customer: stripeID, current_period_end, status } = eventObject as unknown as { customer?: string } & StripeSubscriptionFields;
+      const subLike = eventObject as unknown as { customer?: string } & StripeSubscriptionLike;
+      const { customer: stripeID, status } = subLike;
       if (!stripeID) {
         logger.error('Webhook missing customer ID', { type: event.type });
         return c.body(null, 400);
       }
       const email = await resolveCustomerEmail(stripeID);
       if (!email) return c.body(null, 400);
-      const ok = await applyUserPatch(email, { subscription: { stripeID, expires: current_period_end, status } });
+      const expires = getSubscriptionPeriodEnd(subLike);
+      if (expires === null) {
+        logger.error('Webhook: subscription event has no current_period_end', { type: event.type, eventId: event.id });
+      }
+      const ok = await applyUserPatch(email, { subscription: { stripeID, expires, status } });
       if (ok) logger.info('Subscription updated', { type: event.type, email, status });
     }
 
@@ -922,7 +951,14 @@ app.post("/api/payment", async (c) => {
     }
 
     if (event.type === "invoice.paid") {
-      const { customer: stripeID, subscription: subscriptionId } = eventObject as { customer?: string; subscription?: string };
+      const invoice = eventObject as {
+        customer?: string;
+        subscription?: string;
+        parent?: { subscription_details?: { subscription?: string } };
+      };
+      const stripeID = invoice.customer;
+      // Basil (2025-03-31+) moved the invoice's subscription id under parent.subscription_details.
+      const subscriptionId = invoice.subscription ?? invoice.parent?.subscription_details?.subscription;
       if (subscriptionId && stripeID) {
         const [subscription, email] = await Promise.all([
           stripe!.subscriptions.retrieve(subscriptionId),
@@ -1022,7 +1058,10 @@ app.post("/api/signup", async (c) => {
         // Rollback: delete the user we just created
         logger.error('Auth insert failed, rolling back user creation', { error: (authError as Error).message });
         try {
-          await db.executeQuery({ query: 'DELETE FROM Users WHERE _id = ?', params: [insertID] });
+          const rollback = await db.deleteUser({ _id: insertID });
+          if (rollback.deletedCount !== 1) {
+            logger.error('Rollback failed - orphaned user record', { userID: insertID });
+          }
         } catch (rollbackError) {
           logger.error('Rollback failed - orphaned user record', { userID: insertID, error: (rollbackError as Error).message });
         }

@@ -2,7 +2,7 @@
 
 Two ways to bring an existing app up to the latest skateboard template:
 
-1. **Interactive** — from the app root: `node scripts/update-skateboard.js` (3-way merge, prompts per file).
+1. **Interactive** — from the app root: `node scripts/update-skateboard.js` (3-way merge, prompts per file). **Warning:** after upgrading, `npm run typecheck` gates build/test — expect to annotate your custom backend code (see step 5 of the agent prompt for the typical fixes).
 2. **Agent-driven** — paste the prompt below into Claude Code from the app root and let it run the whole upgrade, including conflict resolution and verification.
 
 The 3.8.0 release converts the template to TypeScript. The updater migrates renamed files (`backend/server.js` → `backend/server.ts`, etc.) with a content-based 3-way merge, so local edits survive the rename. Your app's `src/` components stay `.jsx` — Vite handles mixed JS/TS.
@@ -52,5 +52,6 @@ backend/config.json, or .env files beyond what the updater itself merged.
 ## Notes
 
 - The updater never touches app-owned files (`src/constants.json`, `src/components/*`, `src/main.jsx`, `src/assets/styles.css`, `backend/config.json`, `.env*`). Exception: `src/skateboard-ui.d.ts` is template-owned type scaffolding.
-- `--baseline <version>` forces the 3-way merge baseline when `skateboardVersion` is wrong or was stamped prematurely.
+- `--baseline <version>` forces the 3-way merge baseline when `skateboardVersion` is wrong or was stamped prematurely. It also skips the "Already on latest" early-exit, so you can re-sync an app whose version was stamped without the files actually migrating.
+- If any file ends declined, conflicted, or errored, the updater does **not** stamp `skateboardVersion` — resolve the conflicts, then re-run with `--baseline <old-version>` to finish.
 - Apps that customized `backend/server.js` heavily should expect a handful of conflict markers in `server.ts` — the merge is line-based and the TS conversion annotated most signatures.

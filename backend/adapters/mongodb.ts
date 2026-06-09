@@ -1,10 +1,9 @@
-import { MongoClient } from 'mongodb';
-import type { Db, Document } from 'mongodb';
 import type {
   AuthQuery,
   AuthRecord,
   AuthUpdate,
   DatabaseProvider,
+  DeleteResult,
   ExecuteResult,
   ExecuteSuccess,
   InsertResult,
@@ -17,6 +16,117 @@ import type {
   UserUpdate,
   WebhookEventRecord,
 } from '../types.ts';
+
+// ==== LOCAL DRIVER SURFACE ====
+//
+// `mongodb` is an optional dependency: it is not installed in this repo, and
+// apps that configure MongoDB install it themselves. The driver surface this
+// adapter actually touches is typed locally, and the module is loaded lazily
+// through a variable specifier so tsc never tries to resolve 'mongodb'.
+
+/** Loose BSON document (filters, updates, options, rows). */
+type Document = Record<string, unknown>;
+
+/** Cursor returned by find/aggregate/listCollections; only toArray is used. */
+interface CursorLike<T = Document> {
+  toArray(): Promise<T[]>;
+}
+
+/** Result of insertOne. `acknowledged` is true when the server confirmed the write. */
+interface InsertOneResultLike {
+  acknowledged: boolean;
+  insertedId: unknown;
+}
+
+/** Result of insertMany. */
+interface InsertManyResultLike {
+  insertedIds: Record<number, unknown>;
+  insertedCount: number;
+}
+
+/** Result of updateOne/updateMany. */
+interface UpdateResultLike {
+  matchedCount: number;
+  modifiedCount: number;
+  upsertedCount: number;
+  upsertedId: unknown;
+}
+
+/** Result of deleteOne/deleteMany. */
+interface DeleteResultLike {
+  deletedCount: number;
+}
+
+/** Session handle used for transactions. */
+interface ClientSessionLike {
+  withTransaction(fn: () => Promise<void>): Promise<unknown>;
+  endSession(): Promise<void>;
+}
+
+/** Collection surface used by this adapter. */
+interface CollectionLike {
+  createIndex(spec: Document, options?: Document): Promise<string>;
+  findOne(filter?: Document, options?: Document): Promise<Document | null>;
+  find(filter?: Document, options?: Document): CursorLike;
+  insertOne(doc: Document, options?: Document): Promise<InsertOneResultLike>;
+  insertMany(docs: Document[], options?: Document): Promise<InsertManyResultLike>;
+  updateOne(filter: Document, update: Document, options?: Document): Promise<UpdateResultLike>;
+  updateMany(filter: Document, update: Document, options?: Document): Promise<UpdateResultLike>;
+  deleteOne(filter: Document, options?: Document): Promise<DeleteResultLike>;
+  deleteMany(filter: Document, options?: Document): Promise<DeleteResultLike>;
+  aggregate(pipeline?: Document[], options?: Document): CursorLike;
+  countDocuments(filter?: Document, options?: Document): Promise<number>;
+  distinct(key: string, filter?: Document, options?: Document): Promise<unknown[]>;
+}
+
+/** Database handle surface returned by client.db(). */
+export interface DbLike {
+  /** Owning client — executeTransaction calls db.client.startSession(). */
+  client: MongoClientLike;
+  collection(name: string): CollectionLike;
+  createCollection(name: string): Promise<unknown>;
+  listCollections(): CursorLike<{ name: string }>;
+}
+
+/** Client options this adapter passes to the MongoClient constructor. */
+interface MongoClientOptionsLike {
+  maxPoolSize?: number;
+  serverSelectionTimeoutMS?: number;
+  socketTimeoutMS?: number;
+}
+
+/** MongoClient surface used by this adapter. */
+interface MongoClientLike {
+  connect(): Promise<unknown>;
+  db(name?: string): DbLike;
+  startSession(): ClientSessionLike;
+  close(): Promise<void>;
+}
+
+/** The mongodb module surface used by this adapter. */
+interface MongoModule {
+  /** MongoClient constructor — the only entry point used. */
+  MongoClient: new (url: string, options?: MongoClientOptionsLike) => MongoClientLike;
+}
+
+// Variable specifier keeps tsc from resolving the optional module.
+const MONGODB_SPECIFIER = 'mongodb';
+
+/** Cached driver module, loaded once by loadMongoDriver(). */
+let mongoDriver: MongoModule | null = null;
+
+/**
+ * Load and cache the optional `mongodb` driver.
+ *
+ * @returns The mongodb module surface
+ * @throws {Error} If the `mongodb` package is not installed
+ */
+async function loadMongoDriver(): Promise<MongoModule> {
+  if (!mongoDriver) {
+    mongoDriver = (await import(MONGODB_SPECIFIER)) as unknown as MongoModule;
+  }
+  return mongoDriver;
+}
 
 /**
  * MongoDB database provider with connection pooling
@@ -33,11 +143,11 @@ import type {
  *
  * @class
  */
-export class MongoDBProvider implements DatabaseProvider<Db> {
-  /** Cached MongoClient instances keyed by `${dbName}_${connectionString}`. */
-  clients: Map<string, MongoClient>;
-  /** Cached Db handles keyed by `${dbName}_${connectionString}`. */
-  databases: Map<string, Db>;
+export class MongoDBProvider implements DatabaseProvider<DbLike> {
+  /** Cached client instances keyed by `${dbName}_${connectionString}`. */
+  clients: Map<string, MongoClientLike>;
+  /** Cached database handles keyed by `${dbName}_${connectionString}`. */
+  databases: Map<string, DbLike>;
 
   /**
    * Create MongoDB provider with empty client and database caches
@@ -50,12 +160,15 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
   /**
    * Initialize MongoDB provider
    *
-   * No-op initialization for interface compatibility.
+   * Loads and caches the optional `mongodb` driver. The manager awaits this
+   * right after constructing the provider, so the driver still loads during
+   * adapter initialization.
    *
    * @async
+   * @throws {Error} If the `mongodb` package is not installed
    */
   async initialize(): Promise<void> {
-    // Provider ready for connections
+    await loadMongoDriver();
   }
 
   /**
@@ -73,7 +186,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @returns MongoDB database instance
    * @throws If connectionString is not provided or connection fails
    */
-  async getDatabase(dbName: string, connectionString?: string | null): Promise<Db> {
+  async getDatabase(dbName: string, connectionString?: string | null): Promise<DbLike> {
     const cacheKey = `${dbName}_${connectionString}`;
 
     if (!this.databases.has(cacheKey)) {
@@ -81,6 +194,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
         throw new Error(`Connection string required for MongoDB database: ${dbName}`);
       }
 
+      const { MongoClient } = await loadMongoDriver();
       const client = new MongoClient(connectionString, {
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 5000,
@@ -108,7 +222,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @async
    * @param db - MongoDB database instance
    */
-  async ensureMongoDBSchema(db: Db): Promise<void> {
+  async ensureMongoDBSchema(db: DbLike): Promise<void> {
     const collections = await db.listCollections().toArray();
     const collectionNames = collections.map(c => c.name);
 
@@ -145,7 +259,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @param [projection={}] - MongoDB projection object
    * @returns User document with nested subscription and usage, or null
    */
-  async findUser(db: Db, query: UserQuery, projection: Record<string, unknown> = {}): Promise<User | null> {
+  async findUser(db: DbLike, query: UserQuery, projection: Record<string, unknown> = {}): Promise<User | null> {
     const { _id, email } = query;
     let mongoQuery: Record<string, unknown> = {};
 
@@ -179,7 +293,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @returns MongoDB insertedId
    * @throws If email already exists
    */
-  async insertUser(db: Db, userData: User): Promise<InsertResult> {
+  async insertUser(db: DbLike, userData: User): Promise<InsertResult> {
     const result = await db.collection('Users').insertOne(userData as unknown as Document);
     return { insertedId: result.insertedId };
   }
@@ -197,10 +311,37 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @param update - MongoDB update operators ($set, $inc, etc.)
    * @returns Number of modified documents
    */
-  async updateUser(db: Db, query: UserQuery, update: UserUpdate): Promise<UpdateResult> {
+  async updateUser(db: DbLike, query: UserQuery, update: UserUpdate): Promise<UpdateResult> {
     const { _id } = query;
     const result = await db.collection('Users').updateOne({ _id }, update as Document);
     return { modifiedCount: result.modifiedCount };
+  }
+
+  /**
+   * Delete user document by ID or email
+   *
+   * Matches findUser's selector convention: _id is checked first, then email.
+   * Returns deletedCount 0 when neither selector is given or no document matches.
+   *
+   * @async
+   * @param db - MongoDB database instance
+   * @param query - Query object with _id or email
+   * @returns Number of deleted documents
+   */
+  async deleteUser(db: DbLike, query: UserQuery): Promise<DeleteResult> {
+    const { _id, email } = query;
+    const mongoQuery: Record<string, unknown> = {};
+
+    if (_id) {
+      mongoQuery._id = _id;
+    } else if (email) {
+      mongoQuery.email = email;
+    } else {
+      return { deletedCount: 0 };
+    }
+
+    const result = await db.collection('Users').deleteOne(mongoQuery);
+    return { deletedCount: result.deletedCount };
   }
 
   /**
@@ -212,7 +353,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @param query.email - Email to search
    * @returns Auth document with password hash, or null
    */
-  async findAuth(db: Db, query: AuthQuery): Promise<AuthRecord | null> {
+  async findAuth(db: DbLike, query: AuthQuery): Promise<AuthRecord | null> {
     const { email } = query;
     const auth = await db.collection('Auths').findOne({ email }) as AuthRecord | null;
     return auth;
@@ -230,7 +371,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @returns MongoDB insertedId
    * @throws If email already exists
    */
-  async insertAuth(db: Db, authData: AuthRecord): Promise<InsertResult> {
+  async insertAuth(db: DbLike, authData: AuthRecord): Promise<InsertResult> {
     const result = await db.collection('Auths').insertOne(authData as unknown as Document);
     return { insertedId: result.insertedId };
   }
@@ -246,7 +387,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @param update.password - New password hash
    * @returns Number of modified documents
    */
-  async updateAuth(db: Db, query: AuthQuery, update: AuthUpdate): Promise<UpdateResult> {
+  async updateAuth(db: DbLike, query: AuthQuery, update: AuthUpdate): Promise<UpdateResult> {
     const { email } = query;
     const { password } = update;
     if (typeof password !== 'string') return { modifiedCount: 0 };
@@ -262,7 +403,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @param eventId - Stripe event ID
    * @returns Webhook event document or null if not found
    */
-  async findWebhookEvent(db: Db, eventId: string): Promise<WebhookEventRecord | null> {
+  async findWebhookEvent(db: DbLike, eventId: string): Promise<WebhookEventRecord | null> {
     return await db.collection('WebhookEvents').findOne({ event_id: eventId }) as WebhookEventRecord | null;
   }
 
@@ -276,7 +417,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @param processedAt - Unix timestamp
    * @returns MongoDB insertedId
    */
-  async insertWebhookEvent(db: Db, eventId: string, eventType: string, processedAt: number): Promise<InsertResult> {
+  async insertWebhookEvent(db: DbLike, eventId: string, eventType: string, processedAt: number): Promise<InsertResult> {
     const result = await db.collection('WebhookEvents').insertOne({
       event_id: eventId,
       event_type: eventType,
@@ -307,7 +448,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @returns Operation result
    * @throws If collection or operation is missing
    */
-  async execute(db: Db, queryObject: QueryObject): Promise<ExecuteResult> {
+  async execute(db: DbLike, queryObject: QueryObject): Promise<ExecuteResult> {
     const startTime = Date.now();
 
     try {
@@ -340,7 +481,8 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
         case 'insertone':
           result = await coll.insertOne(query as Document, options);
           data = { insertedId: result.insertedId };
-          rowCount = result.insertedCount || 0;
+          // insertOne reports no count; an acknowledged write means one document
+          rowCount = result.acknowledged ? 1 : 0;
           break;
 
         case 'insertmany':
@@ -439,7 +581,7 @@ export class MongoDBProvider implements DatabaseProvider<Db> {
    * @returns Transaction results
    * @throws Throws on any operation failure
    */
-  async executeTransaction(db: Db, operations: MongoOperation[], startTime: number): Promise<ExecuteSuccess> {
+  async executeTransaction(db: DbLike, operations: MongoOperation[], startTime: number): Promise<ExecuteSuccess> {
     const session = db.client.startSession();
 
     try {

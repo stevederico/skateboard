@@ -1,7 +1,6 @@
-import pg from 'pg';
-import type { Pool } from 'pg';
 import type {
   DatabaseProvider,
+  DeleteResult,
   User,
   UserQuery,
   UserUpdate,
@@ -18,6 +17,83 @@ import type {
   ExecuteResult,
   ExecuteSuccess,
 } from '../types.ts';
+
+// ==== LOCAL DRIVER SURFACE ====
+//
+// `pg` is an optional dependency: it is not installed in this repo, and apps
+// that configure PostgreSQL install it themselves. The driver surface this
+// adapter actually touches is typed locally, and the module is loaded lazily
+// through a variable specifier so tsc never tries to resolve 'pg'.
+
+/**
+ * Result surface of a pg query. `command` is the SQL command tag ('SELECT',
+ * 'UPDATE', ...); `rowCount` is null for commands that affect no rows (DDL).
+ */
+interface QueryResultLike<R = Record<string, unknown>> {
+  rows: R[];
+  rowCount: number | null;
+  command: string;
+}
+
+/** A client checked out of the pool; must be released back. */
+interface PoolClientLike {
+  query<R = Record<string, unknown>>(text: string, values?: unknown[]): Promise<QueryResultLike<R>>;
+  release(): void;
+}
+
+/** Pool options this adapter passes to the Pool constructor. */
+interface PoolConfigLike {
+  connectionString?: string;
+  ssl?: boolean;
+  max?: number;
+  idleTimeoutMillis?: number;
+  connectionTimeoutMillis?: number;
+}
+
+/** Connection pool surface used by this adapter. */
+export interface PoolLike {
+  connect(): Promise<PoolClientLike>;
+  query<R = Record<string, unknown>>(text: string, values?: unknown[]): Promise<QueryResultLike<R>>;
+  end(): Promise<void>;
+}
+
+/** The pg module surface used by this adapter. */
+interface PgModule {
+  /** Pool constructor — the only connection entry point used. */
+  Pool: new (config?: PoolConfigLike) => PoolLike;
+  /** Driver-global type-parser registry. */
+  types: { setTypeParser(oid: number, parser: (value: string) => unknown): void };
+}
+
+/** PostgreSQL OID for the int8 (BIGINT) type. */
+const INT8_OID = 20;
+
+// Variable specifier keeps tsc from resolving the optional module.
+const PG_SPECIFIER = 'pg';
+
+/** Cached driver module, loaded once by loadPgDriver(). */
+let pgDriver: PgModule | null = null;
+
+/**
+ * Load and cache the optional `pg` driver.
+ *
+ * On first load, registers an int8 (BIGINT) type parser so BIGINT columns
+ * (created_at, subscription_expires, ...) come back as numbers instead of the
+ * driver's default strings, keeping the numeric contract in types.ts true.
+ *
+ * @returns The pg module surface
+ * @throws {Error} If the `pg` package is not installed
+ */
+async function loadPgDriver(): Promise<PgModule> {
+  if (!pgDriver) {
+    // pg is CommonJS: the namespace's `default` carries module.exports.
+    const namespace = (await import(PG_SPECIFIER)) as unknown as { default?: PgModule } & PgModule;
+    const driver = namespace.default ?? namespace;
+    driver.types.setTypeParser(INT8_OID, (value) => parseInt(value, 10));
+    pgDriver = driver;
+  }
+  return pgDriver;
+}
 
 /**
  * Flat `users` row as returned by SELECT * before findUser rebuilds the
@@ -39,6 +115,8 @@ interface UserRow extends User {
  * Disables SSL for localhost connections, enables for remote connections.
  *
  * Features:
+ * - Lazy load of the optional `pg` driver (not a declared dependency)
+ * - BIGINT (int8) columns parsed to numbers via a driver type parser
  * - Connection pooling (max 20 connections)
  * - Automatic SSL detection based on hostname
  * - Parameterized queries with $1, $2 syntax
@@ -47,9 +125,9 @@ interface UserRow extends User {
  *
  * @class
  */
-export class PostgreSQLProvider implements DatabaseProvider<Pool> {
+export class PostgreSQLProvider implements DatabaseProvider<PoolLike> {
   /** Cached connection pools keyed by database name. */
-  declare pools: Map<string, Pool>;
+  declare pools: Map<string, PoolLike>;
 
   /**
    * Create PostgreSQL provider with empty pool cache
@@ -61,12 +139,15 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
   /**
    * Initialize PostgreSQL provider
    *
-   * No-op initialization for interface compatibility.
+   * Loads and caches the optional `pg` driver (registering its BIGINT
+   * parser). The manager awaits this right after constructing the provider,
+   * so the driver still loads during adapter initialization.
    *
    * @async
+   * @throws {Error} If the `pg` package is not installed
    */
   async initialize(): Promise<void> {
-    // Provider ready for connections
+    await loadPgDriver();
   }
 
   /**
@@ -84,7 +165,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @returns PostgreSQL connection pool
    * @throws If connectionString is not provided
    */
-  async getDatabase(dbName: string, connectionString?: string | null): Promise<Pool> {
+  async getDatabase(dbName: string, connectionString?: string | null): Promise<PoolLike> {
     if (!this.pools.has(dbName)) {
       if (!connectionString) {
         throw new Error(`Connection string required for PostgreSQL database: ${dbName}`);
@@ -99,6 +180,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
         sslEnabled = true;
       }
 
+      const pg = await loadPgDriver();
       const pool = new pg.Pool({
         connectionString,
         ssl: sslEnabled,
@@ -123,7 +205,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @async
    * @param pool - PostgreSQL connection pool
    */
-  async ensurePostgreSQLSchema(pool: Pool): Promise<void> {
+  async ensurePostgreSQLSchema(pool: PoolLike): Promise<void> {
     const client = await pool.connect();
     try {
       await client.query(`
@@ -183,7 +265,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @param projection - Field projection (compatibility only)
    * @returns User object with subscription and usage nested, or null
    */
-  async findUser(pool: Pool, query: UserQuery, projection: Record<string, unknown> = {}): Promise<User | null> {
+  async findUser(pool: PoolLike, query: UserQuery, projection: Record<string, unknown> = {}): Promise<User | null> {
     const { _id, email } = query;
     let sql = "SELECT * FROM users WHERE ";
     let params: SqlParam[] = [];
@@ -208,7 +290,8 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
       if (user.subscription_stripeID) {
         user.subscription = {
           stripeID: user.subscription_stripeID,
-          expires: user.subscription_expires as number | null,
+          // BIGINT comes back numeric thanks to the int8 parser in loadPgDriver
+          expires: user.subscription_expires ?? null,
           status: user.subscription_status as string
         };
         delete user.subscription_stripeID;
@@ -246,7 +329,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @returns Inserted user ID
    * @throws If email already exists
    */
-  async insertUser(pool: Pool, userData: User): Promise<InsertResult> {
+  async insertUser(pool: PoolLike, userData: User): Promise<InsertResult> {
     const { _id, email, name, created_at } = userData;
     const sql = "INSERT INTO users (_id, email, name, created_at) VALUES ($1, $2, $3, $4)";
 
@@ -279,7 +362,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @param update.$set - Field updates
    * @returns Number of modified rows
    */
-  async updateUser(pool: Pool, query: UserQuery, update: UserUpdate): Promise<UpdateResult> {
+  async updateUser(pool: PoolLike, query: UserQuery, update: UserUpdate): Promise<UpdateResult> {
     const { _id } = query;
     const ALLOWED_FIELDS = ['name', 'email', 'created_at', 'subscription_stripeID', 'subscription_expires', 'subscription_status', 'usage_count', 'usage_reset_at'];
 
@@ -295,7 +378,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
         if (!ALLOWED_FIELDS.includes(column)) return { modifiedCount: 0 };
         const sql = `UPDATE users SET ${column} = COALESCE(${column}, 0) + $1 WHERE _id = $2`;
         const result = await client.query(sql, [incValue, _id]);
-        return { modifiedCount: result.rowCount };
+        return { modifiedCount: result.rowCount ?? 0 };
       }
 
       const updateData = update.$set;
@@ -309,7 +392,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
           subscription_status = $3
           WHERE _id = $4`;
         const result = await client.query(sql, [stripeID, expires, status, _id]);
-        return { modifiedCount: result.rowCount };
+        return { modifiedCount: result.rowCount ?? 0 };
       } else if (updateData.usage) {
         const { count, reset_at } = updateData.usage;
         const sql = `UPDATE users SET
@@ -317,7 +400,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
           usage_reset_at = $2
           WHERE _id = $3`;
         const result = await client.query(sql, [count, reset_at, _id]);
-        return { modifiedCount: result.rowCount };
+        return { modifiedCount: result.rowCount ?? 0 };
       } else {
         // Handle other updates with field validation
         const fields = Object.keys(updateData).filter(field => ALLOWED_FIELDS.includes(field));
@@ -329,8 +412,43 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
 
         const sql = `UPDATE users SET ${setClause} WHERE _id = $${values.length}`;
         const result = await client.query(sql, values);
-        return { modifiedCount: result.rowCount };
+        return { modifiedCount: result.rowCount ?? 0 };
       }
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Delete user row by ID or email
+   *
+   * Matches findUser's selector convention: _id is checked first, then email.
+   * Returns deletedCount 0 when neither selector is given or no row matches.
+   *
+   * @async
+   * @param pool - PostgreSQL connection pool
+   * @param query - Query object with _id or email
+   * @returns Number of deleted rows
+   */
+  async deleteUser(pool: PoolLike, query: UserQuery): Promise<DeleteResult> {
+    const { _id, email } = query;
+    let sql = "DELETE FROM users WHERE ";
+    const params: SqlParam[] = [];
+
+    if (_id) {
+      sql += "_id = $1";
+      params.push(_id);
+    } else if (email) {
+      sql += "email = $1";
+      params.push(email);
+    } else {
+      return { deletedCount: 0 };
+    }
+
+    const client = await pool.connect();
+    try {
+      const result = await client.query(sql, params);
+      return { deletedCount: result.rowCount ?? 0 };
     } finally {
       client.release();
     }
@@ -347,7 +465,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @param query.email - Email to search
    * @returns Auth record with password hash, or null
    */
-  async findAuth(pool: Pool, query: AuthQuery): Promise<AuthRecord | null> {
+  async findAuth(pool: PoolLike, query: AuthQuery): Promise<AuthRecord | null> {
     const { email } = query;
     const sql = "SELECT * FROM auths WHERE email = $1";
 
@@ -374,7 +492,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @returns Inserted email
    * @throws If email already exists
    */
-  async insertAuth(pool: Pool, authData: AuthRecord): Promise<InsertResult> {
+  async insertAuth(pool: PoolLike, authData: AuthRecord): Promise<InsertResult> {
     const { email, password, userID } = authData;
     const sql = 'INSERT INTO auths (email, password, "userID") VALUES ($1, $2, $3)';
 
@@ -398,7 +516,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @param update.password - New password hash
    * @returns Number of modified rows
    */
-  async updateAuth(pool: Pool, query: AuthQuery, update: AuthUpdate): Promise<UpdateResult> {
+  async updateAuth(pool: PoolLike, query: AuthQuery, update: AuthUpdate): Promise<UpdateResult> {
     const { email } = query;
     const { password } = update;
     if (typeof password !== 'string') return { modifiedCount: 0 };
@@ -407,7 +525,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
     const client = await pool.connect();
     try {
       const result = await client.query(sql, [password, email]);
-      return { modifiedCount: result.rowCount };
+      return { modifiedCount: result.rowCount ?? 0 };
     } finally {
       client.release();
     }
@@ -421,7 +539,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @param eventId - Stripe event ID
    * @returns Webhook event record or null if not found
    */
-  async findWebhookEvent(pool: Pool, eventId: string): Promise<WebhookEventRecord | null> {
+  async findWebhookEvent(pool: PoolLike, eventId: string): Promise<WebhookEventRecord | null> {
     const sql = "SELECT * FROM webhook_events WHERE event_id = $1";
     const client = await pool.connect();
     try {
@@ -442,7 +560,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @param processedAt - Unix timestamp
    * @returns Inserted event ID
    */
-  async insertWebhookEvent(pool: Pool, eventId: string, eventType: string, processedAt: number): Promise<InsertResult> {
+  async insertWebhookEvent(pool: PoolLike, eventId: string, eventType: string, processedAt: number): Promise<InsertResult> {
     const sql = "INSERT INTO webhook_events (event_id, event_type, processed_at) VALUES ($1, $2, $3)";
     const client = await pool.connect();
     try {
@@ -456,8 +574,10 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
   /**
    * Execute custom SQL query with unified response format
    *
-   * Handles both SELECT and modification queries using result.rows detection.
-   * Supports transactions via transaction array. Uses parameterized queries.
+   * Distinguishes reads from writes via the result's command tag: 'SELECT'
+   * returns rows; anything else (INSERT/UPDATE/DELETE/DDL) returns the
+   * write-shaped counts. Supports transactions via transaction array.
+   * Uses parameterized queries.
    *
    * Response format includes success flag, data, rowCount, and metadata with timing.
    *
@@ -469,7 +589,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @param queryObject.transaction - Transaction operations
    * @returns Query result
    */
-  async execute(pool: Pool, queryObject: QueryObject): Promise<ExecuteResult> {
+  async execute(pool: PoolLike, queryObject: QueryObject): Promise<ExecuteResult> {
     const startTime = Date.now();
 
     try {
@@ -486,8 +606,9 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
       try {
         const result = await client.query(query, params);
 
-        // Determine if it's a SELECT query based on the result
-        const isSelect = result.rows !== undefined;
+        // The command tag tells reads from writes (pg always populates rows,
+        // even for writes, so rows-presence cannot distinguish them)
+        const isSelect = result.command === 'SELECT';
 
         if (isSelect) {
           return {
@@ -500,17 +621,17 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
             }
           };
         } else {
-          // For INSERT, UPDATE, DELETE
-          let data: { modifiedCount?: number; deletedCount?: number } = {};
-          if (result.rowCount !== undefined) {
-            data.modifiedCount = result.rowCount;
-            data.deletedCount = result.rowCount; // For DELETE queries
-          }
+          // For INSERT, UPDATE, DELETE (rowCount is null for row-less commands)
+          const affectedRows = result.rowCount ?? 0;
+          const data = {
+            modifiedCount: affectedRows,
+            deletedCount: affectedRows // For DELETE queries
+          };
 
           return {
             success: true,
             data,
-            rowCount: result.rowCount || 0,
+            rowCount: affectedRows,
             metadata: {
               executionTime: Date.now() - startTime,
               dbType: 'postgresql'
@@ -546,7 +667,7 @@ export class PostgreSQLProvider implements DatabaseProvider<Pool> {
    * @returns Transaction results
    * @throws Rolls back and throws on any operation failure
    */
-  async executeTransaction(pool: Pool, operations: SqlStatement[], startTime: number): Promise<ExecuteSuccess> {
+  async executeTransaction(pool: PoolLike, operations: SqlStatement[], startTime: number): Promise<ExecuteSuccess> {
     const client = await pool.connect();
 
     try {
