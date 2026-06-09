@@ -1,3 +1,10 @@
+3.8.0
+
+  Convert to TypeScript
+  Add strict typecheck
+  Type database adapters
+  Add ambient declarations
+
 3.7.0
 
   Bump skateboard-ui 3.9.0

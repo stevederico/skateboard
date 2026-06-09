@@ -1,4 +1,22 @@
 import { MongoClient } from 'mongodb';
+import type { Db, Document } from 'mongodb';
+import type {
+  AuthQuery,
+  AuthRecord,
+  AuthUpdate,
+  DatabaseProvider,
+  ExecuteResult,
+  ExecuteSuccess,
+  InsertResult,
+  MongoOperation,
+  MongoQueryObject,
+  QueryObject,
+  UpdateResult,
+  User,
+  UserQuery,
+  UserUpdate,
+  WebhookEventRecord,
+} from '../types.ts';
 
 /**
  * MongoDB database provider with connection pooling
@@ -15,7 +33,12 @@ import { MongoClient } from 'mongodb';
  *
  * @class
  */
-export class MongoDBProvider {
+export class MongoDBProvider implements DatabaseProvider<Db> {
+  /** Cached MongoClient instances keyed by `${dbName}_${connectionString}`. */
+  clients: Map<string, MongoClient>;
+  /** Cached Db handles keyed by `${dbName}_${connectionString}`. */
+  databases: Map<string, Db>;
+
   /**
    * Create MongoDB provider with empty client and database caches
    */
@@ -30,9 +53,8 @@ export class MongoDBProvider {
    * No-op initialization for interface compatibility.
    *
    * @async
-   * @returns {Promise<void>}
    */
-  async initialize() {
+  async initialize(): Promise<void> {
     // Provider ready for connections
   }
 
@@ -46,12 +68,12 @@ export class MongoDBProvider {
    * - socketTimeoutMS: 45000
    *
    * @async
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - MongoDB connection URI (required)
-   * @returns {Promise<Db>} MongoDB database instance
-   * @throws {Error} If connectionString is not provided or connection fails
+   * @param dbName - Database name
+   * @param connectionString - MongoDB connection URI (required)
+   * @returns MongoDB database instance
+   * @throws If connectionString is not provided or connection fails
    */
-  async getDatabase(dbName, connectionString) {
+  async getDatabase(dbName: string, connectionString?: string | null): Promise<Db> {
     const cacheKey = `${dbName}_${connectionString}`;
 
     if (!this.databases.has(cacheKey)) {
@@ -67,14 +89,14 @@ export class MongoDBProvider {
 
       await client.connect();
       const db = client.db(dbName);
-      
+
       this.clients.set(cacheKey, client);
       this.databases.set(cacheKey, db);
-      
+
       await this.ensureMongoDBSchema(db);
     }
 
-    return this.databases.get(cacheKey);
+    return this.databases.get(cacheKey)!;
   }
 
   /**
@@ -84,10 +106,9 @@ export class MongoDBProvider {
    * Checks existing collections before creation.
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @returns {Promise<void>}
+   * @param db - MongoDB database instance
    */
-  async ensureMongoDBSchema(db) {
+  async ensureMongoDBSchema(db: Db): Promise<void> {
     const collections = await db.listCollections().toArray();
     const collectionNames = collections.map(c => c.name);
 
@@ -117,16 +138,16 @@ export class MongoDBProvider {
    * Supports MongoDB projection syntax for field filtering.
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {Object} query - Query object with _id or email
-   * @param {string} [query._id] - User ID to search
-   * @param {string} [query.email] - Email to search
-   * @param {Object} [projection={}] - MongoDB projection object
-   * @returns {Promise<Object|null>} User document with nested subscription and usage, or null
+   * @param db - MongoDB database instance
+   * @param query - Query object with _id or email
+   * @param [query._id] - User ID to search
+   * @param [query.email] - Email to search
+   * @param [projection={}] - MongoDB projection object
+   * @returns User document with nested subscription and usage, or null
    */
-  async findUser(db, query, projection = {}) {
+  async findUser(db: Db, query: UserQuery, projection: Record<string, unknown> = {}): Promise<User | null> {
     const { _id, email } = query;
-    let mongoQuery = {};
+    let mongoQuery: Record<string, unknown> = {};
 
     if (_id) {
       mongoQuery._id = _id;
@@ -136,7 +157,7 @@ export class MongoDBProvider {
       return null;
     }
 
-    const user = await db.collection('Users').findOne(mongoQuery, { projection });
+    const user = await db.collection('Users').findOne(mongoQuery, { projection }) as User | null;
     return user;
   }
 
@@ -147,19 +168,19 @@ export class MongoDBProvider {
    * handles subscription and usage as nested objects.
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {Object} userData - User data to insert
-   * @param {string} userData._id - User ID (UUID)
-   * @param {string} userData.email - User email (unique)
-   * @param {string} userData.name - User name
-   * @param {number} userData.created_at - Unix timestamp
-   * @param {Object} [userData.subscription] - Subscription object
-   * @param {Object} [userData.usage] - Usage object
-   * @returns {Promise<{insertedId: ObjectId}>} MongoDB insertedId
-   * @throws {Error} If email already exists
+   * @param db - MongoDB database instance
+   * @param userData - User data to insert
+   * @param userData._id - User ID (UUID)
+   * @param userData.email - User email (unique)
+   * @param userData.name - User name
+   * @param userData.created_at - Unix timestamp
+   * @param [userData.subscription] - Subscription object
+   * @param [userData.usage] - Usage object
+   * @returns MongoDB insertedId
+   * @throws If email already exists
    */
-  async insertUser(db, userData) {
-    const result = await db.collection('Users').insertOne(userData);
+  async insertUser(db: Db, userData: User): Promise<InsertResult> {
+    const result = await db.collection('Users').insertOne(userData as unknown as Document);
     return { insertedId: result.insertedId };
   }
 
@@ -170,15 +191,15 @@ export class MongoDBProvider {
    * Supports nested field updates without flattening.
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {Object} query - Query object with _id
-   * @param {string} query._id - User ID to update
-   * @param {Object} update - MongoDB update operators ($set, $inc, etc.)
-   * @returns {Promise<{modifiedCount: number}>} Number of modified documents
+   * @param db - MongoDB database instance
+   * @param query - Query object with _id
+   * @param query._id - User ID to update
+   * @param update - MongoDB update operators ($set, $inc, etc.)
+   * @returns Number of modified documents
    */
-  async updateUser(db, query, update) {
+  async updateUser(db: Db, query: UserQuery, update: UserUpdate): Promise<UpdateResult> {
     const { _id } = query;
-    const result = await db.collection('Users').updateOne({ _id }, update);
+    const result = await db.collection('Users').updateOne({ _id }, update as Document);
     return { modifiedCount: result.modifiedCount };
   }
 
@@ -186,14 +207,14 @@ export class MongoDBProvider {
    * Find authentication document by email
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {Object} query - Query object with email
-   * @param {string} query.email - Email to search
-   * @returns {Promise<Object|null>} Auth document with password hash, or null
+   * @param db - MongoDB database instance
+   * @param query - Query object with email
+   * @param query.email - Email to search
+   * @returns Auth document with password hash, or null
    */
-  async findAuth(db, query) {
+  async findAuth(db: Db, query: AuthQuery): Promise<AuthRecord | null> {
     const { email } = query;
-    const auth = await db.collection('Auths').findOne({ email });
+    const auth = await db.collection('Auths').findOne({ email }) as AuthRecord | null;
     return auth;
   }
 
@@ -201,16 +222,16 @@ export class MongoDBProvider {
    * Insert authentication document with hashed password
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {Object} authData - Auth data to insert
-   * @param {string} authData.email - User email (unique)
-   * @param {string} authData.password - Bcrypt hashed password
-   * @param {string} authData.userID - User ID reference
-   * @returns {Promise<{insertedId: ObjectId}>} MongoDB insertedId
-   * @throws {Error} If email already exists
+   * @param db - MongoDB database instance
+   * @param authData - Auth data to insert
+   * @param authData.email - User email (unique)
+   * @param authData.password - Bcrypt hashed password
+   * @param authData.userID - User ID reference
+   * @returns MongoDB insertedId
+   * @throws If email already exists
    */
-  async insertAuth(db, authData) {
-    const result = await db.collection('Auths').insertOne(authData);
+  async insertAuth(db: Db, authData: AuthRecord): Promise<InsertResult> {
+    const result = await db.collection('Auths').insertOne(authData as unknown as Document);
     return { insertedId: result.insertedId };
   }
 
@@ -218,14 +239,14 @@ export class MongoDBProvider {
    * Update authentication document (password only)
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {Object} query - Query object with email
-   * @param {string} query.email - Email of auth document to update
-   * @param {Object} update - Fields to update
-   * @param {string} update.password - New password hash
-   * @returns {Promise<{modifiedCount: number}>} Number of modified documents
+   * @param db - MongoDB database instance
+   * @param query - Query object with email
+   * @param query.email - Email of auth document to update
+   * @param update - Fields to update
+   * @param update.password - New password hash
+   * @returns Number of modified documents
    */
-  async updateAuth(db, query, update) {
+  async updateAuth(db: Db, query: AuthQuery, update: AuthUpdate): Promise<UpdateResult> {
     const { email } = query;
     const { password } = update;
     if (typeof password !== 'string') return { modifiedCount: 0 };
@@ -237,25 +258,25 @@ export class MongoDBProvider {
    * Find webhook event by event ID for idempotency check
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {string} eventId - Stripe event ID
-   * @returns {Promise<Object|null>} Webhook event document or null if not found
+   * @param db - MongoDB database instance
+   * @param eventId - Stripe event ID
+   * @returns Webhook event document or null if not found
    */
-  async findWebhookEvent(db, eventId) {
-    return await db.collection('WebhookEvents').findOne({ event_id: eventId });
+  async findWebhookEvent(db: Db, eventId: string): Promise<WebhookEventRecord | null> {
+    return await db.collection('WebhookEvents').findOne({ event_id: eventId }) as WebhookEventRecord | null;
   }
 
   /**
    * Insert webhook event record for idempotency tracking
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {string} eventId - Stripe event ID (unique)
-   * @param {string} eventType - Stripe event type
-   * @param {number} processedAt - Unix timestamp
-   * @returns {Promise<{insertedId: ObjectId}>} MongoDB insertedId
+   * @param db - MongoDB database instance
+   * @param eventId - Stripe event ID (unique)
+   * @param eventType - Stripe event type
+   * @param processedAt - Unix timestamp
+   * @returns MongoDB insertedId
    */
-  async insertWebhookEvent(db, eventId, eventType, processedAt) {
+  async insertWebhookEvent(db: Db, eventId: string, eventType: string, processedAt: number): Promise<InsertResult> {
     const result = await db.collection('WebhookEvents').insertOne({
       event_id: eventId,
       event_type: eventType,
@@ -274,27 +295,27 @@ export class MongoDBProvider {
    * Response format includes success flag, data, rowCount, and metadata with timing.
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {Object} queryObject - Operation configuration
-   * @param {string} queryObject.collection - Collection name (required)
-   * @param {string} queryObject.operation - Operation type (required)
-   * @param {Object} [queryObject.query] - Query filter
-   * @param {Object} [queryObject.update] - Update document
-   * @param {Array} [queryObject.pipeline] - Aggregation pipeline
-   * @param {Object} [queryObject.options={}] - MongoDB options
-   * @param {Array} [queryObject.transaction] - Transaction operations
-   * @returns {Promise<{success: boolean, data: any, rowCount: number, metadata: Object}>} Operation result
-   * @throws {Error} If collection or operation is missing
+   * @param db - MongoDB database instance
+   * @param queryObject - Operation configuration
+   * @param queryObject.collection - Collection name (required)
+   * @param queryObject.operation - Operation type (required)
+   * @param [queryObject.query] - Query filter
+   * @param [queryObject.update] - Update document
+   * @param [queryObject.pipeline] - Aggregation pipeline
+   * @param [queryObject.options={}] - MongoDB options
+   * @param [queryObject.transaction] - Transaction operations
+   * @returns Operation result
+   * @throws If collection or operation is missing
    */
-  async execute(db, queryObject) {
+  async execute(db: Db, queryObject: QueryObject): Promise<ExecuteResult> {
     const startTime = Date.now();
 
     try {
-      const { collection, operation, query, update, pipeline, options = {}, transaction } = queryObject;
+      const { collection, operation, query, update, pipeline, options = {}, transaction } = queryObject as MongoQueryObject;
       if (transaction && Array.isArray(transaction)) {
         return this.executeTransaction(db, transaction, startTime);
       }
-      
+
       if (!collection || !operation) {
         throw new Error('Collection and operation are required for MongoDB queries');
       }
@@ -309,73 +330,73 @@ export class MongoDBProvider {
           data = await coll.findOne(query || {}, options);
           rowCount = data ? 1 : 0;
           break;
-          
+
         case 'find':
           const cursor = coll.find(query || {}, options);
           data = await cursor.toArray();
           rowCount = data.length;
           break;
-          
+
         case 'insertone':
-          result = await coll.insertOne(query, options);
+          result = await coll.insertOne(query as Document, options);
           data = { insertedId: result.insertedId };
           rowCount = result.insertedCount || 0;
           break;
-          
+
         case 'insertmany':
-          result = await coll.insertMany(query, options);
+          result = await coll.insertMany(query as unknown as Document[], options);
           data = { insertedIds: result.insertedIds, insertedCount: result.insertedCount };
           rowCount = result.insertedCount || 0;
           break;
-          
+
         case 'updateone':
-          result = await coll.updateOne(query, update, options);
-          data = { 
-            modifiedCount: result.modifiedCount, 
+          result = await coll.updateOne(query as Document, update as Document, options);
+          data = {
+            modifiedCount: result.modifiedCount,
             matchedCount: result.matchedCount,
-            upsertedId: result.upsertedId 
+            upsertedId: result.upsertedId
           };
           rowCount = result.modifiedCount || 0;
           break;
-          
+
         case 'updatemany':
-          result = await coll.updateMany(query, update, options);
-          data = { 
-            modifiedCount: result.modifiedCount, 
+          result = await coll.updateMany(query as Document, update as Document, options);
+          data = {
+            modifiedCount: result.modifiedCount,
             matchedCount: result.matchedCount,
-            upsertedCount: result.upsertedCount 
+            upsertedCount: result.upsertedCount
           };
           rowCount = result.modifiedCount || 0;
           break;
-          
+
         case 'deleteone':
-          result = await coll.deleteOne(query, options);
+          result = await coll.deleteOne(query as Document, options);
           data = { deletedCount: result.deletedCount };
           rowCount = result.deletedCount || 0;
           break;
-          
+
         case 'deletemany':
-          result = await coll.deleteMany(query, options);
+          result = await coll.deleteMany(query as Document, options);
           data = { deletedCount: result.deletedCount };
           rowCount = result.deletedCount || 0;
           break;
-          
+
         case 'aggregate':
           const aggCursor = coll.aggregate(pipeline || [], options);
           data = await aggCursor.toArray();
           rowCount = data.length;
           break;
-          
+
         case 'countdocuments':
           data = await coll.countDocuments(query || {}, options);
           rowCount = 1;
           break;
-          
+
         case 'distinct':
-          data = await coll.distinct(query.field, query.filter || {}, options);
+          data = await coll.distinct(query!.field as string, (query!.filter || {}) as Document, options);
           rowCount = data.length;
           break;
-          
+
         default:
           throw new Error(`Unsupported MongoDB operation: ${operation}`);
       }
@@ -391,10 +412,11 @@ export class MongoDBProvider {
       };
 
     } catch (error) {
+      const err = error as Error & { code?: string | number; codeName?: string };
       return {
         success: false,
-        error: error.message,
-        code: error.code || error.codeName,
+        error: err.message,
+        code: err.code || err.codeName,
         metadata: {
           executionTime: Date.now() - startTime,
           dbType: 'mongodb'
@@ -411,35 +433,35 @@ export class MongoDBProvider {
    * All operations succeed or all fail atomically.
    *
    * @async
-   * @param {Db} db - MongoDB database instance
-   * @param {Array<{collection: string, operation: string, query: Object, update: Object, options: Object}>} operations - Operations to execute
-   * @param {number} startTime - Transaction start timestamp for metadata
-   * @returns {Promise<{success: boolean, data: Array, rowCount: number, metadata: Object}>} Transaction results
-   * @throws {Error} Throws on any operation failure
+   * @param db - MongoDB database instance
+   * @param operations - Operations to execute
+   * @param startTime - Transaction start timestamp for metadata
+   * @returns Transaction results
+   * @throws Throws on any operation failure
    */
-  async executeTransaction(db, operations, startTime) {
+  async executeTransaction(db: Db, operations: MongoOperation[], startTime: number): Promise<ExecuteSuccess> {
     const session = db.client.startSession();
 
     try {
-      const results = [];
+      const results: { operation: string; insertedId?: unknown; modifiedCount?: number; deletedCount?: number }[] = [];
 
       await session.withTransaction(async () => {
         for (const operation of operations) {
           const { collection, operation: op, query, update, options = {} } = operation;
           const coll = db.collection(collection);
-          
+
           let result;
           switch (op.toLowerCase()) {
             case 'insertone':
-              result = await coll.insertOne(query, { ...options, session });
+              result = await coll.insertOne(query as Document, { ...options, session });
               results.push({ operation: op, insertedId: result.insertedId });
               break;
             case 'updateone':
-              result = await coll.updateOne(query, update, { ...options, session });
+              result = await coll.updateOne(query as Document, update as Document, { ...options, session });
               results.push({ operation: op, modifiedCount: result.modifiedCount });
               break;
             case 'deleteone':
-              result = await coll.deleteOne(query, { ...options, session });
+              result = await coll.deleteOne(query as Document, { ...options, session });
               results.push({ operation: op, deletedCount: result.deletedCount });
               break;
             default:
@@ -447,7 +469,7 @@ export class MongoDBProvider {
           }
         }
       });
-      
+
       return {
         success: true,
         data: results,
@@ -470,9 +492,8 @@ export class MongoDBProvider {
    * Gracefully closes all MongoClient connections. Call on application shutdown.
    *
    * @async
-   * @returns {Promise<void>}
    */
-  async closeAll() {
+  async closeAll(): Promise<void> {
     for (const [cacheKey, client] of this.clients) {
       await client.close();
     }

@@ -1,13 +1,37 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import UpgradeSheet from '@stevederico/skateboard-ui/UpgradeSheet';
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type ChangeEvent, type KeyboardEvent } from "react";
 import { getRemainingUsage, trackUsage, showUpgradeSheet } from '@stevederico/skateboard-ui/Utilities';
 import { useUser, useDispatch } from '@stevederico/skateboard-ui/Context';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Card, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@stevederico/skateboard-ui/shadcn/ui/dialog';
+
+/** Single chat message rendered in the conversation list. */
+interface Message {
+  id: number | string;
+  text: string;
+  time: string;
+  isMe: boolean;
+}
+
+/** Usage quota state returned by getRemainingUsage/trackUsage. */
+interface UsageInfo {
+  remaining: number;
+  total?: number;
+  isSubscriber: boolean;
+}
+
+/** Imperative handle exposed by UpgradeSheet via its ref. */
+interface UpgradeSheetHandle {
+  show: () => void;
+  hide: () => void;
+  open: () => void;
+  close: () => void;
+  toggle: () => void;
+}
 
 /**
  * Chat view component with usage tracking and typing indicator
@@ -21,19 +45,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
  * - Auto-scroll to latest message
  *
  * @component
- * @returns {JSX.Element} Chat view with message interface
+ * @returns Chat view with message interface
  */
 export default function ChatView() {
   const user = useUser();
   const dispatch = useDispatch();
-  const requireAuth = useCallback((callback) => {
+  const requireAuth = useCallback((callback: () => void) => {
     if (user) {
       callback();
     } else {
       dispatch({ type: 'SHOW_AUTH_OVERLAY', payload: callback });
     }
   }, [user, dispatch]);
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<Message[]>([
     { id: 1, text: "Hey there! 👋", time: "2:30 PM", isMe: false },
     { id: 2, text: "Hi! How's it going?", time: "2:31 PM", isMe: true },
     { id: 3, text: "Good! Working on the new features", time: "2:32 PM", isMe: false },
@@ -42,12 +66,12 @@ export default function ChatView() {
 
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [usageInfo, setUsageInfo] = useState({ remaining: -1, isSubscriber: true });
-  const [usageError, setUsageError] = useState(null);
+  const [usageInfo, setUsageInfo] = useState<UsageInfo>({ remaining: -1, isSubscriber: true });
+  const [usageError, setUsageError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isUserSubscriber = usageInfo.isSubscriber
-  const upgradeSheetRef = useRef();
-  const messagesEndRef = useRef(null);
+  const upgradeSheetRef = useRef<UpgradeSheetHandle | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,7 +106,7 @@ export default function ChatView() {
         return;
       }
 
-      const userMessage = {
+      const userMessage: Message = {
         id: crypto.randomUUID(),
         text: newMessage,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -99,7 +123,7 @@ export default function ChatView() {
       // Auto-response after 200ms
       // TODO: Replace with actual LLM API call
       setTimeout(() => {
-        const aiResponse = {
+        const aiResponse: Message = {
           id: crypto.randomUUID(),
           text: "This is a demo response. Connect your LLM API here.",
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -120,7 +144,7 @@ export default function ChatView() {
         onButtonTitleClick={!isUserSubscriber ? () => showUpgradeSheet(upgradeSheetRef) : undefined}
       />
 
-      <Dialog open={!!usageError} onOpenChange={(open) => !open && setUsageError(null)}>
+      <Dialog open={!!usageError} onOpenChange={(open: boolean) => !open && setUsageError(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Something went wrong</DialogTitle>
@@ -173,8 +197,8 @@ export default function ChatView() {
             name="message"
             autoComplete="off"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && requireAuth(() => handleSend())}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMessage(e.target.value)}
+            onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && requireAuth(() => handleSend())}
             placeholder="Message…"
             className="flex-1 h-10 rounded-full bg-accent border-0 px-4 focus-visible:ring-app"
           />

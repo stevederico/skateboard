@@ -3,6 +3,12 @@ import Header from '@stevederico/skateboard-ui/Header';
 import { Calendar } from '@stevederico/skateboard-ui/shadcn/ui/calendar';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
 
+/** Selected range in mode="range" — mirrors react-day-picker's DateRange shape. */
+interface DateRange {
+  from: Date | undefined;
+  to?: Date | undefined;
+}
+
 /**
  * QA page for the recreated Calendar primitive.
  *
@@ -11,9 +17,9 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@stev
  * keyboard nav, and visual styling in one place.
  */
 export default function CalendarTestView() {
-  const [single, setSingle] = useState(new Date());
-  const [range, setRange] = useState({ from: new Date() });
-  const [dropdown, setDropdown] = useState();
+  const [single, setSingle] = useState<Date | undefined>(new Date());
+  const [range, setRange] = useState<DateRange | undefined>({ from: new Date() });
+  const [dropdown, setDropdown] = useState<Date | undefined>();
   const today = new Date();
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
   const inThreeDays = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3);

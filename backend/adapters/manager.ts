@@ -1,4 +1,19 @@
-import { SQLiteProvider } from './sqlite.js';
+import { SQLiteProvider } from './sqlite.ts';
+import type {
+  DatabaseProvider,
+  DatabaseConnection,
+  User,
+  UserQuery,
+  UserUpdate,
+  AuthRecord,
+  AuthQuery,
+  AuthUpdate,
+  WebhookEventRecord,
+  InsertResult,
+  UpdateResult,
+  QueryObject,
+  ExecuteResult
+} from '../types.ts';
 
 /**
  * Database manager implementing factory pattern for multi-database support
@@ -11,6 +26,9 @@ import { SQLiteProvider } from './sqlite.js';
  * @class
  */
 class DatabaseManager {
+  declare providers: Map<string, DatabaseProvider>;
+  declare activeConnections: Map<string, DatabaseConnection>;
+
   /**
    * Create database manager with empty provider and connection caches
    */
@@ -26,13 +44,13 @@ class DatabaseManager {
    * to avoid duplicate initialization.
    *
    * @async
-   * @param {string} dbType - Database type: 'sqlite', 'postgresql'/'postgres', 'mongodb'/'mongo'
-   * @returns {Promise<SQLiteProvider|PostgreSQLProvider|MongoDBProvider>} Initialized database provider
+   * @param dbType - Database type: 'sqlite', 'postgresql'/'postgres', 'mongodb'/'mongo'
+   * @returns Initialized database provider
    * @throws {Error} If dbType is not supported
    */
-  async getProvider(dbType) {
+  async getProvider(dbType: string): Promise<DatabaseProvider> {
     if (!this.providers.has(dbType)) {
-      let provider;
+      let provider: DatabaseProvider;
       
       switch (dbType.toLowerCase()) {
         case 'sqlite':
@@ -40,13 +58,13 @@ class DatabaseManager {
           break;
         case 'postgresql':
         case 'postgres': {
-          const { PostgreSQLProvider } = await import('./postgres.js');
+          const { PostgreSQLProvider } = await import('./postgres.ts');
           provider = new PostgreSQLProvider();
           break;
         }
         case 'mongodb':
         case 'mongo': {
-          const { MongoDBProvider } = await import('./mongodb.js');
+          const { MongoDBProvider } = await import('./mongodb.ts');
           provider = new MongoDBProvider();
           break;
         }
@@ -58,7 +76,7 @@ class DatabaseManager {
       this.providers.set(dbType, provider);
     }
 
-    return this.providers.get(dbType);
+    return this.providers.get(dbType)!;
   }
 
   /**
@@ -68,13 +86,13 @@ class DatabaseManager {
    * Connection key combines dbType, dbName, and connectionString for uniqueness.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string|null} [connectionString=null] - Connection string or file path
-   * @returns {Promise<{provider: Object, database: Object}>} Provider and database connection
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param [connectionString=null] - Connection string or file path
+   * @returns Provider and database connection
    * @throws {Error} If provider initialization fails
    */
-  async getDatabase(dbType, dbName, connectionString = null) {
+  async getDatabase(dbType: string, dbName: string, connectionString: string | null = null): Promise<DatabaseConnection> {
     const provider = await this.getProvider(dbType);
     const connectionKey = `${dbType}_${dbName}_${connectionString || 'default'}`;
 
@@ -83,7 +101,7 @@ class DatabaseManager {
       this.activeConnections.set(connectionKey, { provider, database });
     }
 
-    return this.activeConnections.get(connectionKey);
+    return this.activeConnections.get(connectionKey)!;
   }
 
   /**
@@ -93,17 +111,17 @@ class DatabaseManager {
    * Returns user with nested subscription object.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {Object} query - Query object with _id or email
-   * @param {string} [query._id] - User ID to search
-   * @param {string} [query.email] - Email to search
-   * @param {Object} [projection={}] - Fields to include/exclude in result
-   * @returns {Promise<Object|null>} User object with subscription nested, or null if not found
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param query - Query object with _id or email
+   * @param [query._id] - User ID to search
+   * @param [query.email] - Email to search
+   * @param [projection={}] - Fields to include/exclude in result
+   * @returns User object with subscription nested, or null if not found
    * @throws {Error} If database operation fails
    */
-  async findUser(dbType, dbName, connectionString, query, projection = {}) {
+  async findUser(dbType: string, dbName: string, connectionString: string, query: UserQuery, projection: Record<string, unknown> = {}): Promise<User | null> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.findUser(database, query, projection);
   }
@@ -114,17 +132,16 @@ class DatabaseManager {
    * Creates user and associated subscription record. Password must be pre-hashed.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {Object} userData - User data to insert
-   * @param {string} userData.email - User email (unique)
-   * @param {string} userData.name - User name
-   * @param {string} userData.password - Bcrypt hashed password
-   * @returns {Promise<Object>} Inserted user object with subscription nested
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param userData - User data to insert
+   * @param userData.email - User email (unique)
+   * @param userData.name - User name
+   * @returns Insert result with inserted ID
    * @throws {Error} If user already exists or database operation fails
    */
-  async insertUser(dbType, dbName, connectionString, userData) {
+  async insertUser(dbType: string, dbName: string, connectionString: string, userData: User): Promise<InsertResult> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.insertUser(database, userData);
   }
@@ -135,58 +152,58 @@ class DatabaseManager {
    * Updates user record and/or nested subscription fields.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {Object} query - Query object with _id or email
-   * @param {string} [query._id] - User ID to update
-   * @param {string} [query.email] - Email to update
-   * @param {Object} update - Update object with fields to modify
-   * @param {Object} [update.subscription] - Subscription fields to update
-   * @returns {Promise<Object|null>} Updated user object, or null if not found
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param query - Query object with _id or email
+   * @param [query._id] - User ID to update
+   * @param [query.email] - Email to update
+   * @param update - Update object with fields to modify
+   * @param [update.$set.subscription] - Subscription fields to update
+   * @returns Update result with modified count
    * @throws {Error} If database operation fails
    */
-  async updateUser(dbType, dbName, connectionString, query, update) {
+  async updateUser(dbType: string, dbName: string, connectionString: string, query: UserQuery, update: UserUpdate): Promise<UpdateResult> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.updateUser(database, query, update);
   }
 
   /**
-   * Find authentication record by user ID or token
+   * Find authentication record by email
    *
-   * Looks up auth record containing CSRF token and metadata.
+   * Looks up credential record containing password hash and user ID.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {Object} query - Query object with userId or csrfToken
-   * @param {string} [query.userId] - User ID to search
-   * @param {string} [query.csrfToken] - CSRF token to search
-   * @returns {Promise<Object|null>} Auth record or null if not found
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param query - Query object with email
+   * @param query.email - Email to search
+   * @returns Auth record or null if not found
    * @throws {Error} If database operation fails
    */
-  async findAuth(dbType, dbName, connectionString, query) {
+  async findAuth(dbType: string, dbName: string, connectionString: string, query: AuthQuery): Promise<AuthRecord | null> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.findAuth(database, query);
   }
 
   /**
-   * Insert authentication record with CSRF token
+   * Insert authentication record with password hash
    *
-   * Creates new auth record for user session management.
+   * Creates new credential record for user signin.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {Object} authData - Auth data to insert
-   * @param {string} authData.userId - User ID this auth belongs to
-   * @param {string} authData.csrfToken - CSRF protection token
-   * @returns {Promise<Object>} Inserted auth record
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param authData - Auth data to insert
+   * @param authData.email - Email this auth belongs to
+   * @param authData.password - Password hash
+   * @param authData.userID - Owning user's ID
+   * @returns Insert result with inserted ID
    * @throws {Error} If database operation fails
    */
-  async insertAuth(dbType, dbName, connectionString, authData) {
+  async insertAuth(dbType: string, dbName: string, connectionString: string, authData: AuthRecord): Promise<InsertResult> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.insertAuth(database, authData);
   }
@@ -197,16 +214,16 @@ class DatabaseManager {
    * Used by lazy password-hash migration on successful login.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {Object} query - Query object with email
-   * @param {string} query.email - Email of auth record to update
-   * @param {Object} update - Fields to update
-   * @param {string} [update.password] - New password hash
-   * @returns {Promise<{modifiedCount: number}>} Number of modified rows
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param query - Query object with email
+   * @param query.email - Email of auth record to update
+   * @param update - Fields to update
+   * @param update.password - New password hash
+   * @returns Number of modified rows
    */
-  async updateAuth(dbType, dbName, connectionString, query, update) {
+  async updateAuth(dbType: string, dbName: string, connectionString: string, query: AuthQuery, update: AuthUpdate): Promise<UpdateResult> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.updateAuth(database, query, update);
   }
@@ -218,14 +235,14 @@ class DatabaseManager {
    * duplicate processing on retries.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {string} eventId - Stripe event ID to check
-   * @returns {Promise<Object|null>} Webhook event record or null if not processed
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param eventId - Stripe event ID to check
+   * @returns Webhook event record or null if not processed
    * @throws {Error} If database operation fails
    */
-  async findWebhookEvent(dbType, dbName, connectionString, eventId) {
+  async findWebhookEvent(dbType: string, dbName: string, connectionString: string, eventId: string): Promise<WebhookEventRecord | null> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.findWebhookEvent(database, eventId);
   }
@@ -237,16 +254,16 @@ class DatabaseManager {
    * duplicate processing on retries.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {string} eventId - Stripe event ID (unique)
-   * @param {string} eventType - Stripe event type
-   * @param {number} processedAt - Unix timestamp when processed
-   * @returns {Promise<Object>} Inserted event record
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param eventId - Stripe event ID (unique)
+   * @param eventType - Stripe event type
+   * @param processedAt - Unix timestamp when processed
+   * @returns Insert result with inserted ID
    * @throws {Error} If database operation fails
    */
-  async insertWebhookEvent(dbType, dbName, connectionString, eventId, eventType, processedAt) {
+  async insertWebhookEvent(dbType: string, dbName: string, connectionString: string, eventId: string, eventType: string, processedAt: number): Promise<InsertResult> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.insertWebhookEvent(database, eventId, eventType, processedAt);
   }
@@ -258,14 +275,14 @@ class DatabaseManager {
    * Query format varies by database type.
    *
    * @async
-   * @param {string} dbType - Database type
-   * @param {string} dbName - Database name
-   * @param {string} connectionString - Connection string or file path
-   * @param {Object} queryObject - Provider-specific query object
-   * @returns {Promise<any>} Query result in provider-specific format
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param queryObject - Provider-specific query object
+   * @returns Query result in provider-specific format
    * @throws {Error} If database operation fails
    */
-  async executeQuery(dbType, dbName, connectionString, queryObject) {
+  async executeQuery(dbType: string, dbName: string, connectionString: string, queryObject: QueryObject): Promise<ExecuteResult> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.execute(database, queryObject);
   }
@@ -277,9 +294,8 @@ class DatabaseManager {
    * internal Maps. Call on application shutdown.
    *
    * @async
-   * @returns {Promise<void>}
    */
-  async closeAll() {
+  async closeAll(): Promise<void> {
     for (const provider of this.providers.values()) {
       await provider.closeAll();
     }
@@ -294,9 +310,8 @@ class DatabaseManager {
  * Pre-instantiated manager for application-wide database access.
  * Import and use directly - no need to instantiate DatabaseManager.
  *
- * @type {DatabaseManager}
  * @example
- * import { databaseManager } from './adapters/manager.js';
+ * import { databaseManager } from './adapters/manager.ts';
  *
  * const user = await databaseManager.findUser('sqlite', 'MyApp', './db.db', { email: 'user@example.com' });
  */

@@ -1,7 +1,24 @@
+import type { ReactNode } from 'react';
 import Header from '@stevederico/skateboard-ui/Header';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
 import { LayoutDashboard, Plus } from '@stevederico/skateboard-ui/icons';
+
+/** Props for the BlankView starter template. */
+interface BlankViewProps {
+  /** Header title */
+  title?: string;
+  /** Empty state description text */
+  description?: string;
+  /** CTA button text (e.g. "Create Project") */
+  buttonTitle?: string;
+  /** CTA button click handler */
+  onButtonClick?: () => void;
+  /** Custom icon element for empty state */
+  icon?: ReactNode;
+  /** Optional content to replace empty state */
+  children?: ReactNode;
+}
 
 /**
  * Blank view template component
@@ -9,16 +26,9 @@ import { LayoutDashboard, Plus } from '@stevederico/skateboard-ui/icons';
  * Starter view with Header and empty state. Use as starting point for new views.
  *
  * @component
- * @param {Object} props
- * @param {string} props.title - Header title
- * @param {string} [props.description] - Empty state description text
- * @param {string} [props.buttonTitle] - CTA button text (e.g. "Create Project")
- * @param {Function} [props.onButtonClick] - CTA button click handler
- * @param {import('react').ReactNode} [props.icon] - Custom icon element for empty state
- * @param {import('react').ReactNode} [props.children] - Optional content to replace empty state
- * @returns {JSX.Element} Blank view with header and empty state
+ * @returns Blank view with header and empty state
  */
-export default function BlankView({ title = "Blank", description, buttonTitle, onButtonClick, icon, children }) {
+export default function BlankView({ title = "Blank", description, buttonTitle, onButtonClick, icon, children }: BlankViewProps) {
   return (
     <>
       <Header title={title} />
