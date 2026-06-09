@@ -11,6 +11,7 @@ import type {
   WebhookEventRecord,
   InsertResult,
   UpdateResult,
+  DeleteResult,
   QueryObject,
   ExecuteResult
 } from '../types.ts';
@@ -166,6 +167,26 @@ class DatabaseManager {
   async updateUser(dbType: string, dbName: string, connectionString: string, query: UserQuery, update: UserUpdate): Promise<UpdateResult> {
     const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
     return await provider.updateUser(database, query, update);
+  }
+
+  /**
+   * Delete user by ID or email
+   *
+   * Unified interface method that delegates to provider-specific implementation.
+   *
+   * @async
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param query - Query object with _id or email
+   * @param [query._id] - User ID to delete
+   * @param [query.email] - Email to delete
+   * @returns Delete result with deleted count (0 when nothing matched)
+   * @throws {Error} If database operation fails
+   */
+  async deleteUser(dbType: string, dbName: string, connectionString: string, query: UserQuery): Promise<DeleteResult> {
+    const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
+    return await provider.deleteUser(database, query);
   }
 
   /**

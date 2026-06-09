@@ -6,6 +6,7 @@ import type {
   AuthRecord,
   AuthUpdate,
   DatabaseProvider,
+  DeleteResult,
   ExecuteResult,
   InsertResult,
   SqlParam,
@@ -197,7 +198,8 @@ export class SQLiteProvider implements DatabaseProvider<Database> {
       return null;
     }
 
-    const result = db.prepare(sql).get(...params) as unknown as UserRow | null;
+    // node:sqlite returns undefined for a miss; normalize to the declared null
+    const result = (db.prepare(sql).get(...params) as unknown as UserRow | undefined) ?? null;
     if (result) {
       // Transform subscription fields
       if (result.subscription_stripeID) {
@@ -309,6 +311,35 @@ export class SQLiteProvider implements DatabaseProvider<Database> {
   }
 
   /**
+   * Delete user row by ID or email
+   *
+   * Matches findUser's selector convention: _id is checked first, then email.
+   * Returns deletedCount 0 when neither selector is given or no row matches.
+   *
+   * @param db - SQLite database instance
+   * @param query - Query object with _id or email
+   * @returns Number of deleted rows
+   */
+  async deleteUser(db: Database, query: UserQuery): Promise<DeleteResult> {
+    const { _id, email } = query;
+    let sql = "DELETE FROM Users WHERE ";
+    const params: SqlParam[] = [];
+
+    if (_id) {
+      sql += "_id = ?";
+      params.push(_id);
+    } else if (email) {
+      sql += "email = ?";
+      params.push(email);
+    } else {
+      return { deletedCount: 0 };
+    }
+
+    const result = db.prepare(sql).run(...params);
+    return { deletedCount: result.changes as number };
+  }
+
+  /**
    * Find authentication record by email
    *
    * @param db - SQLite database instance
@@ -318,7 +349,8 @@ export class SQLiteProvider implements DatabaseProvider<Database> {
   async findAuth(db: Database, query: AuthQuery): Promise<AuthRecord | null> {
     const { email } = query;
     const sql = "SELECT * FROM Auths WHERE email = ?";
-    return db.prepare(sql).get(email) as unknown as AuthRecord | null;
+    // node:sqlite returns undefined for a miss; normalize to the declared null
+    return (db.prepare(sql).get(email) as unknown as AuthRecord | undefined) ?? null;
   }
 
   /**
@@ -362,7 +394,8 @@ export class SQLiteProvider implements DatabaseProvider<Database> {
    */
   async findWebhookEvent(db: Database, eventId: string): Promise<WebhookEventRecord | null> {
     const sql = "SELECT * FROM WebhookEvents WHERE event_id = ?";
-    return db.prepare(sql).get(eventId) as unknown as WebhookEventRecord | null;
+    // node:sqlite returns undefined for a miss; normalize to the declared null
+    return (db.prepare(sql).get(eventId) as unknown as WebhookEventRecord | undefined) ?? null;
   }
 
   /**

@@ -31,8 +31,9 @@ export type DbDialect = 'sqlite' | 'postgresql' | 'mongodb';
  * Written by the /api/payment webhook handlers and read by signin, usage, and
  * portal routes. SQL adapters flatten this into subscription_* columns and
  * rebuild the nested object in findUser; MongoDB stores it natively.
- * Note: the pg driver surfaces BIGINT columns as strings at runtime; the
- * canonical contract (and what SQLite/MongoDB return) is numeric.
+ * Numeric fields are numeric on every adapter: the PostgreSQL adapter
+ * registers an int8 (BIGINT) type parser at driver load, so `expires` comes
+ * back as a number there too, matching SQLite/MongoDB.
  */
 export interface Subscription {
   /** Stripe customer ID (cus_...). */
@@ -190,6 +191,12 @@ export interface UpdateResult {
   modifiedCount: number;
 }
 
+/** Result of a delete operation across all adapters. */
+export interface DeleteResult {
+  /** Number of rows/documents deleted. */
+  deletedCount: number;
+}
+
 // ==== executeQuery QUERY OBJECTS ====
 
 /**
@@ -300,7 +307,8 @@ export type ExecuteResult = ExecuteSuccess | ExecuteFailure;
  * Contract every database adapter implements and DatabaseManager delegates to.
  *
  * `TDb` is the provider's connection handle: node:sqlite DatabaseSync for
- * SQLiteProvider, pg.Pool for PostgreSQLProvider, mongodb Db for
+ * SQLiteProvider, PoolLike (the locally-typed pg Pool surface) for
+ * PostgreSQLProvider, DbLike (the locally-typed mongodb Db surface) for
  * MongoDBProvider. getDatabase may be sync (SQLite) or async — the manager
  * awaits it either way. closeAll is likewise sync on SQLite only.
  */
@@ -315,6 +323,8 @@ export interface DatabaseProvider<TDb = unknown> {
   insertUser(db: TDb, userData: User): Promise<InsertResult>;
   /** Apply a $set/$inc update to a user. */
   updateUser(db: TDb, query: UserQuery, update: UserUpdate): Promise<UpdateResult>;
+  /** Delete a user matched by _id or email. */
+  deleteUser(db: TDb, query: UserQuery): Promise<DeleteResult>;
   /** Find a credential record by email. */
   findAuth(db: TDb, query: AuthQuery): Promise<AuthRecord | null>;
   /** Insert a credential record. */
@@ -350,6 +360,8 @@ export interface BoundDatabase {
   findUser(query: UserQuery, projection?: Record<string, unknown>): Promise<User | null>;
   insertUser(userData: User): Promise<InsertResult>;
   updateUser(query: UserQuery, update: UserUpdate): Promise<UpdateResult>;
+  /** Delete a user matched by _id or email. */
+  deleteUser(query: UserQuery): Promise<DeleteResult>;
   findAuth(query: AuthQuery): Promise<AuthRecord | null>;
   insertAuth(authData: AuthRecord): Promise<InsertResult>;
   updateAuth(query: AuthQuery, update: AuthUpdate): Promise<UpdateResult>;

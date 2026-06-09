@@ -17,6 +17,11 @@
  * baseline, so it falls back to the legacy behavior (overwrite-with-confirm for files,
  * add-only for deps) and warns that pruning/merging is unavailable.
  *
+ * If any file ends declined, conflicted, or errored, `skateboardVersion` is NOT
+ * stamped — a re-run (with `--baseline <old>`) can finish the job after resolving.
+ * Passing `--baseline` also forces a re-sync even when `skateboardVersion` already
+ * matches the latest release.
+ *
  * Shows a diff for each change and requires confirmation before writing. Re-runnable;
  * safe to abort at any prompt.
  *
@@ -35,7 +40,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, chmodSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
@@ -55,7 +60,6 @@ const ALLOWLIST = [
   'backend/adapters/postgres.ts',
   'backend/adapters/mongodb.ts',
   'backend/types.ts',
-  'backend/ambient.d.ts',
   'backend/tsconfig.json',
   'backend/vendor/legacy-bcrypt.js',
   'backend/vendor/legacy-bcrypt.d.ts',
@@ -66,7 +70,14 @@ const ALLOWLIST = [
   'Dockerfile',
   '.dockerignore',
   '.gitignore',
+  '.githooks/pre-commit',
   'scripts/update-skateboard.js'
+];
+
+// Files the template deleted that apps should drop too. A stale copy is harmful
+// (e.g. backend/ambient.d.ts shadows the real pg/mongodb driver types).
+const REMOVED = [
+  'backend/ambient.d.ts'
 ];
 
 // Template renames: new path at HEAD → old path apps may still have. Apps with the
@@ -158,9 +169,23 @@ function showDiff(curContent, incomingContent, label) {
 }
 
 /**
+ * Write a synced template file into the app, creating parent dirs as needed.
+ * Files under `.githooks/` are chmod'd 0o755 — `writeFileSync` alone leaves them
+ * non-executable and git silently skips non-executable hooks.
+ */
+function writeSynced(dst, relPath, content) {
+  mkdirSync(dirname(dst), { recursive: true });
+  writeFileSync(dst, content);
+  if (relPath.startsWith('.githooks/')) chmodSync(dst, 0o755);
+}
+
+/**
  * 3-way merge baseContent→newContent onto appContent via `git merge-file`.
  *
- * @returns {{ merged: string, conflicts: number }}
+ * @returns {{ merged: string, conflicts: number }} `conflicts` is the conflict count,
+ *   or -1 on a hard failure (exit 255 or empty output for a non-empty input — binary/NUL
+ *   or unmergeable content). On -1, `merged` echoes `appContent` and callers MUST leave
+ *   the app's file untouched — writing the empty merge output would destroy it.
  */
 function threeWayMerge(appContent, baseContent, newContent) {
   const cur = join(tmpdir(), 'sk-mf-cur.tmp');
@@ -175,20 +200,34 @@ function threeWayMerge(appContent, baseContent, newContent) {
   } catch (e) {
     conflicts = typeof e.status === 'number' && e.status > 0 ? e.status : 1;
     merged = e.stdout?.toString() ?? appContent;
+    // Exit 255 (git's hard-error code, e.g. "Cannot merge binary files") or an empty
+    // merge of non-empty input means the output is garbage, not a merge result.
+    if (e.status === 255 || (merged === '' && appContent !== '')) {
+      conflicts = -1;
+      merged = appContent;
+    }
+  } finally {
+    rmSync(cur, { force: true });
+    rmSync(base, { force: true });
+    rmSync(other, { force: true });
   }
-  rmSync(cur, { force: true });
-  rmSync(base, { force: true });
-  rmSync(other, { force: true });
   return { merged, conflicts };
 }
 
+/**
+ * Sync one template file into the app (3-way merge, add, or overwrite fallback).
+ *
+ * @returns {Promise<'ok'|'wrote'|'declined'|'conflicts'|'error'>} 'ok' = nothing to do,
+ *   'wrote' = written cleanly, 'declined' = user kept their file, 'conflicts' = written
+ *   with <<<<<<< markers, 'error' = merge failed hard and the file was left untouched.
+ */
 async function syncFile(relPath, baselineTag) {
   const dst = join(APP_ROOT, relPath);
   const newContent = showAtRef('HEAD', relPath);
 
   if (newContent === null) {
     console.log(`[skip] ${relPath} — not in latest skateboard`);
-    return;
+    return 'ok';
   }
 
   const oldRel = RENAMES[relPath];
@@ -196,28 +235,26 @@ async function syncFile(relPath, baselineTag) {
 
   // App still has the pre-rename file and not the new one → migrate across the rename.
   if (!dstExists && oldRel && existsSync(join(APP_ROOT, oldRel))) {
-    await migrateRenamedFile(relPath, oldRel, baselineTag, newContent);
-    return;
+    return migrateRenamedFile(relPath, oldRel, baselineTag, newContent);
   }
 
   const appContent = dstExists ? readFileSync(dst, 'utf8') : '';
 
   if (dstExists && appContent === newContent) {
     console.log(`[ok]   ${relPath}`);
-    return;
+    return 'ok';
   }
 
   // App doesn't have this file yet → offer to add it verbatim.
   if (!dstExists) {
     console.log(`\n[new]  ${relPath} — not present in app`);
     if (await confirm(`Add ${relPath}?`)) {
-      mkdirSync(dirname(dst), { recursive: true });
-      writeFileSync(dst, newContent);
+      writeSynced(dst, relPath, newContent);
       console.log(`[wrote] ${relPath}`);
-    } else {
-      console.log(`[kept]  (absent) ${relPath}`);
+      return 'wrote';
     }
-    return;
+    console.log(`[kept]  (absent) ${relPath}`);
+    return 'declined';
   }
 
   // Baseline lookup falls back to the pre-rename path for baselines older than the rename.
@@ -230,24 +267,30 @@ async function syncFile(relPath, baselineTag) {
     console.log(`\n[diff] ${relPath}  (no baseline — full overwrite; your edits would be replaced)`);
     showDiff(appContent, newContent, relPath);
     if (await confirm(`Overwrite ${relPath} with the latest template version?`)) {
-      writeFileSync(dst, newContent);
+      writeSynced(dst, relPath, newContent);
       console.log(`[wrote] ${relPath}`);
-    } else {
-      console.log(`[kept]  ${relPath}`);
+      return 'wrote';
     }
-    return;
+    console.log(`[kept]  ${relPath}`);
+    return 'declined';
   }
 
   if (baseContent === newContent) {
     console.log(`[ok]   ${relPath} (template unchanged since ${baselineTag}; your edits kept)`);
-    return;
+    return 'ok';
   }
 
   const { merged, conflicts } = threeWayMerge(appContent, baseContent, newContent);
 
+  // Hard merge failure — do NOT write or delete anything.
+  if (conflicts === -1) {
+    console.log(`[error] ${relPath} — git merge-file failed (binary or unmergeable content); file left untouched`);
+    return 'error';
+  }
+
   if (merged === appContent) {
     console.log(`[ok]   ${relPath} (template changes already present)`);
-    return;
+    return 'ok';
   }
 
   console.log(`\n[merge] ${relPath}${conflicts ? ` — ${conflicts} CONFLICT(S)` : ''}`);
@@ -256,17 +299,20 @@ async function syncFile(relPath, baselineTag) {
   if (conflicts) {
     console.log(`  ⚠ ${conflicts} conflict(s): merged file will contain <<<<<<< markers to resolve by hand.`);
     if (await confirm(`Write ${relPath} with conflict markers?`)) {
-      writeFileSync(dst, merged);
+      writeSynced(dst, relPath, merged);
       console.log(`[wrote w/ conflicts] ${relPath}`);
-    } else {
-      console.log(`[kept]  ${relPath}`);
+      return 'conflicts';
     }
-  } else if (await confirm(`Apply merged update to ${relPath}? (your edits preserved)`)) {
-    writeFileSync(dst, merged);
-    console.log(`[wrote] ${relPath}`);
-  } else {
     console.log(`[kept]  ${relPath}`);
+    return 'declined';
   }
+  if (await confirm(`Apply merged update to ${relPath}? (your edits preserved)`)) {
+    writeSynced(dst, relPath, merged);
+    console.log(`[wrote] ${relPath}`);
+    return 'wrote';
+  }
+  console.log(`[kept]  ${relPath}`);
+  return 'declined';
 }
 
 /**
@@ -275,6 +321,8 @@ async function syncFile(relPath, baselineTag) {
  * baseline tag (base) and the new path at HEAD (new) — `git merge-file` is
  * content-based, so names don't matter and local edits survive the rename.
  * Writes the result under the new name and removes the old file on confirm.
+ *
+ * @returns {Promise<'ok'|'wrote'|'declined'|'conflicts'|'error'>} same statuses as syncFile.
  */
 async function migrateRenamedFile(relPath, oldRel, baselineTag, newContent) {
   const dst = join(APP_ROOT, relPath);
@@ -287,17 +335,22 @@ async function migrateRenamedFile(relPath, oldRel, baselineTag, newContent) {
     console.log(`\n[rename] ${oldRel} → ${relPath}  (no baseline — full overwrite; your edits would be replaced)`);
     showDiff(appContent, newContent, relPath);
     if (await confirm(`Replace ${oldRel} with the latest ${relPath}?`)) {
-      mkdirSync(dirname(dst), { recursive: true });
-      writeFileSync(dst, newContent);
+      writeSynced(dst, relPath, newContent);
       rmSync(oldDst, { force: true });
       console.log(`[wrote] ${relPath}   [removed] ${oldRel}`);
-    } else {
-      console.log(`[kept]  ${oldRel}`);
+      return 'wrote';
     }
-    return;
+    console.log(`[kept]  ${oldRel}`);
+    return 'declined';
   }
 
   const { merged, conflicts } = threeWayMerge(appContent, baseContent, newContent);
+
+  // Hard merge failure — do NOT write the new file or delete the old one.
+  if (conflicts === -1) {
+    console.log(`[error] ${oldRel} — git merge-file failed (binary or unmergeable content); file left untouched`);
+    return 'error';
+  }
 
   console.log(`\n[rename] ${oldRel} → ${relPath}${conflicts ? ` — ${conflicts} CONFLICT(S)` : ''}`);
   showDiff(appContent, merged, relPath);
@@ -309,16 +362,21 @@ async function migrateRenamedFile(relPath, oldRel, baselineTag, newContent) {
     ? `Write ${relPath} with conflict markers and remove ${oldRel}?`
     : `Migrate ${oldRel} to ${relPath}? (your edits preserved)`;
   if (await confirm(prompt)) {
-    mkdirSync(dirname(dst), { recursive: true });
-    writeFileSync(dst, merged);
+    writeSynced(dst, relPath, merged);
     rmSync(oldDst, { force: true });
     console.log(`[wrote] ${relPath}   [removed] ${oldRel}`);
-  } else {
-    console.log(`[kept]  ${oldRel}`);
+    return conflicts ? 'conflicts' : 'wrote';
   }
+  console.log(`[kept]  ${oldRel}`);
+  return 'declined';
 }
 
-async function mergePackageJson(baselineTag) {
+/**
+ * Merge the template's package.json deps/scripts into the app's (add/prune/update via
+ * the baseline). Stamps `skateboardVersion` only when `stamp` is true — callers pass
+ * false when any file ended declined/conflicted/errored so a re-run can finish the job.
+ */
+async function mergePackageJson(baselineTag, stamp = true) {
   const newPkg = JSON.parse(showAtRef('HEAD', 'package.json'));
   const appPkg = readJSON(join(APP_ROOT, 'package.json'));
   const baseRaw = baselineTag ? showAtRef(baselineTag, 'package.json') : null;
@@ -360,7 +418,7 @@ async function mergePackageJson(baselineTag) {
     }
   }
 
-  const versionChanged = appPkg.skateboardVersion !== newPkg.version;
+  const versionChanged = stamp && appPkg.skateboardVersion !== newPkg.version;
   if (!Object.keys(adds).length && !Object.keys(removes).length && !Object.keys(updates).length && !versionChanged) {
     console.log('\n[ok] package.json — no changes needed');
     return;
@@ -372,6 +430,18 @@ async function mergePackageJson(baselineTag) {
   for (const [k, v] of Object.entries(removes)) console.log(`  - ${k}: ${v}  (removed upstream)`);
   for (const [k, v] of Object.entries(updates)) console.log(`  ~ ${k}: ${v}`);
   if (!basePkg) console.log(`  ⚠ no baseline tag for ${appPkg.skateboardVersion} — add-only; cannot prune removed deps or detect customized versions.`);
+
+  // The postinstall hooksPath script points git away from .git/hooks — warn if the
+  // app already has real (non-sample) hooks there that would silently stop running.
+  if (String(adds['scripts.postinstall'] ?? '').includes('hooksPath')) {
+    const hooksDir = join(APP_ROOT, '.git', 'hooks');
+    const existingHooks = existsSync(hooksDir)
+      ? readdirSync(hooksDir).filter(f => !f.endsWith('.sample'))
+      : [];
+    if (existingHooks.length) {
+      console.log(`  ⚠ existing git hook(s) in .git/hooks (${existingHooks.join(', ')}) — the postinstall core.hooksPath script will bypass them; move them into .githooks/ to keep them running.`);
+    }
+  }
 
   if (!(await confirm('Apply package.json updates?'))) {
     console.log('[kept] package.json');
@@ -401,7 +471,7 @@ async function mergePackageJson(baselineTag) {
       else if (basePkg && name in baseS && appS[name] === baseS[name]) appS[name] = cmd;
     }
   }
-  appPkg.skateboardVersion = newPkg.version;
+  if (stamp) appPkg.skateboardVersion = newPkg.version;
   writeJSON(join(APP_ROOT, 'package.json'), appPkg);
   console.log('[wrote] package.json');
 }
@@ -426,10 +496,14 @@ async function main() {
   const stranded = Object.entries(RENAMES).filter(([newRel, oldRel]) =>
     existsSync(join(APP_ROOT, oldRel)) && !existsSync(join(APP_ROOT, newRel)));
 
-  if (currentVersion === newPkg.version && !stranded.length) {
+  // --baseline is an explicit request to re-sync, so it skips the up-to-date early-exit.
+  if (currentVersion === newPkg.version && !stranded.length && !baselineArg) {
     console.log('\nAlready on latest. Nothing to do.');
     rmSync(TMP_DIR, { recursive: true, force: true });
     return;
+  }
+  if (currentVersion === newPkg.version && baselineArg) {
+    console.log(`\n--baseline ${baselineArg} given — re-syncing even though skateboardVersion matches latest.`);
   }
   if (currentVersion === newPkg.version && stranded.length) {
     console.log(`\n⚠ skateboardVersion says ${currentVersion} but ${stranded.length} pre-rename file(s) remain (e.g. ${stranded[0][1]}).`);
@@ -445,14 +519,54 @@ async function main() {
     : `⚠ No tag for ${baselineArg || currentVersion} — falling back to overwrite/add-only (no merge or prune).`);
   console.log(SKIP_NOTE);
 
+  const statuses = [];
   for (const relPath of ALLOWLIST) {
-    await syncFile(relPath, baselineTag);
+    statuses.push(await syncFile(relPath, baselineTag));
   }
 
-  await mergePackageJson(baselineTag);
+  // Drop files the template deleted — keeping them is harmful (stale ambient
+  // declarations shadow real driver types).
+  for (const relPath of REMOVED) {
+    const dst = join(APP_ROOT, relPath);
+    if (!existsSync(dst)) continue;
+    console.log(`\n[removed upstream] ${relPath} — the template deleted this file`);
+    if (await confirm(`Delete ${relPath}?`)) {
+      rmSync(dst, { force: true });
+      console.log(`[removed] ${relPath}`);
+      statuses.push('wrote');
+    } else {
+      console.log(`[kept]  ${relPath}`);
+      statuses.push('declined');
+    }
+  }
+
+  // Any declined/conflicted/errored file means the upgrade is incomplete — don't stamp
+  // skateboardVersion (the dep/script merges are still offered above).
+  const blocked = statuses.filter(s => s === 'declined' || s === 'conflicts' || s === 'error').length;
+  await mergePackageJson(baselineTag, blocked === 0);
+  if (blocked) {
+    console.log(`\n⚠ ${blocked} file(s) declined/conflicted — skateboardVersion left at ${currentVersion} so a re-run can finish the job; re-run with --baseline ${currentVersion} after resolving.`);
+  }
 
   rmSync(TMP_DIR, { recursive: true, force: true });
-  console.log('\nDone. Run your install command (deno install / npm install) and test the app.');
+
+  console.log('\nDone. Post-upgrade checklist:');
+  console.log('  1. npm install');
+  console.log('  2. npm run typecheck — your custom code merged into .ts files may need annotations');
+  console.log('  3. See docs/UPGRADE.md for the agent prompt that automates conflict + type fixes.');
+
+  // tsc already installed → offer to run the typecheck right here.
+  if (existsSync(join(APP_ROOT, 'node_modules', '.bin', 'tsc'))) {
+    console.log('\ntsc is installed. Note: typecheck is EXPECTED to fail until your custom code is annotated — the errors are the to-do list, not a regression.');
+    if (await confirm('Run npm run typecheck now?')) {
+      try {
+        execSync('npm run typecheck', { cwd: APP_ROOT, stdio: 'inherit' });
+        console.log('[ok] typecheck passed');
+      } catch {
+        console.log('[info] typecheck failed — annotate the reported code, then re-run npm run typecheck.');
+      }
+    }
+  }
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
