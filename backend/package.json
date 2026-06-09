@@ -7,10 +7,10 @@
         "node": ">=24.0.0"
     },
     "scripts": {
-        "start": "node server.js",
-        "dev": "node --watch server.js",
-        "test": "node --test server.test.js",
-        "test:watch": "node --test --watch server.test.js"
+        "start": "node server.ts",
+        "dev": "node --watch server.ts",
+        "test": "node --test server.test.ts",
+        "test:watch": "node --test --watch server.test.ts"
     },
     "dependencies": {
         "@hono/node-server": "^1.14.1",

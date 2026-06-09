@@ -1,3 +1,21 @@
+3.8.0
+
+  Convert to TypeScript
+  Add strict typecheck
+  Type database adapters
+  Add ambient declarations
+  Gate build typecheck
+  Gate test typecheck
+  Add pre-commit hook
+  Migrate update script
+  Add upgrade prompt
+  Update README
+  Fix basil webhooks
+  Add deleteUser rollback
+  Lazy-load db drivers
+  Fix typecheck gates
+  Harden update script
+
 3.7.0
 
   Bump skateboard-ui 3.9.0

@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "3.7.0",
-  "skateboardVersion": "3.7.0",
+  "version": "3.8.0",
+  "skateboardVersion": "3.8.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -14,11 +14,13 @@
     "start": "npm run front & npm run server",
     "front": "vite --force --mode development",
     "server": "npm run --workspace=backend dev",
-    "build": "vite build --mode production",
-    "prod": "vite build --mode production",
+    "build": "npm run typecheck && vite build --mode production",
+    "prod": "npm run typecheck && vite build --mode production",
     "install-all": "npm install && npm install --workspace=backend",
-    "test": "npm run --workspace=backend test",
+    "postinstall": "git config core.hooksPath .githooks || true",
+    "test": "npm run typecheck && npm run --workspace=backend test",
     "test:watch": "npm run --workspace=backend test:watch",
+    "typecheck": "tsc -p tsconfig.json && tsc -p backend/tsconfig.json",
     "verify:ui": "node scripts/verify-ui-version.mjs"
   },
   "dependencies": {
@@ -29,8 +31,12 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.0",
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.16",
+    "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react-swc": "4.3.1",
     "tailwindcss": "4.3.0",
+    "typescript": "6.0.3",
     "vite": "8.0.13"
   }
 }

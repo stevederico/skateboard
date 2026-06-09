@@ -1,8 +1,16 @@
 import { defineConfig } from 'vite';
+import type { ESBuildOptions, Plugin } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 import fs from 'node:fs';
+
+/** Subset of constants.json fields consumed at build time */
+type BuildConstants = {
+    appName: string;
+    tagline: string;
+    companyWebsite: string;
+};
 
 /**
  * Custom logger plugin to simplify Vite server startup output
@@ -10,9 +18,9 @@ import fs from 'node:fs';
  * Overrides default Vite URL printer to show single clean message.
  * Suppresses verbose network address output.
  *
- * @returns {import('vite').Plugin} Vite plugin object
+ * @returns Vite plugin object
  */
-const customLoggerPlugin = () => {
+const customLoggerPlugin = (): Plugin => {
     return {
         name: 'custom-logger',
         configureServer(server) {
@@ -30,13 +38,13 @@ const customLoggerPlugin = () => {
  * in index.html with values from constants.json at build time. Enables
  * dynamic metadata without build script complexity.
  *
- * @returns {import('vite').Plugin} Vite plugin object
+ * @returns Vite plugin object
  */
-const htmlReplacePlugin = () => {
+const htmlReplacePlugin = (): Plugin => {
     return {
         name: 'html-replace',
         transformIndexHtml(html) {
-            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8')) as BuildConstants;
 
             return html
                 .replace(/{{APP_NAME}}/g, constants.appName)
@@ -55,13 +63,13 @@ const htmlReplacePlugin = () => {
  * - Sitemap reference from constants.json
  * - Disallows all other bots from entire site
  *
- * @returns {import('vite').Plugin} Vite plugin object
+ * @returns Vite plugin object
  */
-const dynamicRobotsPlugin = () => {
+const dynamicRobotsPlugin = (): Plugin => {
     return {
         name: 'dynamic-robots',
         generateBundle() {
-            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8')) as BuildConstants;
             const website = constants.companyWebsite.startsWith('http')
                 ? constants.companyWebsite
                 : `https://${constants.companyWebsite}`;
@@ -116,13 +124,13 @@ Sitemap: ${website}/sitemap.xml
  *
  * Uses current build date for lastmod. Reads website URL from constants.json.
  *
- * @returns {import('vite').Plugin} Vite plugin object
+ * @returns Vite plugin object
  */
-const dynamicSitemapPlugin = () => {
+const dynamicSitemapPlugin = (): Plugin => {
     return {
         name: 'dynamic-sitemap',
         generateBundle() {
-            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8')) as BuildConstants;
             const website = constants.companyWebsite.startsWith('http')
                 ? constants.companyWebsite
                 : `https://${constants.companyWebsite}`;
@@ -184,13 +192,13 @@ const dynamicSitemapPlugin = () => {
  *
  * Enables Add to Home Screen and PWA functionality.
  *
- * @returns {import('vite').Plugin} Vite plugin object
+ * @returns Vite plugin object
  */
-const dynamicManifestPlugin = () => {
+const dynamicManifestPlugin = (): Plugin => {
     return {
         name: 'dynamic-manifest',
         generateBundle() {
-            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+            const constants = JSON.parse(fs.readFileSync('src/constants.json', 'utf8')) as BuildConstants;
 
             const manifestContent = {
                 short_name: constants.appName,
@@ -230,9 +238,12 @@ export default defineConfig({
     dynamicSitemapPlugin(),
     dynamicManifestPlugin()
   ],
+  // Vite 8 ships without esbuild installed, so its ESBuildOptions type loses
+  // esbuild's TransformOptions fields (including `drop`); cast keeps the
+  // option exactly as-is without a runtime change.
   esbuild: {
     drop: []
-  },
+  } as ESBuildOptions,
   resolve: {
     dedupe: ['react', 'react-dom', 'react-router-dom', 'react-router'],
     alias: {
