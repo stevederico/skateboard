@@ -20,9 +20,18 @@
  * Shows a diff for each change and requires confirmation before writing. Re-runnable;
  * safe to abort at any prompt.
  *
+ * Template renames (e.g. the 3.8.0 JS→TS conversion) are handled via the RENAMES
+ * map: the app's old-named file is 3-way merged against the old path at the
+ * baseline tag and the new path at HEAD, written under the new name, and the old
+ * file removed — so local edits survive the rename.
+ *
  * Usage:
- *   node scripts/update-skateboard.js          # interactive
- *   node scripts/update-skateboard.js --yes    # apply all without prompts
+ *   node scripts/update-skateboard.js                   # interactive
+ *   node scripts/update-skateboard.js --yes             # apply all without prompts
+ *   node scripts/update-skateboard.js --baseline 3.7.0  # force the merge baseline
+ *     (use when skateboardVersion was stamped without the files actually migrating)
+ *
+ * Env overrides (for testing): SKATEBOARD_REPO (clone URL/path), SKATEBOARD_BRANCH.
  */
 
 import { execSync } from 'node:child_process';
@@ -33,43 +42,67 @@ import { createInterface } from 'node:readline/promises';
 
 const APP_ROOT = process.cwd();
 const TMP_DIR = '/tmp/skateboard-update';
-const REPO = 'https://github.com/stevederico/skateboard.git';
+const REPO = process.env.SKATEBOARD_REPO || 'https://github.com/stevederico/skateboard.git';
+const BRANCH = process.env.SKATEBOARD_BRANCH || '';
 
-// Template-owned files. App-owned files (constants.json, components, config.json,
-// .env, main.jsx) are never touched — see SKIP_NOTE.
+// Template-owned files (current names at HEAD). App-owned files (constants.json,
+// components, config.json, .env, main.jsx) are never touched — see SKIP_NOTE.
 const ALLOWLIST = [
-  'backend/server.js',
-  'backend/server.test.js',
-  'backend/adapters/manager.js',
-  'backend/adapters/sqlite.js',
-  'backend/adapters/postgres.js',
-  'backend/adapters/mongodb.js',
+  'backend/server.ts',
+  'backend/server.test.ts',
+  'backend/adapters/manager.ts',
+  'backend/adapters/sqlite.ts',
+  'backend/adapters/postgres.ts',
+  'backend/adapters/mongodb.ts',
+  'backend/types.ts',
+  'backend/ambient.d.ts',
+  'backend/tsconfig.json',
   'backend/vendor/legacy-bcrypt.js',
+  'backend/vendor/legacy-bcrypt.d.ts',
   'backend/package.json',
-  'vite.config.js',
+  'tsconfig.json',
+  'src/types/skateboard-ui.d.ts',
+  'vite.config.ts',
   'Dockerfile',
   '.dockerignore',
   '.gitignore',
   'scripts/update-skateboard.js'
 ];
 
+// Template renames: new path at HEAD → old path apps may still have. Apps with the
+// old-named file get a 3-way merge across the rename (see migrateRenamedFile).
+const RENAMES = {
+  'backend/server.ts': 'backend/server.js',
+  'backend/server.test.ts': 'backend/server.test.js',
+  'backend/adapters/manager.ts': 'backend/adapters/manager.js',
+  'backend/adapters/sqlite.ts': 'backend/adapters/sqlite.js',
+  'backend/adapters/postgres.ts': 'backend/adapters/postgres.js',
+  'backend/adapters/mongodb.ts': 'backend/adapters/mongodb.js',
+  'vite.config.ts': 'vite.config.js'
+};
+
 const SKIP_NOTE = `
 Files NOT updated (app-owned — port manually if needed):
   - src/constants.json
-  - src/main.jsx          (your routes)
+  - src/main.jsx           (your routes — stays .jsx; Vite handles mixed JS/TS)
   - src/components/*       (your components)
   - src/assets/styles.css  (your theme overrides)
   - backend/config.json
   - backend/.env*
+(exception: src/types/skateboard-ui.d.ts is template-owned type scaffolding)
 `;
 
 const yes = process.argv.includes('--yes') || process.argv.includes('-y');
+const baselineArg = (() => {
+  const i = process.argv.indexOf('--baseline');
+  return i !== -1 ? process.argv[i + 1] : null;
+})();
 
 /** Full clone (not shallow) so baseline version tags are available for 3-way merge. */
 function fetchSkateboard() {
   if (existsSync(TMP_DIR)) rmSync(TMP_DIR, { recursive: true, force: true });
   console.log('Fetching skateboard (full history for 3-way merge)...');
-  execSync(`git clone ${REPO} ${TMP_DIR}`, { stdio: 'pipe' });
+  execSync(`git clone ${BRANCH ? `--branch ${BRANCH} ` : ''}${REPO} ${TMP_DIR}`, { stdio: 'pipe' });
 }
 
 function readJSON(path) {
@@ -158,7 +191,15 @@ async function syncFile(relPath, baselineTag) {
     return;
   }
 
+  const oldRel = RENAMES[relPath];
   const dstExists = existsSync(dst);
+
+  // App still has the pre-rename file and not the new one → migrate across the rename.
+  if (!dstExists && oldRel && existsSync(join(APP_ROOT, oldRel))) {
+    await migrateRenamedFile(relPath, oldRel, baselineTag, newContent);
+    return;
+  }
+
   const appContent = dstExists ? readFileSync(dst, 'utf8') : '';
 
   if (dstExists && appContent === newContent) {
@@ -179,7 +220,10 @@ async function syncFile(relPath, baselineTag) {
     return;
   }
 
-  const baseContent = baselineTag ? showAtRef(baselineTag, relPath) : null;
+  // Baseline lookup falls back to the pre-rename path for baselines older than the rename.
+  const baseContent = baselineTag
+    ? (showAtRef(baselineTag, relPath) ?? (oldRel ? showAtRef(baselineTag, oldRel) : null))
+    : null;
 
   // No baseline → can't merge; legacy overwrite-with-confirm (and warn).
   if (baseContent === null) {
@@ -222,6 +266,55 @@ async function syncFile(relPath, baselineTag) {
     console.log(`[wrote] ${relPath}`);
   } else {
     console.log(`[kept]  ${relPath}`);
+  }
+}
+
+/**
+ * Migrate a template-renamed file (e.g. backend/server.js → backend/server.ts):
+ * 3-way merge the app's old-named file (current) against the old path at the
+ * baseline tag (base) and the new path at HEAD (new) — `git merge-file` is
+ * content-based, so names don't matter and local edits survive the rename.
+ * Writes the result under the new name and removes the old file on confirm.
+ */
+async function migrateRenamedFile(relPath, oldRel, baselineTag, newContent) {
+  const dst = join(APP_ROOT, relPath);
+  const oldDst = join(APP_ROOT, oldRel);
+  const appContent = readFileSync(oldDst, 'utf8');
+  const baseContent = baselineTag ? showAtRef(baselineTag, oldRel) : null;
+
+  // No baseline → can't merge; overwrite-with-confirm (and warn), like syncFile.
+  if (baseContent === null) {
+    console.log(`\n[rename] ${oldRel} → ${relPath}  (no baseline — full overwrite; your edits would be replaced)`);
+    showDiff(appContent, newContent, relPath);
+    if (await confirm(`Replace ${oldRel} with the latest ${relPath}?`)) {
+      mkdirSync(dirname(dst), { recursive: true });
+      writeFileSync(dst, newContent);
+      rmSync(oldDst, { force: true });
+      console.log(`[wrote] ${relPath}   [removed] ${oldRel}`);
+    } else {
+      console.log(`[kept]  ${oldRel}`);
+    }
+    return;
+  }
+
+  const { merged, conflicts } = threeWayMerge(appContent, baseContent, newContent);
+
+  console.log(`\n[rename] ${oldRel} → ${relPath}${conflicts ? ` — ${conflicts} CONFLICT(S)` : ''}`);
+  showDiff(appContent, merged, relPath);
+
+  if (conflicts) {
+    console.log(`  ⚠ ${conflicts} conflict(s): merged file will contain <<<<<<< markers to resolve by hand.`);
+  }
+  const prompt = conflicts
+    ? `Write ${relPath} with conflict markers and remove ${oldRel}?`
+    : `Migrate ${oldRel} to ${relPath}? (your edits preserved)`;
+  if (await confirm(prompt)) {
+    mkdirSync(dirname(dst), { recursive: true });
+    writeFileSync(dst, merged);
+    rmSync(oldDst, { force: true });
+    console.log(`[wrote] ${relPath}   [removed] ${oldRel}`);
+  } else {
+    console.log(`[kept]  ${oldRel}`);
   }
 }
 
@@ -328,16 +421,28 @@ async function main() {
   console.log(`\nApp skateboardVersion: ${currentVersion}`);
   console.log(`Latest skateboard:     ${newPkg.version}`);
 
-  if (currentVersion === newPkg.version) {
+  // Stranded state: an older updater stamped skateboardVersion without migrating
+  // renamed files (its allowlist predated the renames). Detect and keep going.
+  const stranded = Object.entries(RENAMES).filter(([newRel, oldRel]) =>
+    existsSync(join(APP_ROOT, oldRel)) && !existsSync(join(APP_ROOT, newRel)));
+
+  if (currentVersion === newPkg.version && !stranded.length) {
     console.log('\nAlready on latest. Nothing to do.');
     rmSync(TMP_DIR, { recursive: true, force: true });
     return;
   }
+  if (currentVersion === newPkg.version && stranded.length) {
+    console.log(`\n⚠ skateboardVersion says ${currentVersion} but ${stranded.length} pre-rename file(s) remain (e.g. ${stranded[0][1]}).`);
+    console.log('  Continuing so the rename migration can run. Pass --baseline <your-real-prior-version> for a proper 3-way merge.');
+  }
 
-  const baselineTag = resolveBaselineTag(currentVersion);
+  const baselineTag = resolveBaselineTag(baselineArg || currentVersion);
+  if (baselineArg && !baselineTag) {
+    console.log(`⚠ --baseline ${baselineArg} is not a tag in the template — ignoring.`);
+  }
   console.log(baselineTag
     ? `Baseline for 3-way merge: tag ${baselineTag}`
-    : `⚠ No tag for ${currentVersion} — falling back to overwrite/add-only (no merge or prune).`);
+    : `⚠ No tag for ${baselineArg || currentVersion} — falling back to overwrite/add-only (no merge or prune).`);
   console.log(SKIP_NOTE);
 
   for (const relPath of ALLOWLIST) {
