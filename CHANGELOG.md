@@ -9,6 +9,7 @@
   Add pre-commit hook
   Migrate update script
   Add upgrade prompt
+  Update README
   Fix basil webhooks
   Add deleteUser rollback
   Lazy-load db drivers
