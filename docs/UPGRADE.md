@@ -51,7 +51,8 @@ backend/config.json, or .env files beyond what the updater itself merged.
 
 ## Notes
 
-- The updater never touches app-owned files (`src/constants.json`, `src/components/*`, `src/main.jsx`, `src/assets/styles.css`, `backend/config.json`, `.env*`). Exception: `src/skateboard-ui.d.ts` is template-owned type scaffolding.
+- The updater never touches app-owned files (`src/constants.json`, `src/components/*`, `src/main.jsx`, `src/assets/styles.css`, `backend/config.json`, `.env*`).
+- skateboard-ui ≥3.10.0 ships its own TypeScript declarations, so the old `src/skateboard-ui.d.ts` shim is deleted on upgrade — a stale copy would shadow the package's real types.
 - `--baseline <version>` forces the 3-way merge baseline when `skateboardVersion` is wrong or was stamped prematurely. It also skips the "Already on latest" early-exit, so you can re-sync an app whose version was stamped without the files actually migrating.
 - If any file ends declined, conflicted, or errored, the updater does **not** stamp `skateboardVersion` — resolve the conflicts, then re-run with `--baseline <old-version>` to finish.
 - Apps that customized `backend/server.js` heavily should expect a handful of conflict markers in `server.ts` — the merge is line-based and the TS conversion annotated most signatures.
