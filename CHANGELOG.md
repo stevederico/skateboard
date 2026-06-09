@@ -4,6 +4,9 @@
   Add strict typecheck
   Type database adapters
   Add ambient declarations
+  Gate build typecheck
+  Gate test typecheck
+  Add pre-commit hook
 
 3.7.0
 

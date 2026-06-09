@@ -1,0 +1,6 @@
+#!/bin/sh
+# Block commits that don't type-check.
+npm run typecheck || {
+  echo "\n✗ Type check failed — commit aborted. Fix errors or run 'npm run typecheck' to see them."
+  exit 1
+}
