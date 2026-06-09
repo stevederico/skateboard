@@ -61,7 +61,7 @@ const ALLOWLIST = [
   'backend/vendor/legacy-bcrypt.d.ts',
   'backend/package.json',
   'tsconfig.json',
-  'src/types/skateboard-ui.d.ts',
+  'src/skateboard-ui.d.ts',
   'vite.config.ts',
   'Dockerfile',
   '.dockerignore',
@@ -89,7 +89,7 @@ Files NOT updated (app-owned — port manually if needed):
   - src/assets/styles.css  (your theme overrides)
   - backend/config.json
   - backend/.env*
-(exception: src/types/skateboard-ui.d.ts is template-owned type scaffolding)
+(exception: src/skateboard-ui.d.ts is template-owned type scaffolding)
 `;
 
 const yes = process.argv.includes('--yes') || process.argv.includes('-y');

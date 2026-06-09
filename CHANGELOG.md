@@ -7,6 +7,8 @@
   Gate build typecheck
   Gate test typecheck
   Add pre-commit hook
+  Migrate update script
+  Add upgrade prompt
 
 3.7.0
 
