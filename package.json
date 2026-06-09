@@ -19,6 +19,8 @@
     "preprod": "npm run typecheck",
     "prod": "vite build --mode production",
     "install-all": "npm install && npm install --workspace=backend",
+    "postinstall": "git config core.hooksPath .githooks || true",
+    "pretest": "npm run typecheck",
     "test": "npm run --workspace=backend test",
     "test:watch": "npm run --workspace=backend test:watch",
     "typecheck": "tsc -p tsconfig.json && tsc -p backend/tsconfig.json",
