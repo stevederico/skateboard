@@ -205,7 +205,7 @@ The Checkout and Portal UI live in the `@stevederico/skateboard-ui` shell packag
 - `showManage(stripeID)` — `POST`s to `/portal` with `{ customerID }`, then redirects to the returned portal URL.
 - `PaymentView` — handles the return query params (`success`, `canceled`, `portal=return`) and redirects the user back to where they left off.
 
-Your app's `LandingSpecSheet.tsx` only *displays* the pricing card from `constants.stripeProducts[0]`; its CTA navigates to `/app`, not to Checkout.
+The shell's `LandingView` (rendered at `/`, driven by `constants.json`) only *displays* the pricing card from `constants.stripeProducts[0]`; its CTA navigates to `/app`, not to Checkout.
 
 ### Gating an Action with Usage
 

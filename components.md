@@ -92,14 +92,16 @@ import CommandMenu from '@/components/CommandMenu';
 <CommandMenu />
 ```
 
-### LandingSpecSheet.tsx
+### Landing page (shell-provided)
 
-Public marketing landing page, passed as the `landingPage` prop to `createSkateboardApp`. Default export `LandingSpecSheet`. No props — it reads everything from `state.constants` via `getState()`. Sections: sticky header, hero, Features grid (from `features.items`), Pricing card (from `stripeProducts[0]` + `pricing.extras`), CTA banner, and footer. Its CTA calls `goApp` (navigates to `/app`) — it does not start Stripe checkout.
+The public marketing landing page is **owned by the skateboard-ui shell**, not your app — there is no landing component in `src/components`. The shell renders its default `LandingView` at `/` automatically whenever you pass no `landingPage` to `createSkateboardApp`. It takes no props and reads every piece of copy from `src/constants.json` (`appName`, `appIcon`, `tagline`, `cta`, `navLinks`, `features.items`, `stripeProducts[0]`, `pricing`, `ctaHeading`, `footerLinks`, …): sticky header, hero, feature grid, optional pricing card, CTA banner, and footer. Its CTA navigates to `/app` — it does not start Stripe checkout. Feature icons and `appIcon` must be Lucide names (kebab- or PascalCase); emoji do not render.
+
+Customize it by editing `constants.json`. To replace it entirely, pass your own element as `landingPage`:
 
 ```tsx
-import LandingSpecSheet from '@/components/LandingSpecSheet';
+import MyLanding from './components/MyLanding';
 
-createSkateboardApp({ constants, appRoutes, defaultRoute: 'home', landingPage: <LandingSpecSheet /> });
+createSkateboardApp({ constants, appRoutes, defaultRoute: 'home', landingPage: <MyLanding /> });
 ```
 
 ### CalendarTestView.tsx
