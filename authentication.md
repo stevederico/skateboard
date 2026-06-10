@@ -39,7 +39,7 @@ with a 16-byte salt and a 64-byte derived key. Verification dispatches on the st
 - `$2...` → legacy bcrypt verify (vendored, verify-only)
 - anything else → rejected
 
-Legacy bcrypt hashes are validated by `backend/vendor/legacy-bcrypt.js` (a vendored, verify-only copy of bcryptjs). On a successful sign-in with a non-scrypt hash, the password is re-hashed with scrypt and persisted via `db.updateAuth` (best-effort lazy migration).
+Legacy bcrypt hashes are validated by `backend/vendor/legacy-bcrypt.js` (a vendored, verify-only copy of bcryptjs; stays plain JS). On a successful sign-in with a non-scrypt hash, the password is re-hashed with scrypt and persisted via `db.updateAuth` (best-effort lazy migration).
 
 ### JWT
 
@@ -61,7 +61,7 @@ The frontend `apiRequest` utility (from `@stevederico/skateboard-ui`) automatica
 
 ## Backend API
 
-All endpoints are defined in `backend/server.js` under the `/api` prefix.
+All endpoints are defined in `backend/server.ts` under the `/api` prefix.
 
 ### POST /api/signup
 
@@ -175,18 +175,19 @@ Health check. No auth.
 
 You do not write `<Routes>` or a `ProtectedRoute` component yourself. `createSkateboardApp` (from `@stevederico/skateboard-ui/App`) owns the router, auth flow, and layout. The shell auto-creates `/`, `/signin`, `/signup`, `/signout`, and the protected `/app` tree; your `appRoutes` mount under `/app/`.
 
-```jsx
-// src/main.jsx
-import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
-import constants from './constants.json';
+```tsx
+// src/main.tsx
 import { lazy } from 'react';
+import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
+import type { AppRoute } from '@stevederico/skateboard-ui/App';
+import constants from './constants.json';
 
-const HomeView = lazy(() => import('./components/HomeView.jsx'));
+const HomeView = lazy(() => import('./components/HomeView'));
 
-const appRoutes = {
-  home: <HomeView />,
+const appRoutes: AppRoute[] = [
+  { path: 'home', element: <HomeView /> },
   // ...your views
-};
+];
 
 createSkateboardApp({
   constants,
@@ -201,7 +202,7 @@ Unauthenticated visits to a protected route redirect to sign-in automatically.
 
 Read the current user from the shell context via `getState()`:
 
-```jsx
+```tsx
 import { getState } from '@stevederico/skateboard-ui/Context';
 
 function Profile() {
@@ -244,7 +245,7 @@ Environment variables are loaded manually (no dotenv): the backend reads `backen
 
 ### Token expiration
 
-The JWT expiry is `tokenExpirationDays = 30` in `backend/server.js`:
+The JWT expiry is `tokenExpirationDays = 30` in `backend/server.ts`:
 
 ```javascript
 const tokenExpirationDays = 30;
@@ -256,7 +257,7 @@ Sign-up validates: `name` 1–100 chars, `email` valid and ≤254 chars, `passwo
 
 ## Database schema
 
-Credentials are stored separately from user records. The active default is SQLite (`backend/adapters/sqlite.js`), selected by `database.dbType` in `backend/config.json`. PostgreSQL and MongoDB adapters are also available.
+Credentials are stored separately from user records. The active default is SQLite (`backend/adapters/sqlite.ts`), selected by `database.dbType` in `backend/config.json`. PostgreSQL and MongoDB adapters are also available.
 
 ### Users
 

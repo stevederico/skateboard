@@ -6,7 +6,7 @@ description: Deploy your Skateboard app to production — Vercel, Render, Netlif
 
 # Deployment
 
-Skateboard is a monorepo: a Vite-built React frontend (served as static files from `dist`) and a Node.js + Hono backend (`backend/server.js`) that defaults to SQLite. Pick one of the supported paths below — a single combined deployment (Vercel or Docker) or a split frontend/backend deployment (Render, or Netlify + Railway).
+Skateboard is a monorepo: a Vite-built React frontend (served as static files from `dist`) and a Node.js + Hono backend (`backend/server.ts`) that defaults to SQLite. The codebase is 100% TypeScript; `npm run build` runs a `tsc` typecheck gate (`npm run typecheck`) before Vite produces the production bundle, so a type error fails the build. Pick one of the supported paths below — a single combined deployment (Vercel or Docker) or a split frontend/backend deployment (Render, or Netlify + Railway).
 
 ## Before You Deploy
 
@@ -45,11 +45,11 @@ The recommended path — frontend and backend ship together.
 {
   "version": 2,
   "builds": [
-    { "src": "backend/server.js", "use": "@vercel/node" },
+    { "src": "backend/server.ts", "use": "@vercel/node" },
     { "src": "package.json", "use": "@vercel/static-build" }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "backend/server.js" },
+    { "src": "/api/(.*)", "dest": "backend/server.ts" },
     { "src": "/(.*)", "dest": "$1" }
   ],
   "buildCommand": "npm run build"
@@ -58,9 +58,9 @@ The recommended path — frontend and backend ship together.
 
 ### 2. Export the Hono app
 
-Add this to the end of `backend/server.js` so Vercel can mount it:
+Add this to the end of `backend/server.ts` so Vercel can mount it:
 
-```javascript
+```typescript
 export default app;
 ```
 
@@ -145,7 +145,7 @@ CORS_ORIGINS=https://random-name.netlify.app
 
 ## Docker
 
-A `Dockerfile` ships with the repo: a multi-stage build on `node:22-alpine` that builds the frontend, copies the backend, exposes port `8000`, and runs the server with the SQLite flag (`node --experimental-sqlite backend/server.js`). It includes a healthcheck against `/api/health`.
+A `Dockerfile` ships with the repo: a multi-stage build on `node:24-alpine` that runs `npm run build` (typecheck + Vite) to produce the frontend, copies the backend, exposes port `8000`, and runs the server with `node server.ts` (Node strips the TypeScript types at runtime; SQLite is built in on Node 24). It includes a healthcheck against `/api/health`.
 
 ```bash
 docker build -t skateboard .
@@ -156,7 +156,7 @@ The container serves both the static frontend (from `dist`) and the API on port 
 
 ## Database Configuration
 
-The backend ships with three adapters (`backend/adapters/{sqlite,postgres,mongodb}.js`) selected by `backend/config.json`:
+The backend ships with three adapters (`backend/adapters/{sqlite,postgres,mongodb}.ts`) selected by `backend/config.json`:
 
 ```jsonc
 // SQLite (default)

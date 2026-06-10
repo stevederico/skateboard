@@ -16,6 +16,7 @@ Three files (plus your env) control the entire app:
 | `backend/config.json` | Static dir, database type and connection | No (app-owned) |
 | `backend/.env` | Secrets and runtime overrides | No (app-owned) |
 | `src/assets/styles.css` | Brand color + design tokens | Reviewed/merged |
+| `tsconfig.json` / `backend/tsconfig.json` | TypeScript typecheck config (frontend / backend; both `noEmit` — Vite/esbuild transpiles) | Reviewed/merged |
 
 ---
 

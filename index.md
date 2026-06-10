@@ -51,6 +51,7 @@ description: A React starter with auth, Stripe, shadcn/ui, and SQLite — ship y
 Skateboard is a production-ready React starter built on an **Application Shell Architecture**: the shell (`@stevederico/skateboard-ui`) owns routing, auth, layout, and build utilities, so your app code is just routes, views, and config. Everything you need to ship a modern web app is included:
 
 - ⚡ **React 19** with Vite 8 for fast development (SWC, no Babel)
+- 🟦 **TypeScript** end-to-end (frontend and backend) — strict typecheck (`tsc --noEmit`) gates builds and tests, with no separate build step (Vite/esbuild transpiles)
 - 🎨 **Tailwind CSS v4** with Shadcn/ui components from skateboard-ui
 - 🔐 **Authentication** — native HS256 JWT in HttpOnly cookies, CSRF protection, scrypt password hashing (zero external auth deps)
 - 💳 **Stripe** integration for checkout, the customer portal, and webhooks
@@ -89,7 +90,7 @@ npm run server         # Backend only
 
 ## Updating the Boilerplate
 
-Skateboard ships an update script that syncs only boilerplate-owned files (`backend/server.js`, `backend/adapters/*`, `vite.config.js`, `Dockerfile`, and more) and never touches your `constants.json`, components, or env:
+Skateboard ships an update script that syncs only boilerplate-owned files (`backend/server.ts`, `backend/adapters/*`, `vite.config.ts`, `Dockerfile`, and more) and never touches your `constants.json`, components, or env:
 
 ```bash
 node scripts/update-skateboard.js          # interactive — diff per file
