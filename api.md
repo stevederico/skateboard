@@ -6,13 +6,13 @@ description: Complete backend API reference for the Skateboard Hono server — e
 
 # API Reference
 
-Complete reference for the Skateboard backend, a [Hono](https://hono.dev) server running on Node.js (`>=22.5.0`, ES modules). The server is defined entirely in `backend/server.js` and started with:
+Complete reference for the Skateboard backend, a [Hono](https://hono.dev) server running on Node.js (`>=24.0.0`, ES modules, TypeScript). The server is defined entirely in `backend/server.ts` and started with:
 
 ```bash
-node --experimental-sqlite server.js
+node server.ts
 ```
 
-The `--experimental-sqlite` flag is required because the default SQLite adapter imports `node:sqlite` (`DatabaseSync`). From the repo root, `npm run server` delegates to the backend workspace's `start` script, and `npm run start` runs the Vite frontend and backend concurrently.
+Node runs the `.ts` source directly (no build step). The default SQLite adapter imports `node:sqlite` (`DatabaseSync`). From the repo root, `npm run server` delegates to the backend workspace's `start` script, and `npm run start` runs the Vite frontend and backend concurrently.
 
 ## Base URL
 
@@ -325,13 +325,13 @@ Non-`/api` routes serve static files from `config.staticDir` (`../dist`). Any no
 
 ## Database
 
-The backend uses a unified adapter pattern (`backend/adapters/manager.js`, exported as `databaseManager`). The active database is selected by `backend/config.json` → `database.dbType` (default `"sqlite"`) — it is **not** chosen by an env var. Env vars (`MONGODB_URL`, `POSTGRES_URL`, `DATABASE_URL`) only substitute into the `connectionString` via `${VAR}` placeholders. Switching databases requires editing `config.json`.
+The backend uses a unified adapter pattern (`backend/adapters/manager.ts`, exported as `databaseManager`). The active database is selected by `backend/config.json` → `database.dbType` (default `"sqlite"`) — it is **not** chosen by an env var. Env vars (`MONGODB_URL`, `POSTGRES_URL`, `DATABASE_URL`) only substitute into the `connectionString` via `${VAR}` placeholders. Switching databases requires editing `config.json`.
 
 | dbType | Adapter | Driver |
 |---|---|---|
-| `sqlite` (default) | `adapters/sqlite.js` | `node:sqlite` (`DatabaseSync`), WAL mode |
-| `postgresql` / `postgres` | `adapters/postgres.js` (dynamic import) | `pg` Pool |
-| `mongodb` / `mongo` | `adapters/mongodb.js` (dynamic import) | `mongodb` driver |
+| `sqlite` (default) | `adapters/sqlite.ts` | `node:sqlite` (`DatabaseSync`), WAL mode |
+| `postgresql` / `postgres` | `adapters/postgres.ts` (dynamic import) | `pg` Pool |
+| `mongodb` / `mongo` | `adapters/mongodb.ts` (dynamic import) | `mongodb` driver |
 
 > `pg` and `mongodb` are **not** declared in `backend/package.json` dependencies; they are loaded lazily and resolved from the hoisted root `node_modules`. SQLite-only deployments work without them.
 
@@ -387,4 +387,4 @@ Loaded manually (no dotenv) from `backend/.env` then `backend/.env.local` when n
 - `hono` `^4.7.11`
 - `stripe` `^18.5.0`
 
-There are no backend devDependencies; tests run with Node's built-in test runner (`node --test --experimental-sqlite server.test.js`).
+There are no backend devDependencies; tests run with Node's built-in test runner (`node --test server.test.ts`).

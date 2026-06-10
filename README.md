@@ -1,6 +1,6 @@
 # Skateboard Documentation
 
-Welcome to the Skateboard documentation! A modern React boilerplate with built-in authentication, payments, and beautiful UI components.
+Welcome to the Skateboard documentation! A modern React + TypeScript boilerplate with built-in authentication, payments, and beautiful UI components.
 
 ## Quick Links
 
@@ -15,9 +15,10 @@ Welcome to the Skateboard documentation! A modern React boilerplate with built-i
 
 ## What is Skateboard?
 
-Skateboard is a production-ready React boilerplate that includes:
+Skateboard is a production-ready React + TypeScript boilerplate that includes:
 
 - ⚡ **React 19** with Vite for lightning-fast development
+- 🟦 **TypeScript** (strict, no build step — Node 24 runs `.ts` natively, Vite compiles `.tsx`)
 - 🎨 **Tailwind CSS v4** with Shadcn/ui components
 - 🔐 **Authentication** system ready to go
 - 💳 **Stripe** integration for payments

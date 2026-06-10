@@ -74,7 +74,7 @@ The `lookup_key` here must match the lookup key you set in Stripe. `backend/conf
 
 ## Backend API
 
-All endpoints live in `backend/server.js` and are prefixed with `/api`. Auth means a valid JWT in the HttpOnly `token` cookie; CSRF means an `x-csrf-token` header matching the stored token.
+All endpoints live in `backend/server.ts` and are prefixed with `/api`. Auth means a valid JWT in the HttpOnly `token` cookie; CSRF means an `x-csrf-token` header matching the stored token.
 
 ### POST /api/checkout
 
@@ -186,7 +186,7 @@ SQL adapters (SQLite, PostgreSQL) flatten this into `subscription_stripeID`, `su
 
 The check lives in `POST /api/usage`:
 
-```javascript
+```typescript
 const isSubscriber =
   subscription?.status === 'active' && (!expires || expires > now);
 ```
@@ -205,7 +205,7 @@ The Checkout and Portal UI live in the `@stevederico/skateboard-ui` shell packag
 - `showManage(stripeID)` — `POST`s to `/portal` with `{ customerID }`, then redirects to the returned portal URL.
 - `PaymentView` — handles the return query params (`success`, `canceled`, `portal=return`) and redirects the user back to where they left off.
 
-Your app's `LandingSpecSheet.jsx` only *displays* the pricing card from `constants.stripeProducts[0]`; its CTA navigates to `/app`, not to Checkout.
+Your app's `LandingSpecSheet.tsx` only *displays* the pricing card from `constants.stripeProducts[0]`; its CTA navigates to `/app`, not to Checkout.
 
 ### Gating an Action with Usage
 

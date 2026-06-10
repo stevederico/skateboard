@@ -12,11 +12,11 @@ Skateboard uses an Application Shell Architecture: the shell (`@stevederico/skat
 
 These ship in the boilerplate's `src/components/`. They are your code — the update script never overwrites them. Each is a starting point you adapt for your app.
 
-### BlankView.jsx
+### BlankView.tsx
 
-Reusable empty-state view template. Default export `BlankView`.
+Reusable empty-state view template. Default export `BlankView`. Props are a typed `BlankViewProps` interface.
 
-```jsx
+```tsx
 import BlankView from '@/components/BlankView';
 
 <BlankView
@@ -27,63 +27,86 @@ import BlankView from '@/components/BlankView';
 />
 ```
 
-Props: `title` (default `"Blank"`), `description`, `buttonTitle`, `onButtonClick`, `icon` (ReactNode, default `<LayoutDashboard size={24} />`), `children` (replaces the empty state when provided). Renders the shell `<Header>` plus shadcn `Empty`/`EmptyHeader`/`EmptyMedia`/`EmptyTitle`/`EmptyDescription`; the CTA `<Button>` (with a `<Plus>` icon) only appears when `buttonTitle` is set. Used three times in `main.jsx` for the Analytics, Projects, and Team routes.
+The component's prop interface:
 
-### HomeView.jsx
+```tsx
+import type { ReactNode } from 'react';
 
-Dashboard view, lazy-loaded in `main.jsx`. Default export `HomeView`. No props. Renders `<Header title="Documents" />` and `<SectionCards />` inside an `@container/main` layout.
+interface BlankViewProps {
+  /** Header title */
+  title?: string;
+  /** Empty state description text */
+  description?: string;
+  /** CTA button text (e.g. "Create Project") */
+  buttonTitle?: string;
+  /** CTA button click handler */
+  onButtonClick?: () => void;
+  /** Custom icon element for empty state */
+  icon?: ReactNode;
+  /** Optional content to replace empty state */
+  children?: ReactNode;
+}
 
-```jsx
+export default function BlankView({ title = "Blank", description, buttonTitle, onButtonClick, icon, children }: BlankViewProps) { /* ... */ }
+```
+
+Props: `title` (default `"Blank"`), `description`, `buttonTitle`, `onButtonClick`, `icon` (`ReactNode`, default `<LayoutDashboard size={24} />`), `children` (replaces the empty state when provided). Renders the shell `<Header>` plus shadcn `Empty`/`EmptyHeader`/`EmptyMedia`/`EmptyTitle`/`EmptyDescription`; the CTA `<Button>` (with a `<Plus>` icon) only appears when `buttonTitle` is set. Used three times in `main.tsx` for the Analytics, Projects, and Team routes.
+
+### HomeView.tsx
+
+Dashboard view, lazy-loaded in `main.tsx`. Default export `HomeView`. No props. Renders `<Header title="Documents" />` and `<SectionCards />` inside an `@container/main` layout.
+
+```tsx
 import HomeView from '@/components/HomeView';
 
 <HomeView />
 ```
 
-### SectionCards.jsx
+### SectionCards.tsx
 
 Named export `SectionCards` (not a default export). No props. Four hardcoded metric cards (Total Revenue, New Customers, Active Accounts, Growth Rate) built from shadcn `Card`/`Badge` with `TrendingUp`/`TrendingDown` icons, laid out in a responsive grid (`@xl/main:grid-cols-2 @5xl/main:grid-cols-4`). Static demo data you replace with real metrics.
 
-```jsx
+```tsx
 import { SectionCards } from '@/components/SectionCards';
 
 <SectionCards />
 ```
 
-### ChatView.jsx
+### ChatView.tsx
 
-Demo chat interface with usage tracking and upgrade gating. Default export `ChatView`. No props. Uses `useUser`/`useDispatch` from skateboard-ui Context and `getRemainingUsage`/`trackUsage`/`showUpgradeSheet` from Utilities. Non-subscribers are gated when remaining usage reaches `0` (which opens the `UpgradeSheet`); the header shows the remaining count as a pill button. Sending requires auth — it dispatches `SHOW_AUTH_OVERLAY` if there is no user.
+Demo chat interface with usage tracking and upgrade gating. Default export `ChatView`. No props. Uses `useUser`/`useDispatch` from skateboard-ui Context and `getRemainingUsage`/`trackUsage`/`showUpgradeSheet` from Utilities. Local `Message`, `UsageInfo`, and `UpgradeSheetHandle` interfaces type the message list, quota state, and the `UpgradeSheet` ref. Non-subscribers are gated when remaining usage reaches `0` (which opens the `UpgradeSheet`); the header shows the remaining count as a pill button. Sending requires auth — it dispatches `SHOW_AUTH_OVERLAY` if there is no user.
 
-```jsx
+```tsx
 import ChatView from '@/components/ChatView';
 
 <ChatView />
 ```
 
-### CommandMenu.jsx
+### CommandMenu.tsx
 
-Global Cmd+K / Ctrl+K command palette. Default export `CommandMenu`. No props. Reads `state.constants.pages` via `getState()` and uses the shadcn `CommandDialog`/`Command` family (cmdk). Selecting a page calls `navigate('/app/' + page.url)`. It is injected app-wide by `AppLayout` (the layout override passed to `createSkateboardApp`).
+Global Cmd+K / Ctrl+K command palette. Default export `CommandMenu`. No props. Reads `state.constants.pages` via `getState()` (typed via a local `PageEntry` interface) and uses the shadcn `CommandDialog`/`Command` family (cmdk). Selecting a page calls `navigate('/app/' + page.url)`. It is injected app-wide by `AppLayout` (the layout override passed to `createSkateboardApp`).
 
-```jsx
+```tsx
 import CommandMenu from '@/components/CommandMenu';
 
 <CommandMenu />
 ```
 
-### LandingSpecSheet.jsx
+### LandingSpecSheet.tsx
 
 Public marketing landing page, passed as the `landingPage` prop to `createSkateboardApp`. Default export `LandingSpecSheet`. No props — it reads everything from `state.constants` via `getState()`. Sections: sticky header, hero, Features grid (from `features.items`), Pricing card (from `stripeProducts[0]` + `pricing.extras`), CTA banner, and footer. Its CTA calls `goApp` (navigates to `/app`) — it does not start Stripe checkout.
 
-```jsx
+```tsx
 import LandingSpecSheet from '@/components/LandingSpecSheet';
 
 createSkateboardApp({ constants, appRoutes, defaultRoute: 'home', landingPage: <LandingSpecSheet /> });
 ```
 
-### CalendarTestView.jsx
+### CalendarTestView.tsx
 
 QA harness for the shadcn `Calendar` primitive. Default export `CalendarTestView`. No props. Demonstrates `mode="single"`, `mode="range"`, `captionLayout="dropdown"`, and disabled dates. It is wired to the `calendar-test` route but is not listed in `constants.pages`, so it has no sidebar or command-menu entry — reach it by direct URL.
 
-```jsx
+```tsx
 import CalendarTestView from '@/components/CalendarTestView';
 
 <CalendarTestView />
@@ -93,7 +116,7 @@ import CalendarTestView from '@/components/CalendarTestView';
 
 Compose your views from the shadcn primitives provided by the shell. They are imported from `@stevederico/skateboard-ui/shadcn/ui/<component>` — they are not vendored into your app's `src/`.
 
-```jsx
+```tsx
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
 import { Label } from '@stevederico/skateboard-ui/shadcn/ui/label';
@@ -130,7 +153,7 @@ Use the right component for the job:
 
 Cards are the primary content container. Always use the full structure.
 
-```jsx
+```tsx
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@stevederico/skateboard-ui/shadcn/ui/card';
 
 <Card>
@@ -155,7 +178,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 
 Dialogs are for focused tasks requiring user attention.
 
-```jsx
+```tsx
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@stevederico/skateboard-ui/shadcn/ui/dialog';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 
@@ -185,7 +208,7 @@ import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 
 Combine `Field`, `Label`, and `Input`.
 
-```jsx
+```tsx
 import { Field } from '@stevederico/skateboard-ui/shadcn/ui/field';
 import { Label } from '@stevederico/skateboard-ui/shadcn/ui/label';
 import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
@@ -194,7 +217,7 @@ import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
   <Field>
     <Label htmlFor="email">Email</Label>
-    <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+    <Input id="email" type="email" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
   </Field>
   <Button type="submit">Save</Button>
 </form>
@@ -208,7 +231,7 @@ import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 
 For supplementary content that slides in from the edge (detail panels, filters, settings).
 
-```jsx
+```tsx
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@stevederico/skateboard-ui/shadcn/ui/sheet';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 
@@ -236,7 +259,7 @@ import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 
 Every data-fetching view handles three states — loading, error, and data — and uses `useListData` from the shell rather than fetching in `useEffect` directly.
 
-```jsx
+```tsx
 import { useListData } from '@stevederico/skateboard-ui/Utilities';
 import Header from '@stevederico/skateboard-ui/Header';
 import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
@@ -284,7 +307,7 @@ export default function ProjectsView() {
 
 Use the shell `Header`'s `children` for right-side actions, or `buttonTitle`/`onButtonTitleClick` for a simple text button.
 
-```jsx
+```tsx
 import Header from '@stevederico/skateboard-ui/Header';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Plus } from '@stevederico/skateboard-ui/icons';
@@ -300,7 +323,7 @@ import { Plus } from '@stevederico/skateboard-ui/icons';
 
 Skateboard uses the [Lucide](https://lucide.dev/icons) icon set, vendored into the shell (3.0+). Import named icons from `@stevederico/skateboard-ui/icons` — there is no `lucide-react` dependency. Icon names are PascalCase with no prefix (`credit-card` → `CreditCard`).
 
-```jsx
+```tsx
 import { Home, Settings, User, Menu } from '@stevederico/skateboard-ui/icons';
 
 <Home size={18} />
@@ -309,7 +332,7 @@ import { Home, Settings, User, Menu } from '@stevederico/skateboard-ui/icons';
 
 For icons whose name lives in a constant (e.g. `constants.appIcon`, `pages[].icon`), render them by name with `DynamicIcon`:
 
-```jsx
+```tsx
 import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 
 <DynamicIcon name="home" size={18} />
@@ -331,7 +354,7 @@ import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';
 - Decorative icons next to text get `aria-hidden="true"`.
 - Informational icons (no text) need `aria-label`.
 
-```jsx
+```tsx
 {/* Icon-only button */}
 <Button variant="ghost" size="icon" aria-label="Delete item">
   <Trash2 size={18} />

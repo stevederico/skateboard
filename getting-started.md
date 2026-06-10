@@ -13,6 +13,8 @@ This guide walks you through installing Skateboard, running it for the first tim
 - Node.js v22+
 - Git
 
+Skateboard is written in TypeScript end to end (frontend and backend). There's no separate build step — the type checker runs with `npm run typecheck` (`tsc -p tsconfig.json && tsc -p backend/tsconfig.json`, both `noEmit`) and Vite/esbuild handles transpilation.
+
 ## Installation
 
 The fastest way to start a new project is the create script. It scaffolds the app for you.
@@ -97,11 +99,11 @@ npm run server    # Backend only (Hono server on :8000)
 ## Building for Production
 
 ```bash
-npm run build     # Build the frontend (vite build --mode production)
-npm run prod      # Build the frontend (vite build --mode production)
+npm run build     # Typecheck, then build the frontend (vite build --mode production)
+npm run prod      # Typecheck, then build the frontend (vite build --mode production)
 ```
 
-Both commands run `vite build --mode production` and output the compiled frontend to `dist/`. (`build` and `prod` are currently identical.)
+Both commands run `npm run typecheck && vite build --mode production`: the type checker (`tsc -p tsconfig.json && tsc -p backend/tsconfig.json`, `noEmit`) gates the build, then Vite/esbuild transpiles and outputs the compiled frontend to `dist/`. (`build` and `prod` are currently identical.)
 
 ## Updating the Boilerplate
 
@@ -112,27 +114,30 @@ node scripts/update-skateboard.js          # interactive — review a diff per f
 node scripts/update-skateboard.js --yes    # apply all changes without prompting
 ```
 
-It updates a fixed allowlist (`backend/server.js`, `backend/server.test.js`, `backend/adapters/*`, `vite.config.js`, `Dockerfile`, `.dockerignore`, `.gitignore`, `scripts/update-skateboard.js`) and merges any new dependencies into `package.json`. It never modifies `src/constants.json`, `src/main.jsx`, `src/components/*`, `src/assets/styles.css`, `backend/config.json`, or `.env` files.
+It updates a fixed allowlist (`backend/server.ts`, `backend/server.test.ts`, `backend/adapters/*.ts`, `backend/types.ts`, `backend/tsconfig.json`, `backend/vendor/legacy-bcrypt.js`, `backend/package.json`, `tsconfig.json`, `vite.config.ts`, `Dockerfile`, `.dockerignore`, `.gitignore`, `.githooks/pre-commit`, `scripts/update-skateboard.js`) and merges any new dependencies into `package.json`. It also deletes stale files the template removed — the ambient type shims `backend/ambient.d.ts` and `src/skateboard-ui.d.ts`, which would shadow the real driver and package types if left behind. It never modifies `src/constants.json`, `src/main.tsx`, `src/components/*`, `src/assets/styles.css`, `backend/config.json`, or `.env` files.
 
 ## Project Structure
 
 ```
 skateboard/
 ├── src/
-│   ├── components/        # Your views and components (HomeView.jsx, ChatView.jsx, ...)
+│   ├── components/        # Your views and components (HomeView.tsx, ChatView.tsx, ...)
 │   ├── assets/
 │   │   └── styles.css     # Brand color override (--color-app)
-│   ├── main.jsx           # Route definitions (createSkateboardApp)
+│   ├── main.tsx           # Route definitions (createSkateboardApp)
 │   └── constants.json     # All app configuration
 ├── backend/
-│   ├── server.js          # Hono server
-│   ├── adapters/          # sqlite.js, postgres.js, mongodb.js, manager.js
+│   ├── server.ts          # Hono server
+│   ├── adapters/          # sqlite.ts, postgres.ts, mongodb.ts, manager.ts
+│   ├── types.ts           # Shared backend types
 │   ├── databases/         # SQLite database files
+│   ├── tsconfig.json      # Backend TypeScript config
 │   └── config.json        # Backend config (staticDir + database)
 ├── scripts/
 │   └── update-skateboard.js
+├── tsconfig.json          # Frontend TypeScript config
 ├── package.json
-└── vite.config.js
+└── vite.config.ts
 ```
 
 Skateboard is a monorepo: the root is the React frontend (Vite + `@stevederico/skateboard-ui`), and the `backend` workspace is the Hono server with a multi-database adapter layer.
