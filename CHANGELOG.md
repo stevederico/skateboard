@@ -1,3 +1,8 @@
+3.12.0
+
+  Sync CLAUDE.md
+  Updater propagates rules
+
 3.11.0
 
   Prohibit ts-nocheck

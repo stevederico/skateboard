@@ -66,6 +66,7 @@ const ALLOWLIST = [
   'backend/package.json',
   'tsconfig.json',
   'vite.config.ts',
+  'CLAUDE.md',
   'Dockerfile',
   '.dockerignore',
   '.gitignore',
