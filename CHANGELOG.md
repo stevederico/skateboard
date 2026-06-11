@@ -1,3 +1,9 @@
+3.10.0
+
+  Update CLAUDE.md TypeScript
+  Add TS anti-patterns
+  Fix stale docs
+
 3.9.0
 
   Pin skateboard-ui 3.11.0
