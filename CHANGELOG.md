@@ -1,3 +1,7 @@
+3.11.0
+
+  Prohibit ts-nocheck
+
 3.10.0
 
   Update CLAUDE.md TypeScript
