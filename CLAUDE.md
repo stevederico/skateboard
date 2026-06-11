@@ -109,6 +109,7 @@ All of these silence the compiler instead of proving correctness:
 - Never use `as` casts to silence errors (especially `as unknown as X`) — prove the type instead
 - Never use `!` non-null assertions — handle the null/undefined case
 - Never use `@ts-ignore` — if truly unavoidable, use `@ts-expect-error` with a reason comment (it fails when the error goes away)
+- Never use `@ts-nocheck` — it disables type checking for the entire file; stronger than `@ts-ignore` and equally prohibited
 - Never disable or loosen `strict` in tsconfig
 - Never use loose built-in types (`Function`, `object`, `{}`) — write precise signatures and shapes
 - Never cast unvalidated data at boundaries — no `JSON.parse(x) as User` without a runtime check
