@@ -1,3 +1,8 @@
+3.13.0
+
+  Pin skateboard-ui 4.3.0
+  Inherit accessibility fixes
+
 3.12.0
 
   Sync CLAUDE.md

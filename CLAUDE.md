@@ -624,7 +624,7 @@ When working with these libraries, consult the provided documentation before mak
 
 **Version:**
 - skateboard@3.10.0
-- skateboard-ui@3.11.0
+- skateboard-ui@4.3.0
 
 ## Updating from Skateboard Boilerplate
 
