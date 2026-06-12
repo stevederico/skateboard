@@ -68,8 +68,8 @@ interface CollectionLike {
   createIndex(spec: Document, options?: Document): Promise<string>;
   findOne(filter?: Document, options?: Document): Promise<Document | null>;
   find(filter?: Document, options?: Document): CursorLike;
-  insertOne(doc: Document, options?: Document): Promise<InsertOneResultLike>;
-  insertMany(docs: Document[], options?: Document): Promise<InsertManyResultLike>;
+  insertOne<T>(doc: T, options?: Document): Promise<InsertOneResultLike>;
+  insertMany<T>(docs: T[], options?: Document): Promise<InsertManyResultLike>;
   updateOne(filter: Document, update: Document, options?: Document): Promise<UpdateResultLike>;
   updateMany(filter: Document, update: Document, options?: Document): Promise<UpdateResultLike>;
   deleteOne(filter: Document, options?: Document): Promise<DeleteResultLike>;
@@ -116,14 +116,37 @@ const MONGODB_SPECIFIER = 'mongodb';
 let mongoDriver: MongoModule | null = null;
 
 /**
+ * Narrow an unknown dynamic-import result to the {@link MongoModule} surface.
+ *
+ * Validates only the members this adapter actually uses (the `MongoClient`
+ * constructor), so a malformed or missing driver fails loudly rather than
+ * crashing later at the call site.
+ *
+ * @param mod - The resolved module namespace, typed as unknown
+ * @returns Type predicate asserting `mod` exposes a `MongoClient` constructor
+ */
+function isMongoModule(mod: unknown): mod is MongoModule {
+  return (
+    typeof mod === 'object' &&
+    mod !== null &&
+    'MongoClient' in mod &&
+    typeof mod.MongoClient === 'function'
+  );
+}
+
+/**
  * Load and cache the optional `mongodb` driver.
  *
  * @returns The mongodb module surface
- * @throws {Error} If the `mongodb` package is not installed
+ * @throws {Error} If the `mongodb` package is not installed or does not expose MongoClient
  */
 async function loadMongoDriver(): Promise<MongoModule> {
   if (!mongoDriver) {
-    mongoDriver = (await import(MONGODB_SPECIFIER)) as unknown as MongoModule;
+    const mod: unknown = await import(MONGODB_SPECIFIER);
+    if (!isMongoModule(mod)) {
+      throw new Error("The 'mongodb' package is not installed or does not export MongoClient");
+    }
+    mongoDriver = mod;
   }
   return mongoDriver;
 }
@@ -294,7 +317,7 @@ export class MongoDBProvider implements DatabaseProvider<DbLike> {
    * @throws If email already exists
    */
   async insertUser(db: DbLike, userData: User): Promise<InsertResult> {
-    const result = await db.collection('Users').insertOne(userData as unknown as Document);
+    const result = await db.collection('Users').insertOne(userData);
     return { insertedId: result.insertedId };
   }
 
@@ -372,7 +395,7 @@ export class MongoDBProvider implements DatabaseProvider<DbLike> {
    * @throws If email already exists
    */
   async insertAuth(db: DbLike, authData: AuthRecord): Promise<InsertResult> {
-    const result = await db.collection('Auths').insertOne(authData as unknown as Document);
+    const result = await db.collection('Auths').insertOne(authData);
     return { insertedId: result.insertedId };
   }
 
@@ -486,7 +509,10 @@ export class MongoDBProvider implements DatabaseProvider<DbLike> {
           break;
 
         case 'insertmany':
-          result = await coll.insertMany(query as unknown as Document[], options);
+          if (!Array.isArray(query)) {
+            throw new Error('insertMany requires query to be an array of documents');
+          }
+          result = await coll.insertMany(query, options);
           data = { insertedIds: result.insertedIds, insertedCount: result.insertedCount };
           rowCount = result.insertedCount || 0;
           break;
@@ -535,7 +561,10 @@ export class MongoDBProvider implements DatabaseProvider<DbLike> {
           break;
 
         case 'distinct':
-          data = await coll.distinct(query!.field as string, (query!.filter || {}) as Document, options);
+          if (typeof query?.field !== 'string') {
+            throw new Error('distinct requires query.field to be a string');
+          }
+          data = await coll.distinct(query.field, (query.filter || {}) as Document, options);
           rowCount = data.length;
           break;
 
@@ -554,11 +583,15 @@ export class MongoDBProvider implements DatabaseProvider<DbLike> {
       };
 
     } catch (error) {
-      const err = error as Error & { code?: string | number; codeName?: string };
+      const err = error instanceof Error ? error : new Error(String(error));
+      const code = 'code' in err && (typeof err.code === 'string' || typeof err.code === 'number')
+        ? err.code
+        : undefined;
+      const codeName = 'codeName' in err && typeof err.codeName === 'string' ? err.codeName : undefined;
       return {
         success: false,
         error: err.message,
-        code: err.code || err.codeName,
+        code: code || codeName,
         metadata: {
           executionTime: Date.now() - startTime,
           dbType: 'mongodb'
