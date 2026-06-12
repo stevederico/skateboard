@@ -1,7 +1,7 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "3.14.0",
+  "version": "3.15.0",
   "skateboardVersion": "3.14.0",
   "type": "module",
   "engines": {
@@ -24,7 +24,7 @@
     "verify:ui": "node scripts/verify-ui-version.mjs"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "4.3.0",
+    "@stevederico/skateboard-ui": "4.6.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-router": "7.15.0"
