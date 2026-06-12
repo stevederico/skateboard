@@ -217,6 +217,43 @@ function threeWayMerge(appContent, baseContent, newContent) {
 }
 
 /**
+ * Scan 3-way-merge output for defects that compile clean and ship silently:
+ *   1. Residual conflict markers INSIDE block comments — `tsc` ignores `<<<<<<<`
+ *      in a `/** ... *␐/` so `npm run typecheck` passes with the markers still there.
+ *   2. Duplicate top-level declarations — when a function/const is absent from the
+ *      (too-old) baseline but added on BOTH sides at different positions, the merge
+ *      keeps both copies with NO conflict marker (later caught only as TS2393).
+ * Returns an array of human-readable issue strings (empty = clean). Duplicate
+ * detection runs only on JS/TS sources; marker detection on any text file.
+ *
+ * @param {string} content merged file content
+ * @param {string} relPath path (selects whether duplicate detection applies)
+ * @returns {string[]}
+ */
+function findMergeDefects(content, relPath) {
+  const issues = [];
+  const lines = content.split('\n');
+  lines.forEach((line, i) => {
+    if (/^(<<<<<<<|=======|>>>>>>>)( |\t|$)/.test(line)) {
+      issues.push(`conflict marker at line ${i + 1}: ${line.slice(0, 40)}`);
+    }
+  });
+  if (/\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(relPath)) {
+    const counts = {};
+    const decl = /^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*[(<]|^\s*(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*(?::[^=]+)?=>|<)/;
+    for (const line of lines) {
+      const m = line.match(decl);
+      const name = m && (m[1] || m[2]);
+      if (name) counts[name] = (counts[name] || 0) + 1;
+    }
+    for (const [name, n] of Object.entries(counts)) {
+      if (n > 1) issues.push(`duplicate top-level declaration "${name}" (${n}×) — likely TS2393`);
+    }
+  }
+  return issues;
+}
+
+/**
  * Sync one template file into the app (3-way merge, add, or overwrite fallback).
  *
  * @returns {Promise<'ok'|'wrote'|'declined'|'conflicts'|'error'>} 'ok' = nothing to do,
@@ -295,14 +332,19 @@ async function syncFile(relPath, baselineTag) {
     return 'ok';
   }
 
-  console.log(`\n[merge] ${relPath}${conflicts ? ` — ${conflicts} CONFLICT(S)` : ''}`);
+  // A clean (conflicts === 0) merge can still ship a duplicate declaration with no
+  // marker, so always scan the output — not just when git reported a conflict.
+  const defects = findMergeDefects(merged, relPath);
+
+  console.log(`\n[merge] ${relPath}${conflicts ? ` — ${conflicts} CONFLICT(S)` : ''}${defects.length ? ` — ${defects.length} DEFECT(S)` : ''}`);
   showDiff(appContent, merged, relPath);
 
-  if (conflicts) {
-    console.log(`  ⚠ ${conflicts} conflict(s): merged file will contain <<<<<<< markers to resolve by hand.`);
-    if (await confirm(`Write ${relPath} with conflict markers?`)) {
+  if (conflicts || defects.length) {
+    if (conflicts) console.log(`  ⚠ ${conflicts} conflict(s): merged file will contain <<<<<<< markers to resolve by hand.`);
+    for (const d of defects) console.log(`  ⚠ ${d}`);
+    if (await confirm(`Write ${relPath} anyway? (needs manual cleanup before it builds)`)) {
       writeSynced(dst, relPath, merged);
-      console.log(`[wrote w/ conflicts] ${relPath}`);
+      console.log(`[wrote w/ issues] ${relPath}`);
       return 'conflicts';
     }
     console.log(`[kept]  ${relPath}`);
@@ -354,20 +396,22 @@ async function migrateRenamedFile(relPath, oldRel, baselineTag, newContent) {
     return 'error';
   }
 
-  console.log(`\n[rename] ${oldRel} → ${relPath}${conflicts ? ` — ${conflicts} CONFLICT(S)` : ''}`);
+  const defects = findMergeDefects(merged, relPath);
+  const hasIssues = conflicts > 0 || defects.length > 0;
+
+  console.log(`\n[rename] ${oldRel} → ${relPath}${conflicts ? ` — ${conflicts} CONFLICT(S)` : ''}${defects.length ? ` — ${defects.length} DEFECT(S)` : ''}`);
   showDiff(appContent, merged, relPath);
 
-  if (conflicts) {
-    console.log(`  ⚠ ${conflicts} conflict(s): merged file will contain <<<<<<< markers to resolve by hand.`);
-  }
-  const prompt = conflicts
-    ? `Write ${relPath} with conflict markers and remove ${oldRel}?`
+  if (conflicts) console.log(`  ⚠ ${conflicts} conflict(s): merged file will contain <<<<<<< markers to resolve by hand.`);
+  for (const d of defects) console.log(`  ⚠ ${d}`);
+  const prompt = hasIssues
+    ? `Write ${relPath} anyway (needs manual cleanup) and remove ${oldRel}?`
     : `Migrate ${oldRel} to ${relPath}? (your edits preserved)`;
   if (await confirm(prompt)) {
     writeSynced(dst, relPath, merged);
     rmSync(oldDst, { force: true });
-    console.log(`[wrote] ${relPath}   [removed] ${oldRel}`);
-    return conflicts ? 'conflicts' : 'wrote';
+    console.log(`[wrote${hasIssues ? ' w/ issues' : ''}] ${relPath}   [removed] ${oldRel}`);
+    return hasIssues ? 'conflicts' : 'wrote';
   }
   console.log(`[kept]  ${oldRel}`);
   return 'declined';
@@ -547,7 +591,13 @@ async function main() {
   const blocked = statuses.filter(s => s === 'declined' || s === 'conflicts' || s === 'error').length;
   await mergePackageJson(baselineTag, blocked === 0);
   if (blocked) {
-    console.log(`\n⚠ ${blocked} file(s) declined/conflicted — skateboardVersion left at ${currentVersion} so a re-run can finish the job; re-run with --baseline ${currentVersion} after resolving.`);
+    console.log(`\n⚠ ${blocked} file(s) declined/conflicted or carry merge defects (conflict markers / duplicate declarations).`);
+    console.log(`  skateboardVersion left at ${currentVersion}. Resolve the flagged files, then re-run with --baseline ${currentVersion}.`);
+    console.log(`  NOTE: markers inside JSDoc and duplicate functions COMPILE CLEAN — do not trust 'npm run typecheck' alone;`);
+    console.log(`  confirm with: git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- '*.ts' '*.tsx'`);
+    // Non-zero exit so CI / automation that runs this with --yes does not mistake a
+    // marker-laden or duplicate-ridden result for success.
+    process.exitCode = 1;
   }
 
   rmSync(TMP_DIR, { recursive: true, force: true });
