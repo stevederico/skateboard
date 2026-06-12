@@ -26,6 +26,11 @@ function jwtSign(payload: JwtPayload, secret: string): string {
   const sig = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
   return `${head}.${body}.${sig}`;
 }
+function isJwtPayload(value: unknown): value is JwtPayload {
+  if (typeof value !== 'object' || value === null) return false;
+  return 'userID' in value && typeof value.userID === 'string'
+    && 'exp' in value && typeof value.exp === 'number';
+}
 function jwtVerify(token: string, secret: string): JwtPayload {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('Invalid token');
@@ -37,7 +42,11 @@ function jwtVerify(token: string, secret: string): JwtPayload {
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
     throw new Error('Invalid signature');
   }
-  const payload = JSON.parse(Buffer.from(body, 'base64url').toString()) as JwtPayload;
+  const decoded: unknown = JSON.parse(Buffer.from(body, 'base64url').toString());
+  if (!isJwtPayload(decoded)) {
+    throw new Error('Invalid token');
+  }
+  const payload = decoded;
   if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
     const err = new Error('Token expired');
     err.name = 'TokenExpiredError';
