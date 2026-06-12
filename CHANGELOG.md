@@ -1,3 +1,7 @@
+3.15.0
+
+  Pin skateboard-ui 4.6.0
+
 3.14.0
 
   Narrow backend catch errors
