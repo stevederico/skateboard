@@ -65,6 +65,23 @@ interface PgModule {
   types: { setTypeParser(oid: number, parser: (value: string) => unknown): void };
 }
 
+/**
+ * Narrow an unknown dynamic-import result to the pg module surface this
+ * adapter touches. Verifies the members actually used (the Pool constructor
+ * and the types.setTypeParser registry) are present and callable.
+ *
+ * @param value - Candidate module namespace
+ * @returns True if value matches the PgModule surface
+ */
+function isPgModule(value: unknown): value is PgModule {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('Pool' in value) || typeof value.Pool !== 'function') return false;
+  if (!('types' in value)) return false;
+  const { types } = value;
+  if (typeof types !== 'object' || types === null) return false;
+  return 'setTypeParser' in types && typeof types.setTypeParser === 'function';
+}
+
 /** PostgreSQL OID for the int8 (BIGINT) type. */
 const INT8_OID = 20;
 
@@ -87,10 +104,17 @@ let pgDriver: PgModule | null = null;
 async function loadPgDriver(): Promise<PgModule> {
   if (!pgDriver) {
     // pg is CommonJS: the namespace's `default` carries module.exports.
-    const namespace = (await import(PG_SPECIFIER)) as unknown as { default?: PgModule } & PgModule;
-    const driver = namespace.default ?? namespace;
-    driver.types.setTypeParser(INT8_OID, (value) => parseInt(value, 10));
-    pgDriver = driver;
+    const namespace: unknown = await import(PG_SPECIFIER);
+    const exported =
+      typeof namespace === 'object' && namespace !== null && 'default' in namespace
+        ? namespace.default
+        : undefined;
+    const candidate = exported ?? namespace;
+    if (!isPgModule(candidate)) {
+      throw new Error("The 'pg' package did not export the expected module surface (Pool, types.setTypeParser)");
+    }
+    candidate.types.setTypeParser(INT8_OID, (value) => parseInt(value, 10));
+    pgDriver = candidate;
   }
   return pgDriver;
 }
@@ -644,7 +668,7 @@ export class PostgreSQLProvider implements DatabaseProvider<PoolLike> {
     } catch (error) {
       return {
         success: false,
-        error: (error as Error).message,
+        error: error instanceof Error ? error.message : String(error),
         code: (error as { code?: string | number }).code,
         metadata: {
           executionTime: Date.now() - startTime,

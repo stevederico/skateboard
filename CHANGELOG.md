@@ -1,3 +1,10 @@
+3.14.0
+
+  Narrow backend catch errors
+  Validate JSON.parse boundaries
+  Guard non-null assertions
+  Type-guard dynamic driver imports
+
 3.13.0
 
   Pin skateboard-ui 4.3.0
