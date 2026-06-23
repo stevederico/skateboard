@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
+import type { Logger } from '../types.ts';
 
 /**
  * Check if the server is running in production mode
@@ -8,31 +9,31 @@ import { readFileSync, writeFileSync, statSync } from 'node:fs';
  * Reads the NODE_ENV environment variable. Returns true only when
  * NODE_ENV is explicitly set to "production".
  *
- * @returns {boolean} True if NODE_ENV === "production"
+ * @returns True if NODE_ENV === "production"
  */
-export function isProd() {
+export function isProd(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
 /**
  * Parse a .env file and apply key=value pairs to process.env.
  *
- * Skips blank lines and comments. Handles quoted values and values containing '='.
- * Silently skips if file doesn't exist.
+ * Skips blank lines, comments, and lines with an empty key. A line with a key
+ * but no value (e.g. `STRIPE_KEY=`) sets the variable to an empty string —
+ * this lets an operator explicitly clear/disable a value. Handles quoted
+ * values and values containing '='. Silently skips if file doesn't exist.
  *
- * @param {string} filePath - Absolute path to the .env file
- * @returns {void}
+ * @param filePath - Absolute path to the .env file
  */
-export function loadEnvFile(filePath) {
+export function loadEnvFile(filePath: string): void {
   try {
     const data = readFileSync(filePath, 'utf8');
-    for (let line of data.split(/\r?\n/)) {
+    for (const line of data.split(/\r?\n/)) {
       if (!line || line.trim().startsWith('#')) continue;
-      let [key, ...valueParts] = line.split('=');
-      let value = valueParts.join('=');
-      if (key && value) {
-        key = key.trim();
-        value = value.trim().replace(/^["']|["']$/g, '');
+      const [rawKey, ...valueParts] = line.split('=');
+      const key = rawKey.trim();
+      if (key) {
+        const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
         process.env[key] = value;
       }
     }
@@ -49,12 +50,11 @@ export function loadEnvFile(filePath) {
  * Creates .env from .env.example if it doesn't exist. Only called in
  * non-production mode — Railway injects vars directly in prod.
  *
- * @param {Object} [options] - Load options
- * @param {string} [options.baseDir] - Backend directory (defaults to parent of this module)
- * @param {Object} [options.logger] - Logger with error() method for failure reporting
- * @returns {void}
+ * @param options - Load options
+ * @param options.baseDir - Backend directory (defaults to parent of this module)
+ * @param options.logger - Logger for failure reporting
  */
-export function loadLocalENV(options = {}) {
+export function loadLocalENV(options: { baseDir?: string; logger?: Partial<Logger> } = {}): void {
   const baseDir = options.baseDir ?? resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const logger = options.logger;
   const envFilePath = resolve(baseDir, './.env');
@@ -64,12 +64,12 @@ export function loadLocalENV(options = {}) {
   // Check if .env exists, if not create it from .env.example
   try {
     statSync(envFilePath);
-  } catch (err) {
+  } catch {
     try {
       const exampleData = readFileSync(envExamplePath, 'utf8');
       writeFileSync(envFilePath, exampleData);
     } catch (exampleErr) {
-      logger?.error('Failed to create .env from template', { error: exampleErr.message });
+      logger?.error?.('Failed to create .env from template', { error: exampleErr instanceof Error ? exampleErr.message : String(exampleErr) });
       return;
     }
   }
@@ -85,19 +85,20 @@ export function loadLocalENV(options = {}) {
  * Resolve environment variable placeholders in configuration strings
  *
  * Replaces ${VAR_NAME} patterns with process.env values. Logs warning
- * and preserves placeholder if environment variable is undefined.
+ * and preserves placeholder if environment variable is undefined. Returns
+ * non-string input unchanged.
  *
- * @param {string} str - String with ${VAR_NAME} placeholders
- * @param {Object} [logger] - Optional logger with warn() method
- * @returns {string} String with placeholders replaced
+ * @param str - String with ${VAR_NAME} placeholders
+ * @param logger - Optional logger with warn() method
+ * @returns String with placeholders replaced
  */
-export function resolveEnvironmentVariables(str, logger) {
+export function resolveEnvironmentVariables(str: string, logger?: Partial<Logger>): string {
   if (typeof str !== 'string') return str;
 
-  return str.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+  return str.replace(/\$\{([^}]+)\}/g, (match, varName: string) => {
     const envValue = process.env[varName];
     if (envValue === undefined) {
-      logger?.warn('Environment variable not defined, using placeholder', { varName, placeholder: match });
+      logger?.warn?.('Environment variable not defined, using placeholder', { varName, placeholder: match });
       return match; // Return the placeholder if env var is not found
     }
     return envValue;
@@ -111,14 +112,8 @@ export function resolveEnvironmentVariables(str, logger) {
  * unresolved ${VAR} references in database config. Logs warnings for
  * missing variables but does not exit the process.
  *
- * @param {Object} options - Validation context
- * @param {Object} options.config - Loaded application config
- * @param {string} [options.stripeKey] - STRIPE_KEY value
- * @param {string} [options.stripeEndpointSecret] - STRIPE_ENDPOINT_SECRET value
- * @param {string} [options.jwtSecret] - JWT_SECRET value
- * @param {Object} [options.logger] - Logger with warn() method
- * @param {Object} [options.env] - Environment object (defaults to process.env)
- * @returns {boolean} True if all required variables are present
+ * @param options - Validation context
+ * @returns True if all required variables are present
  */
 export function validateEnvironmentVariables({
   config,
@@ -127,8 +122,15 @@ export function validateEnvironmentVariables({
   jwtSecret,
   logger,
   env = process.env
-}) {
-  const missing = [];
+}: {
+  config: { database: { connectionString: unknown } };
+  stripeKey?: string;
+  stripeEndpointSecret?: string;
+  jwtSecret?: string;
+  logger?: Partial<Logger>;
+  env?: Record<string, string | undefined>;
+}): boolean {
+  const missing: string[] = [];
 
   if (!stripeKey) missing.push('STRIPE_KEY');
   if (!stripeEndpointSecret) missing.push('STRIPE_ENDPOINT_SECRET');
@@ -148,7 +150,7 @@ export function validateEnvironmentVariables({
   }
 
   if (missing.length > 0) {
-    logger?.warn('Missing environment variables - server continuing with limited functionality', {
+    logger?.warn?.('Missing environment variables - server continuing with limited functionality', {
       missing,
       hint: 'Set DATABASE_URL, MONGODB_URL, POSTGRES_URL, STRIPE_KEY, JWT_SECRET for full functionality'
     });

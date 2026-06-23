@@ -1,8 +1,18 @@
+3.17.0
+
+  Centralize backend lib
+  Validate JWT payload
+  Set empty env-values
+  Bound store growth
+  Optimize store eviction
+  Type build scripts
+  Document vitest runner
+
 3.16.0
 
-  Merge test coverage suite
-  Add vitest frontend tests
-  Add adapter coverage tests
+  Merge coverage suite
+  Add vitest tests
+  Add adapter tests
 
 3.15.0
 

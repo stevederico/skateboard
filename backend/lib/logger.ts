@@ -1,3 +1,5 @@
+import type { Logger } from '../types.ts';
+
 /**
  * Create a structured JSON logger for server operations
  *
@@ -5,11 +7,11 @@
  * JSON; in production, emits compact single-line JSON. Debug level is suppressed
  * in production.
  *
- * @param {boolean|function(): boolean} isProd - Production flag or predicate
- * @returns {Object} Logger with error, warn, info, and debug methods
+ * @param isProd - Production flag or predicate evaluated per log call
+ * @returns Logger with error, warn, info, and debug methods
  */
-export function createLogger(isProd) {
-  const isProduction = () => (typeof isProd === 'function' ? isProd() : isProd);
+export function createLogger(isProd: boolean | (() => boolean)): Logger {
+  const isProduction = (): boolean => (typeof isProd === 'function' ? isProd() : isProd);
 
   return {
     error: (message, meta = {}) => {

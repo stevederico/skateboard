@@ -11,7 +11,7 @@ import {
   jwtVerify,
   generateUUID,
   TOKEN_EXPIRATION_DAYS,
-} from './auth.js';
+} from './auth.ts';
 
 const scryptAsync = promisify(crypto.scrypt);
 const LEGACY_BCRYPT_HASH = '$2b$10$gix5z78/st4CdQYVM8C4g.ygzzWZQ39pnLKhxVtMWK1HUeASfzIyG';

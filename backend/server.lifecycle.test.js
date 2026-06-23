@@ -1,5 +1,12 @@
 /**
  * Server lifecycle and branch-coverage tests for server.ts
+ *
+ * NOTE: server.ts is a singleton — it reads NODE_ENV and caches env-dependent
+ * config (intervals, secure-headers, loadLocalENV) at import time. This file
+ * sets NODE_ENV='test' before importing it, so the in-process module is frozen
+ * in test mode. Any assertion about PRODUCTION config must spawn a child
+ * process with NODE_ENV='production' (see server.prod-import.test.js) — never
+ * assert prod behavior against the in-process import here.
  */
 import { describe, it, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';

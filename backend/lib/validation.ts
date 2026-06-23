@@ -4,12 +4,12 @@
  * Replaces &, <, >, ", ', / with HTML entities. Returns original value
  * if not a string.
  *
- * @param {string} text - Text to escape
- * @returns {string} HTML-escaped text
+ * @param text - Text to escape
+ * @returns HTML-escaped text
  */
-export function escapeHtml(text) {
+export function escapeHtml(text: string): string {
   if (typeof text !== 'string') return text;
-  const map = {
+  const map: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
@@ -25,12 +25,12 @@ export function escapeHtml(text) {
  *
  * RFC 5321 compliant validation with robust regex checking local part,
  * domain, and TLD. Max length 254 characters. Prevents consecutive dots
- * and leading/trailing hyphens.
+ * and leading/trailing hyphens. Narrows unknown input to string.
  *
- * @param {string} email - Email address to validate
- * @returns {boolean} True if valid email format
+ * @param email - Email address to validate
+ * @returns True if valid email format
  */
-export function validateEmail(email) {
+export function validateEmail(email: unknown): email is string {
   if (!email || typeof email !== 'string') return false;
   if (email.length > 254) return false; // RFC 5321
 
@@ -45,12 +45,13 @@ export function validateEmail(email) {
 /**
  * Validate password length within bcrypt limits
  *
- * Enforces 6-72 character range (bcrypt's maximum is 72 bytes).
+ * Enforces 6-72 character range (bcrypt's maximum is 72 bytes). Narrows
+ * unknown input to string.
  *
- * @param {string} password - Password to validate
- * @returns {boolean} True if valid password length
+ * @param password - Password to validate
+ * @returns True if valid password length
  */
-export function validatePassword(password) {
+export function validatePassword(password: unknown): password is string {
   if (!password || typeof password !== 'string') return false;
   if (password.length < 6 || password.length > 72) return false; // bcrypt limit
   return true;
@@ -59,12 +60,13 @@ export function validatePassword(password) {
 /**
  * Validate name length and non-empty after trim
  *
- * Enforces 1-100 character range after trimming whitespace.
+ * Enforces 1-100 character range after trimming whitespace. Narrows unknown
+ * input to string.
  *
- * @param {string} name - Name to validate
- * @returns {boolean} True if valid name
+ * @param name - Name to validate
+ * @returns True if valid name
  */
-export function validateName(name) {
+export function validateName(name: unknown): name is string {
   if (!name || typeof name !== 'string') return false;
   if (name.trim().length === 0 || name.length > 100) return false;
   return true;

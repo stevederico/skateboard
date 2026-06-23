@@ -1,6 +1,6 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { createLogger } from './logger.js';
+import { createLogger } from './logger.ts';
 
 describe('logger.js', () => {
   const originals = {

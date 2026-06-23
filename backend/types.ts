@@ -378,8 +378,8 @@ export interface BoundDatabase {
 export interface JwtPayload {
   /** Authenticated user's `_id` (normalized to string by authMiddleware). */
   userID: string;
-  /** Expiration as a Unix timestamp (seconds). */
-  exp: number;
+  /** Expiration as a Unix timestamp (seconds); omitted for non-expiring tokens. */
+  exp?: number;
 }
 
 /** Per-user entry in the in-memory CSRF token store. */

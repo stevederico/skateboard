@@ -41,7 +41,7 @@ const {
   dynamicRobotsPlugin,
   dynamicSitemapPlugin,
   dynamicManifestPlugin
-} = await import('./vite.plugins.js');
+} = await import('./vite.plugins.ts');
 
 describe('customLoggerPlugin', () => {
   it('overrides printUrls with a single localhost message', () => {
