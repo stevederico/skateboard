@@ -1,7 +1,7 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "3.15.0",
+  "version": "3.16.0",
   "skateboardVersion": "3.14.0",
   "type": "module",
   "engines": {
@@ -18,10 +18,17 @@
     "prod": "npm run typecheck && vite build --mode production",
     "install-all": "npm install && npm install --workspace=backend",
     "postinstall": "git config core.hooksPath .githooks || true",
-    "test": "npm run typecheck && npm run --workspace=backend test",
-    "test:watch": "npm run --workspace=backend test:watch",
+    "verify:ui": "node scripts/verify-ui-version.mjs",
     "typecheck": "tsc -p tsconfig.json && tsc -p backend/tsconfig.json",
-    "verify:ui": "node scripts/verify-ui-version.mjs"
+    "test": "npm run typecheck && npm run test:backend && npm run test:frontend && npm run test:build",
+    "test:watch": "npm run --workspace=backend test:watch",
+    "test:backend": "npm run test --workspace=backend",
+    "test:frontend": "vitest run",
+    "test:build": "node --experimental-test-module-mocks --test vite.plugins.test.js scripts/verify-ui-version.test.js",
+    "test:coverage": "npm run test:coverage:backend && npm run test:coverage:frontend && npm run test:coverage:build",
+    "test:coverage:backend": "node --experimental-test-module-mocks --experimental-test-coverage --test-concurrency=1 --test backend/server.test.ts backend/server.lifecycle.test.js backend/server.prod-import.test.js backend/adapters/*.test.js backend/lib/*.test.js",
+    "test:coverage:frontend": "vitest run --coverage",
+    "test:coverage:build": "node --experimental-test-module-mocks --experimental-test-coverage --test vite.plugins.test.js scripts/verify-ui-version.test.js"
   },
   "dependencies": {
     "@stevederico/skateboard-ui": "4.6.0",
@@ -31,12 +38,17 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "@types/node": "25.9.1",
     "@types/react": "19.2.16",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react-swc": "4.3.1",
+    "@vitest/coverage-v8": "^3.2.4",
+    "jsdom": "^26.1.0",
     "tailwindcss": "4.3.0",
     "typescript": "6.0.3",
-    "vite": "8.0.13"
+    "vite": "8.0.13",
+    "vitest": "^3.2.4"
   }
 }

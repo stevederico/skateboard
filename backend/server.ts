@@ -21,6 +21,44 @@ import type { BackendConfig, BoundDatabase, CsrfTokenEntry, DatabaseConfig, JwtP
 type AppEnv = { Variables: { userID: string } };
 
 /**
+ * Determine if this module is being run directly (not imported).
+ *
+ * @param moduleUrl - import.meta.url of the module
+ * @returns True when executed as the entry script
+ */
+export function isMainModule(moduleUrl: string): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return resolve(fileURLToPath(moduleUrl)) === resolve(entry);
+}
+
+/**
+ * Whether the HTTP server and process signal handlers should start.
+ *
+ * @param skipFlag - Skip-server env value
+ * @param moduleUrl - Module URL to compare with argv entry
+ * @returns True when this process should bind a port
+ */
+export function __testShouldStartServer(
+  skipFlag: string | undefined = process.env.SKIP_SERVER_START,
+  moduleUrl: string = import.meta.url
+): boolean {
+  return skipFlag !== '1' && isMainModule(moduleUrl);
+}
+
+const shouldStartServer = __testShouldStartServer();
+
+/**
+ * Resolve HTTP listen port from environment.
+ *
+ * @param env - Environment variables
+ * @returns Parsed port number
+ */
+export function __testResolvePort(env: NodeJS.ProcessEnv = process.env): number {
+  return parseInt(env.PORT || '8000');
+}
+
+/**
  * Extract a human-readable message from an unknown thrown value.
  *
  * Narrows to Error to read `.message`; falls back to String() for non-Error
@@ -32,7 +70,7 @@ type AppEnv = { Variables: { userID: string } };
 const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
 // ==== SERVER CONFIG ====
-const port = parseInt(process.env.PORT || "8000");
+const port = __testResolvePort();
 
 // ==== STRUCTURED LOGGING ====
 // Defined early so all code can use it (no external dependencies)
@@ -196,8 +234,12 @@ async function csrfProtection(c: Context<AppEnv>, next: Next) {
   await next();
 }
 
-// Cleanup expired CSRF tokens every hour to prevent memory leak
-setInterval(() => {
+/**
+ * Remove expired CSRF tokens and evict oldest entries when over limit.
+ *
+ * @returns void
+ */
+export function __testRunCsrfCleanup(): void {
   const now = Date.now();
   let cleaned = 0;
 
@@ -208,13 +250,35 @@ setInterval(() => {
     }
   }
 
-  // LRU eviction if still over limit
   evictOldestEntries(csrfTokenStore, CSRF_MAX_ENTRIES, (data) => data.timestamp);
 
   if (cleaned > 0) {
     logger.debug('CSRF cleanup completed', { removedTokens: cleaned });
   }
-}, 60 * 60 * 1000); // Run every hour
+}
+
+/**
+ * Register hourly CSRF cleanup interval.
+ *
+ * @returns void
+ */
+export function __testRegisterCsrfInterval(): void {
+  setInterval(__testRunCsrfCleanup, 60 * 60 * 1000);
+}
+
+/**
+ * Register CSRF cleanup interval when server startup is enabled.
+ *
+ * @param shouldStart - Whether startup hooks are active
+ * @returns void
+ */
+export function __testRegisterCsrfIntervalIfStarted(shouldStart: boolean = shouldStartServer): void {
+  if (shouldStart) {
+    __testRegisterCsrfInterval();
+  }
+}
+
+__testRegisterCsrfIntervalIfStarted();
 
 // ==== ACCOUNT LOCKOUT ====
 const loginAttemptStore = new Map<string, { attempts: number; lockedUntil: number | null }>(); // email -> { attempts, lockedUntil }
@@ -281,8 +345,12 @@ function clearFailedLogins(email: string): void {
   loginAttemptStore.delete(email);
 }
 
-// Cleanup expired lockout entries every 15 minutes
-setInterval(() => {
+/**
+ * Remove expired lockout entries and evict oldest when over limit.
+ *
+ * @returns void
+ */
+export function __testRunLockoutCleanup(): void {
   const now = Date.now();
   let cleaned = 0;
 
@@ -293,23 +361,76 @@ setInterval(() => {
     }
   }
 
-  // LRU eviction if still over limit
   evictOldestEntries(loginAttemptStore, LOCKOUT_MAX_ENTRIES, (data) => data.lockedUntil || 0);
 
   if (cleaned > 0) {
     logger.debug('Lockout cleanup completed', { removedEntries: cleaned });
   }
-}, 15 * 60 * 1000);
+}
+
+/**
+ * Register lockout cleanup interval.
+ *
+ * @returns void
+ */
+export function __testRegisterLockoutInterval(): void {
+  setInterval(__testRunLockoutCleanup, 15 * 60 * 1000);
+}
+
+/**
+ * Register lockout cleanup interval when server startup is enabled.
+ *
+ * @param shouldStart - Whether startup hooks are active
+ * @returns void
+ */
+export function __testRegisterLockoutIntervalIfStarted(shouldStart: boolean = shouldStartServer): void {
+  if (shouldStart) {
+    __testRegisterLockoutInterval();
+  }
+}
+
+__testRegisterLockoutIntervalIfStarted();
+
+/**
+ * Register production hourly maintenance interval when running in production.
+ *
+ * @param prod - Production mode flag
+ * @param shouldStart - Whether server startup hooks are enabled
+ * @returns void
+ */
+export function __testMaybeRegisterProdHourlyInterval(
+  prod: boolean = isProd(),
+  shouldStart: boolean = shouldStartServer
+): void {
+  if (prod && shouldStart) {
+    __testRegisterProdHourlyInterval();
+  }
+}
+
+/**
+ * Register production hourly maintenance interval.
+ *
+ * @returns void
+ */
+export function __testRegisterProdHourlyInterval(): void {
+  setInterval(__testRunProdHourlyTask, 60 * 60 * 1000);
+}
+
+/**
+ * Production-only hourly maintenance task.
+ *
+ * @returns void
+ */
+export function __testRunProdHourlyTask(): void {
+  logger.debug('Hourly task completed');
+}
 
 // ==== CONFIG & ENV ====
 // Environment setup - MUST happen before config loading
 if (!isProd()) {
   loadLocalENV();
-} else {
-  setInterval(async () => {
-    logger.debug('Hourly task completed');
-  }, 60 * 60 * 1000); // Every hour
 }
+__testMaybeRegisterProdHourlyInterval();
 
 /**
  * Resolve environment variable placeholders in configuration strings
@@ -349,38 +470,44 @@ function isRawConfig(value: unknown): value is { staticDir?: string; database: D
     && 'connectionString' in database && typeof database.connectionString === 'string';
 }
 
-// Load and process configuration
-let config: BackendConfig;
-try {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  const configPath = resolve(__dirname, './config.json');
-  const configData = await promisify(readFile)(configPath);
-  const parsedConfig: unknown = JSON.parse(configData.toString());
-  if (!isRawConfig(parsedConfig)) {
-    throw new Error('Invalid config.json shape');
-  }
-  const rawConfig = parsedConfig;
+/**
+ * Load application config from config.json with fallback defaults.
+ *
+ * @returns Resolved application config
+ */
+export async function __testLoadApplicationConfig(): Promise<BackendConfig> {
+  try {
+    const configFilename = fileURLToPath(import.meta.url);
+    const configDirname = dirname(configFilename);
+    const configPath = resolve(configDirname, './config.json');
+    const configData = await promisify(readFile)(configPath);
+    const parsedConfig: unknown = JSON.parse(configData.toString());
+    if (!isRawConfig(parsedConfig)) {
+      throw new Error('Invalid config.json shape');
+    }
+    const rawConfig = parsedConfig;
 
-  // Resolve environment variables in configuration
-  config = {
-    staticDir: rawConfig.staticDir || '../dist',
-    database: {
-      ...rawConfig.database,
-      connectionString: resolveEnvironmentVariables(rawConfig.database.connectionString)
-    }
-  };
-} catch (err) {
-  logger.error('Failed to load config, using defaults', { error: errorMessage(err) });
-  config = {
-    staticDir: '../dist',
-    database: {
-      db: "MyApp",
-      dbType: "sqlite",
-      connectionString: "./databases/MyApp.db"
-    }
-  };
+    return {
+      staticDir: rawConfig.staticDir || '../dist',
+      database: {
+        ...rawConfig.database,
+        connectionString: resolveEnvironmentVariables(rawConfig.database.connectionString)
+      }
+    };
+  } catch (err) {
+    logger.error('Failed to load config, using defaults', { error: errorMessage(err) });
+    return {
+      staticDir: '../dist',
+      database: {
+        db: "MyApp",
+        dbType: "sqlite",
+        connectionString: process.env.TEST_DATABASE_PATH || "./databases/MyApp.db"
+      }
+    };
+  }
 }
+
+let config: BackendConfig = await __testLoadApplicationConfig();
 
 const STRIPE_KEY = process.env.STRIPE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -440,13 +567,30 @@ logger.info('Single-client backend initialized');
 const dbConfig = config.database;
 
 // ==== SERVICES SETUP ====
-// Stripe setup (only if key is available)
-let stripe: Stripe | null = null;
-if (STRIPE_KEY) {
-  stripe = new Stripe(STRIPE_KEY);
-} else {
+/**
+ * Log warning when Stripe is disabled due to missing API key.
+ *
+ * @returns void
+ */
+export function __testWarnStripeDisabled(): void {
   logger.warn('STRIPE_KEY not set - Stripe functionality disabled');
 }
+
+/**
+ * Initialize Stripe client or disable when API key is missing.
+ *
+ * @param stripeKey - Stripe secret key
+ * @returns Stripe client or null
+ */
+export function __testInitializeStripe(stripeKey: string | undefined): Stripe | null {
+  if (stripeKey) {
+    return new Stripe(stripeKey);
+  }
+  __testWarnStripeDisabled();
+  return null;
+}
+
+let stripe: Stripe | null = __testInitializeStripe(STRIPE_KEY);
 
 // Single database config - always use the same one
 const currentDbConfig = dbConfig;
@@ -483,11 +627,19 @@ const app = new Hono<AppEnv>();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// CORS middleware (needed for development when frontend is on different port)
-// Use CORS_ORIGINS env var in production, fallback to localhost for development
-const corsOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5173', 'http://localhost:8000', 'http://127.0.0.1:5173', 'http://127.0.0.1:8000'];
+/**
+ * Resolve allowed CORS origins from environment or development defaults.
+ *
+ * @param env - Environment variables
+ * @returns Allowed CORS origins
+ */
+export function __testResolveCorsOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
+  return env.CORS_ORIGINS
+    ? env.CORS_ORIGINS.split(',').map(o => o.trim())
+    : ['http://localhost:5173', 'http://localhost:8000', 'http://127.0.0.1:5173', 'http://127.0.0.1:8000'];
+}
+
+const corsOrigins = __testResolveCorsOrigins();
 
 app.use('*', cors({
   origin: corsOrigins,
@@ -496,8 +648,14 @@ app.use('*', cors({
   credentials: true
 }));
 
-// Apache Common Log Format middleware
-app.use('*', async (c, next) => {
+/**
+ * Apache Common Log Format request logger middleware.
+ *
+ * @param c - Hono context
+ * @param next - Next middleware
+ * @returns void
+ */
+export async function __testApacheLogMiddleware(c: Context<AppEnv>, next: Next): Promise<void> {
   const start = Date.now();
   await next();
   const timestamp = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
@@ -507,39 +665,63 @@ app.use('*', async (c, next) => {
   const duration = Date.now() - start;
 
   console.log(`[${timestamp}] "${method} ${url}" ${status} (${duration}ms)`);
-});
+}
 
-// Security headers middleware
-app.use('*', secureHeaders({
-  contentSecurityPolicy: {
-    defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'unsafe-inline'"],
-    styleSrc: ["'self'", "'unsafe-inline'"],
-    imgSrc: ["'self'", "https:"],
-    fontSrc: ["'self'"],
-    connectSrc: ["'self'"],
-    frameAncestors: ["'none'"]
-  },
-  strictTransportSecurity: !isProd() ? false : 'max-age=31536000; includeSubDomains; preload',
-  xFrameOptions: 'DENY',
-  xContentTypeOptions: 'nosniff',
-  referrerPolicy: 'strict-origin-when-cross-origin',
-  permissionsPolicy: {
-    camera: [],
-    microphone: [],
-    geolocation: [],
-    payment: []
-  }
-}));
+app.use('*', __testApacheLogMiddleware);
 
-// Request logging middleware (dev only)
-app.use('*', async (c, next) => {
-  if (!isProd()) {
+/**
+ * Build secure-headers middleware options for the current environment.
+ *
+ * @param prod - Production mode flag
+ * @returns Secure headers config
+ */
+export function __testBuildSecureHeadersOptions(prod: boolean = isProd()) {
+  return {
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "https:"],
+      fontSrc: ["'self'"],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'none'"]
+    },
+    strictTransportSecurity: !prod ? false as const : 'max-age=31536000; includeSubDomains; preload',
+    xFrameOptions: 'DENY' as const,
+    xContentTypeOptions: 'nosniff' as const,
+    referrerPolicy: 'strict-origin-when-cross-origin' as const,
+    permissionsPolicy: {
+      camera: [],
+      microphone: [],
+      geolocation: [],
+      payment: []
+    }
+  };
+}
+
+app.use('*', secureHeaders(__testBuildSecureHeadersOptions()));
+
+/**
+ * Development-only request logging middleware.
+ *
+ * @param c - Hono context
+ * @param next - Next middleware
+ * @param prod - Production mode flag
+ * @returns void
+ */
+export async function __testDevRequestLogMiddleware(
+  c: Context<AppEnv>,
+  next: Next,
+  prod: boolean = isProd()
+): Promise<void> {
+  if (!prod) {
     const requestId = Math.random().toString(36).substr(2, 9);
     logger.debug('Request received', { method: c.req.method, path: c.req.path, requestId });
   }
   await next();
-});
+}
+
+app.use('*', __testDevRequestLogMiddleware);
 
 const tokenExpirationDays = 30;
 
@@ -691,14 +873,15 @@ function jwtVerify(token: string, secret: string): JwtPayload {
  */
 async function generateToken(userID: string): Promise<string> {
   try {
-    if (!JWT_SECRET) {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
       throw new Error("JWT_SECRET not configured - authentication disabled");
     }
 
     const exp = tokenExpireTimestamp();
     const payload = { userID, exp };
 
-    return jwtSign(payload, JWT_SECRET);
+    return jwtSign(payload, jwtSecret);
   } catch (error) {
     logger.error('Token generation error', { error: errorMessage(error) });
     throw error;
@@ -719,7 +902,8 @@ async function generateToken(userID: string): Promise<string> {
  * @returns 401/503 error or continues to next middleware
  */
 async function authMiddleware(c: Context<AppEnv>, next: Next) {
-  if (!JWT_SECRET) {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
     return c.json({ error: "Authentication service unavailable" }, 503);
   }
 
@@ -730,7 +914,7 @@ async function authMiddleware(c: Context<AppEnv>, next: Next) {
   }
 
   try {
-    const payload = jwtVerify(token, JWT_SECRET);
+    const payload = jwtVerify(token, jwtSecret);
     // Normalize userID to string for consistent Map key usage (CSRF, sessions)
     const normalizedUserID = String(payload.userID);
     c.set('userID', normalizedUserID);
@@ -996,7 +1180,7 @@ async function applyUserPatch(email: string, $set: UserSetFields): Promise<boole
     logger.warn('Webhook: No user found for email', { email });
     return false;
   }
-  await db.updateUser({ email }, { $set });
+  await db.updateUser({ _id: user._id }, { $set });
   return true;
 }
 
@@ -1112,6 +1296,49 @@ app.post("/api/payment", async (c) => {
 
 // ==== STATIC ROUTES ====
 app.get("/api/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
+
+/**
+ * Integration test route handler that throws intentionally (test env only).
+ *
+ * @returns never
+ */
+function __testIntegrationErrorHandler(): never {
+  throw new Error('Intentional integration test error');
+}
+
+if (process.env.NODE_ENV === 'test') {
+  app.get('/api/__integration_error_test__', __testIntegrationErrorHandler);
+}
+
+/**
+ * Sanitize a user-update field value for persistence.
+ *
+ * @param value - Raw request value
+ * @returns Escaped string or original non-string value
+ */
+export function __testSanitizeUserUpdateValue(value: unknown): unknown {
+  return typeof value === 'string' ? escapeHtml(value.trim()) : value;
+}
+
+/**
+ * Resolve usage object from a user record with defaults.
+ *
+ * @param user - User record from database
+ * @returns Usage snapshot
+ */
+export function __testResolveUsage(user: { usage?: { count: number; reset_at: number | null } }): { count: number; reset_at: number | null } {
+  return user.usage || { count: 0, reset_at: null };
+}
+
+/**
+ * Resolve post-increment usage count from an updated user record.
+ *
+ * @param updatedUser - User record after increment
+ * @returns Usage count, defaulting to 1 when missing
+ */
+export function __testResolveActualCount(updatedUser: { usage?: { count: number } } | null | undefined): number {
+  return updatedUser?.usage?.count || 1;
+}
 
 /**
  * Parse JSON request body with proper error handling
@@ -1363,7 +1590,7 @@ app.put("/api/me", authMiddleware, csrfProtection, async (c) => {
     for (const [key, value] of Object.entries(body)) {
       if (UPDATEABLE_USER_FIELDS.includes(key)) {
         // Sanitize string values to prevent XSS
-        update[key] = typeof value === 'string' ? escapeHtml(value.trim()) : value;
+        update[key] = __testSanitizeUserUpdateValue(value) as string;
       }
     }
 
@@ -1423,8 +1650,7 @@ app.post("/api/usage", authMiddleware, async (c) => {
     const limit = parseInt(process.env.FREE_USAGE_LIMIT || '20');
     const now = Math.floor(Date.now() / 1000);
 
-    // Initialize usage if not set
-    let usage = user.usage || { count: 0, reset_at: null };
+    let usage = __testResolveUsage(user);
 
     // Check if we need to reset (30 days = 2592000 seconds)
     if (!usage.reset_at || now > usage.reset_at) {
@@ -1447,7 +1673,7 @@ app.post("/api/usage", authMiddleware, async (c) => {
 
       // Re-read user to get actual count after atomic increment
       const updatedUser = await db.findUser( { _id: userID });
-      const actualCount = updatedUser?.usage?.count || 1;
+      const actualCount = __testResolveActualCount(updatedUser);
 
       // If we exceeded the limit, rollback the increment and return 429
       if (actualCount > limit) {
@@ -1668,44 +1894,168 @@ function loadEnvFile(filePath: string): void {
 }
 
 // ==== SERVER STARTUP ====
-const server = serve({
-  fetch: app.fetch,
-  port,
-  hostname: '::'  // Listen on both IPv4 and IPv6
-}, (info) => {
+let server: ReturnType<typeof serve> | null = null;
+
+/**
+ * Log successful server startup.
+ *
+ * @param info - Server listen info from @hono/node-server
+ * @returns void
+ */
+export function __testOnServerStarted(info: { port: number }): void {
   logger.info('Server started successfully', {
     port: info.port,
     environment: !isProd() ? 'development' : 'production'
   });
-});
-
-// Handle graceful shutdown on SIGTERM and SIGINT - NEED THIS FOR PROXY
-if (typeof process !== 'undefined') {
-  const gracefulShutdown = async (signal: string) => {
-    console.log(`${signal} received. Shutting down gracefully...`);
-
-    // Close HTTP server first
-    server.close(async () => {
-      console.log('Server closed');
-
-      // Close all database connections with error handling
-      try {
-        await databaseManager.closeAll();
-        console.log('Database connections closed');
-      } catch (err) {
-        console.error('Error closing database connections:', err);
-      }
-
-      process.exit(0);
-    });
-
-    // Force exit after 10 seconds if graceful shutdown hangs
-    setTimeout(() => {
-      console.error('Forced shutdown after timeout');
-      process.exit(1);
-    }, 10000);
-  };
-
-  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
+
+type ShutdownOptions = {
+  exit?: (code: number) => void;
+  setForceExitTimeout?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+};
+
+/**
+ * Gracefully shut down HTTP server and database connections.
+ *
+ * @param httpServer - HTTP server instance
+ * @param signal - Signal name (SIGTERM, SIGINT)
+ * @param options - Shutdown options for tests
+ * @returns void
+ */
+export function __testGracefulShutdown(
+  httpServer: { close: (cb: () => void) => void },
+  signal: string,
+  options: ShutdownOptions = {}
+): void {
+  const exit = options.exit ?? process.exit.bind(process);
+  const setForceExitTimeout = options.setForceExitTimeout ?? ((fn, ms) => setTimeout(fn, ms));
+
+  console.log(`${signal} received. Shutting down gracefully...`);
+
+  httpServer.close(async () => {
+    console.log('Server closed');
+
+    try {
+      await databaseManager.closeAll();
+      console.log('Database connections closed');
+    } catch (err) {
+      console.error('Error closing database connections:', err);
+    }
+
+    exit(0);
+  });
+
+  setForceExitTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    exit(1);
+  }, 10000);
+}
+
+/**
+ * Register SIGTERM/SIGINT handlers for graceful shutdown.
+ *
+ * @param httpServer - HTTP server instance
+ * @returns void
+ */
+export function __testRegisterGracefulShutdown(httpServer: { close: (cb: () => void) => void }): void {
+  if (typeof process !== 'undefined') {
+    process.on('SIGTERM', () => __testGracefulShutdown(httpServer, 'SIGTERM'));
+    process.on('SIGINT', () => __testGracefulShutdown(httpServer, 'SIGINT'));
+  }
+}
+
+let __testServeFactory: typeof serve = serve;
+
+/**
+ * Replace the HTTP server factory used by default startup (tests only).
+ *
+ * @param factory - Injectable serve implementation
+ * @returns void
+ */
+export function __testSetServeFactory(factory: typeof serve): void {
+  __testServeFactory = factory;
+}
+
+/**
+ * Start HTTP server and register graceful shutdown handlers.
+ *
+ * @param serveFn - Server factory
+ * @returns HTTP server instance
+ */
+export function __testStartHttpServer(serveFn: typeof serve = __testServeFactory) {
+  const httpServer = serveFn({
+    fetch: app.fetch,
+    port,
+    hostname: '::'
+  }, __testOnServerStarted);
+
+  __testRegisterGracefulShutdown(httpServer);
+  return httpServer;
+}
+
+/**
+ * Start HTTP server when startup is enabled.
+ *
+ * @param shouldStart - Whether startup hooks are active
+ * @param serveFn - Server factory
+ * @returns HTTP server instance or null
+ */
+export function __testStartHttpServerIfNeeded(
+  shouldStart: boolean = shouldStartServer,
+  serveFn: typeof serve = __testServeFactory
+) {
+  if (!shouldStart) return null;
+  return __testStartHttpServer(serveFn);
+}
+
+server = __testStartHttpServerIfNeeded();
+
+/**
+ * Replace the module-level Stripe client (for integration tests only).
+ *
+ * @param stripeClient - Mock or real Stripe instance
+ * @returns void
+ */
+export function setStripeForTests(stripeClient: Stripe | null): void {
+  stripe = stripeClient;
+}
+
+export {
+  app,
+  db,
+  config,
+  stripe,
+  csrfTokenStore,
+  loginAttemptStore,
+  logger,
+  isProd,
+  loadEnvFile,
+  loadLocalENV,
+  resolveEnvironmentVariables,
+  validateEnvironmentVariables,
+  escapeHtml,
+  validateEmail,
+  validatePassword,
+  validateName,
+  hashPassword,
+  verifyPassword,
+  needsRehash,
+  jwtSign,
+  jwtVerify,
+  tokenExpireTimestamp,
+  generateUUID,
+  evictOldestEntries,
+  generateCSRFToken,
+  csrfProtection,
+  isAccountLocked,
+  recordFailedLogin,
+  clearFailedLogins,
+  buildSubscriptionPatch,
+  resolveCustomerEmail,
+  applyUserPatch,
+  parseJsonBody,
+  generateToken,
+  authMiddleware,
+  setAuthCookies,
+  shouldStartServer
+};
