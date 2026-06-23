@@ -518,6 +518,18 @@ describe('PostgreSQLProvider', () => {
   });
 
   describe('executeTransaction', () => {
+    it('commits empty transaction arrays', async () => {
+      const pool = await provider.getDatabase('txn-empty', 'postgres://user:pass@localhost/txn-empty');
+      pool.setHandler(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      });
+      const result = await provider.executeTransaction(pool, [], Date.now());
+      assert.equal(result.success, true);
+      assert.equal(result.rowCount, 0);
+      assert.equal(pool._client.release.mock.calls.length, 1);
+    });
+
     it('commits operations on success', async () => {
       const pool = await provider.getDatabase('txn', 'postgres://user:pass@localhost/txn');
       pool.setHandler(async (sql) => {
@@ -529,6 +541,7 @@ describe('PostgreSQLProvider', () => {
       ], Date.now());
       assert.equal(result.success, true);
       assert.equal(result.data[0].rowCount, 1);
+      assert.equal(pool._client.release.mock.calls.length, 1);
     });
 
     it('rolls back and throws when an operation fails', async () => {
@@ -544,6 +557,56 @@ describe('PostgreSQLProvider', () => {
           { query: 'BAD', params: [] },
         ], Date.now()),
         /txn failed/
+      );
+      assert.ok(clientQueries.some((q) => q.sql === 'ROLLBACK'));
+      assert.equal(pool._client.release.mock.calls.length, 1);
+    });
+
+    it('releases client when begin fails', async () => {
+      const pool = await provider.getDatabase('txn-begin-fail', 'postgres://user:pass@localhost/txn-begin-fail');
+      pool.setHandler(async (sql) => {
+        if (sql === 'BEGIN') throw new Error('begin failed');
+        if (sql === 'ROLLBACK') return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 0 };
+      });
+      await assert.rejects(
+        () => provider.executeTransaction(pool, [
+          { query: 'INSERT INTO users VALUES ($1)', params: ['u1'] },
+        ], Date.now()),
+        /begin failed/
+      );
+      assert.equal(pool._client.release.mock.calls.length, 1);
+    });
+
+    it('releases client when rollback fails after operation error', async () => {
+      const pool = await provider.getDatabase('txn-rollback-fail', 'postgres://user:pass@localhost/txn-rollback-fail');
+      pool.setHandler(async (sql) => {
+        if (sql === 'BEGIN') return { rows: [], rowCount: 0 };
+        if (sql === 'ROLLBACK') throw new Error('rollback failed');
+        throw new Error('op failed');
+      });
+      await assert.rejects(
+        () => provider.executeTransaction(pool, [
+          { query: 'INSERT INTO users VALUES ($1)', params: ['u1'] },
+        ], Date.now()),
+        /op failed/
+      );
+      assert.equal(pool._client.release.mock.calls.length, 1);
+    });
+
+    it('releases client when commit fails after successful operations', async () => {
+      const pool = await provider.getDatabase('txn-commit-fail', 'postgres://user:pass@localhost/txn-commit-fail');
+      pool.setHandler(async (sql) => {
+        if (sql === 'BEGIN') return { rows: [], rowCount: 0 };
+        if (sql === 'COMMIT') throw new Error('commit failed');
+        if (sql === 'ROLLBACK') return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 1 };
+      });
+      await assert.rejects(
+        () => provider.executeTransaction(pool, [
+          { query: 'INSERT INTO users VALUES ($1)', params: ['u1'] },
+        ], Date.now()),
+        /commit failed/
       );
       assert.ok(clientQueries.some((q) => q.sql === 'ROLLBACK'));
       assert.equal(pool._client.release.mock.calls.length, 1);

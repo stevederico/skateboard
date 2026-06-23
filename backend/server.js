@@ -833,11 +833,18 @@ app.post("/api/payment", async (c) => {
 // ==== STATIC ROUTES ====
 app.get("/api/health", (c) => c.json({ status: "ok", timestamp: Date.now() }));
 
+/**
+ * Integration test route handler that throws intentionally (test env only).
+ *
+ * @returns {never}
+ */
+function __testIntegrationErrorHandler() {
+  throw new Error('Intentional integration test error');
+}
+
 // Integration test hook — route registered at module load (before matcher is built)
 if (process.env.NODE_ENV === 'test') {
-  app.get('/api/__integration_error_test__', () => {
-    throw new Error('Intentional integration test error');
-  });
+  app.get('/api/__integration_error_test__', __testIntegrationErrorHandler);
 }
 
 /**
@@ -1402,13 +1409,26 @@ export function __testRegisterGracefulShutdown(httpServer) {
   }
 }
 
+/** @type {typeof serve} */
+let __testServeFactory = serve;
+
+/**
+ * Replace the HTTP server factory used by default startup (tests only).
+ *
+ * @param {typeof serve} factory - Injectable serve implementation
+ * @returns {void}
+ */
+export function __testSetServeFactory(factory) {
+  __testServeFactory = factory;
+}
+
 /**
  * Start HTTP server and register graceful shutdown handlers
  *
- * @param {Function} [serveFn] - Server factory (defaults to @hono/node-server serve)
+ * @param {Function} [serveFn] - Server factory (defaults to injectable serve factory)
  * @returns {import('@hono/node-server').Server}
  */
-export function __testStartHttpServer(serveFn = serve) {
+export function __testStartHttpServer(serveFn = __testServeFactory) {
   const httpServer = serveFn({
     fetch: app.fetch,
     port,
@@ -1423,10 +1443,10 @@ export function __testStartHttpServer(serveFn = serve) {
  * Start HTTP server when startup is enabled
  *
  * @param {boolean} [shouldStart=shouldStartServer] - Whether startup hooks are active
- * @param {Function} [serveFn=serve] - Server factory
+ * @param {Function} [serveFn=__testServeFactory] - Server factory
  * @returns {import('@hono/node-server').Server|null}
  */
-export function __testStartHttpServerIfNeeded(shouldStart = shouldStartServer, serveFn = serve) {
+export function __testStartHttpServerIfNeeded(shouldStart = shouldStartServer, serveFn = __testServeFactory) {
   if (!shouldStart) return null;
   return __testStartHttpServer(serveFn);
 }
