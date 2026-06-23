@@ -7,15 +7,28 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { secureHeaders } from 'hono/secure-headers'
 import { cors } from 'hono/cors'
 import Stripe from "stripe";
-import { compare as legacyBcryptCompare } from "./vendor/legacy-bcrypt.js";
 import crypto from "crypto";
 
 import { databaseManager } from "./adapters/manager.ts";
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { readFile, mkdir, stat } from 'node:fs';
 import { promisify } from 'node:util';
 import type { BackendConfig, BoundDatabase, CsrfTokenEntry, DatabaseConfig, JwtPayload, Logger, Subscription, UserSetFields } from './types.ts';
+import { createLogger } from './lib/logger.ts';
+import { isProd, loadEnvFile, loadLocalENV, resolveEnvironmentVariables, validateEnvironmentVariables } from './lib/env.ts';
+import { escapeHtml, validateEmail, validatePassword, validateName } from './lib/validation.ts';
+import { evictOldestEntries } from './lib/store.ts';
+import {
+  TOKEN_EXPIRATION_DAYS,
+  hashPassword,
+  verifyPassword,
+  needsRehash,
+  tokenExpireTimestamp,
+  jwtSign,
+  jwtVerify,
+  generateUUID,
+} from './lib/auth.ts';
 
 /** Hono context environment: authMiddleware sets userID for downstream middleware/handlers. */
 type AppEnv = { Variables: { userID: string } };
@@ -69,83 +82,34 @@ export function __testResolvePort(env: NodeJS.ProcessEnv = process.env): number 
  */
 const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+/**
+ * Unreference a timer so it doesn't keep the process event loop alive.
+ *
+ * Lets background cleanup intervals run unconditionally (independent of
+ * whether this module is the entry script) without blocking process/test
+ * exit. Guards the call so test doubles that return a non-timer (e.g. a
+ * number) from setInterval are tolerated.
+ *
+ * @param timer - Return value of setInterval
+ * @returns void
+ */
+function unrefTimer(timer: unknown): void {
+  if (timer && typeof timer === 'object' && 'unref' in timer && typeof timer.unref === 'function') {
+    timer.unref();
+  }
+}
+
 // ==== SERVER CONFIG ====
 const port = __testResolvePort();
 
 // ==== STRUCTURED LOGGING ====
 // Defined early so all code can use it (no external dependencies)
-const logger: Logger = {
-  error: (message, meta = {}) => {
-    const logEntry = {
-      level: 'ERROR',
-      timestamp: new Date().toISOString(),
-      message,
-      ...meta
-    };
-    console.error(!isProd() ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
-  },
-
-  warn: (message, meta = {}) => {
-    const logEntry = {
-      level: 'WARN',
-      timestamp: new Date().toISOString(),
-      message,
-      ...meta
-    };
-    console.warn(!isProd() ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
-  },
-
-  info: (message, meta = {}) => {
-    const logEntry = {
-      level: 'INFO',
-      timestamp: new Date().toISOString(),
-      message,
-      ...meta
-    };
-    console.log(!isProd() ? JSON.stringify(logEntry, null, 2) : JSON.stringify(logEntry));
-  },
-
-  debug: (message, meta = {}) => {
-    if (isProd()) return;
-    const logEntry = {
-      level: 'DEBUG',
-      timestamp: new Date().toISOString(),
-      message,
-      ...meta
-    };
-    console.log(JSON.stringify(logEntry, null, 2));
-  }
-};
+const logger: Logger = createLogger(isProd);
 
 // ==== CSRF PROTECTION ====
 const csrfTokenStore = new Map<string, CsrfTokenEntry>(); // userID -> { token, timestamp }
 const CSRF_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 const CSRF_MAX_ENTRIES = 50000; // LRU eviction threshold
-
-/**
- * LRU eviction helper that removes oldest entries when over limit
- *
- * Prevents memory leaks in CSRF store by removing oldest entries based on
- * timestamp when store exceeds maxEntries threshold.
- *
- * @param store - Map to evict entries from
- * @param maxEntries - Maximum entries before eviction
- * @param getTimestamp - Function to extract timestamp from value
- */
-function evictOldestEntries<K, V>(store: Map<K, V>, maxEntries: number, getTimestamp: (value: V) => number): void {
-  if (store.size <= maxEntries) return;
-
-  // Convert to array and sort by timestamp
-  const entries = Array.from(store.entries())
-    .map(([key, value]) => ({ key, timestamp: getTimestamp(value) }))
-    .sort((a, b) => a.timestamp - b.timestamp);
-
-  // Remove oldest entries until under limit
-  const toRemove = store.size - maxEntries;
-  for (let i = 0; i < toRemove; i++) {
-    store.delete(entries[i].key);
-  }
-}
 
 /**
  * Generate cryptographically secure CSRF token
@@ -263,7 +227,7 @@ export function __testRunCsrfCleanup(): void {
  * @returns void
  */
 export function __testRegisterCsrfInterval(): void {
-  setInterval(__testRunCsrfCleanup, 60 * 60 * 1000);
+  unrefTimer(setInterval(__testRunCsrfCleanup, 60 * 60 * 1000));
 }
 
 /**
@@ -278,7 +242,12 @@ export function __testRegisterCsrfIntervalIfStarted(shouldStart: boolean = shoul
   }
 }
 
-__testRegisterCsrfIntervalIfStarted();
+// Register unconditionally (not gated on shouldStartServer): csrfTokenStore
+// capacity/expiry cleanup must run whenever this module is loaded — including
+// when imported by a wrapper/bootstrap rather than run as the entry script —
+// or the store would grow without bound. The timer is unref'd so it never
+// blocks process/test exit.
+__testRegisterCsrfInterval();
 
 // ==== ACCOUNT LOCKOUT ====
 const loginAttemptStore = new Map<string, { attempts: number; lockedUntil: number | null }>(); // email -> { attempts, lockedUntil }
@@ -374,7 +343,7 @@ export function __testRunLockoutCleanup(): void {
  * @returns void
  */
 export function __testRegisterLockoutInterval(): void {
-  setInterval(__testRunLockoutCleanup, 15 * 60 * 1000);
+  unrefTimer(setInterval(__testRunLockoutCleanup, 15 * 60 * 1000));
 }
 
 /**
@@ -389,7 +358,10 @@ export function __testRegisterLockoutIntervalIfStarted(shouldStart: boolean = sh
   }
 }
 
-__testRegisterLockoutIntervalIfStarted();
+// Register unconditionally (see CSRF interval note): loginAttemptStore
+// capacity/expiry cleanup must run on every module load, unref'd so it never
+// blocks process/test exit.
+__testRegisterLockoutInterval();
 
 /**
  * Register production hourly maintenance interval when running in production.
@@ -413,7 +385,7 @@ export function __testMaybeRegisterProdHourlyInterval(
  * @returns void
  */
 export function __testRegisterProdHourlyInterval(): void {
-  setInterval(__testRunProdHourlyTask, 60 * 60 * 1000);
+  unrefTimer(setInterval(__testRunProdHourlyTask, 60 * 60 * 1000));
 }
 
 /**
@@ -428,31 +400,9 @@ export function __testRunProdHourlyTask(): void {
 // ==== CONFIG & ENV ====
 // Environment setup - MUST happen before config loading
 if (!isProd()) {
-  loadLocalENV();
+  loadLocalENV({ logger });
 }
 __testMaybeRegisterProdHourlyInterval();
-
-/**
- * Resolve environment variable placeholders in configuration strings
- *
- * Replaces ${VAR_NAME} patterns with process.env values. Logs warning
- * and preserves placeholder if environment variable is undefined.
- *
- * @param str - String with ${VAR_NAME} placeholders
- * @returns String with placeholders replaced
- */
-function resolveEnvironmentVariables(str: string): string {
-  if (typeof str !== 'string') return str;
-
-  return str.replace(/\$\{([^}]+)\}/g, (match: string, varName: string) => {
-    const envValue = process.env[varName];
-    if (envValue === undefined) {
-      logger.warn('Environment variable not defined, using placeholder', { varName, placeholder: match });
-      return match; // Return the placeholder if env var is not found
-    }
-    return envValue;
-  });
-}
 
 /**
  * Validate the parsed config.json shape: a `database` object carrying string
@@ -491,7 +441,7 @@ export async function __testLoadApplicationConfig(): Promise<BackendConfig> {
       staticDir: rawConfig.staticDir || '../dist',
       database: {
         ...rawConfig.database,
-        connectionString: resolveEnvironmentVariables(rawConfig.database.connectionString)
+        connectionString: resolveEnvironmentVariables(rawConfig.database.connectionString, logger)
       }
     };
   } catch (err) {
@@ -512,49 +462,13 @@ let config: BackendConfig = await __testLoadApplicationConfig();
 const STRIPE_KEY = process.env.STRIPE_KEY;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-/**
- * Validate required environment variables are set
- *
- * Checks for STRIPE_KEY, STRIPE_ENDPOINT_SECRET, JWT_SECRET, and any
- * unresolved ${VAR} references in database config. Logs warnings for
- * missing variables but does not exit the process.
- *
- * @returns True if all required variables are present
- */
-function validateEnvironmentVariables(): boolean {
-  const missing = [];
-
-  if (!STRIPE_KEY) missing.push('STRIPE_KEY');
-  if (!process.env.STRIPE_ENDPOINT_SECRET) missing.push('STRIPE_ENDPOINT_SECRET');
-  if (!JWT_SECRET) missing.push('JWT_SECRET');
-
-  // Check for database environment variables that are referenced but not defined
-  if (typeof config.database.connectionString === 'string') {
-    const matches = config.database.connectionString.match(/\$\{([^}]+)\}/g);
-    if (matches) {
-      matches.forEach(match => {
-        const varName = match.slice(2, -1); // Remove ${ and }
-        if (!process.env[varName]) {
-          missing.push(`${varName} (referenced in database config)`);
-        }
-      });
-    }
-  }
-
-  if (missing.length > 0) {
-    logger.warn('Missing environment variables - server continuing with limited functionality', {
-      missing,
-      hint: 'Set DATABASE_URL, MONGODB_URL, POSTGRES_URL, STRIPE_KEY, JWT_SECRET for full functionality'
-    });
-
-    // Don't exit - let the server continue with warnings
-    return false;
-  }
-
-  return true;
-}
-
-const envValidationPassed = validateEnvironmentVariables();
+const envValidationPassed = validateEnvironmentVariables({
+  config,
+  stripeKey: STRIPE_KEY,
+  stripeEndpointSecret: process.env.STRIPE_ENDPOINT_SECRET,
+  jwtSecret: JWT_SECRET,
+  logger
+});
 
 if (envValidationPassed) {
   logger.info('Environment variables validated successfully');
@@ -723,143 +637,6 @@ export async function __testDevRequestLogMiddleware(
 
 app.use('*', __testDevRequestLogMiddleware);
 
-const tokenExpirationDays = 30;
-
-const scryptAsync = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
-const SCRYPT_KEYLEN = 64;
-const SCRYPT_SALTLEN = 16;
-
-/**
- * Hash password using node:crypto scrypt
- *
- * Format: `scrypt$<base64url salt>$<base64url key>`. New hashes always use
- * scrypt; legacy bcrypt hashes (prefix `$2`) are verified via the dispatch
- * in verifyPassword but never created.
- *
- * @async
- * @param password - Plain text password to hash
- * @returns Scrypt hash string
- */
-async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.randomBytes(SCRYPT_SALTLEN);
-  const key = await scryptAsync(password, salt, SCRYPT_KEYLEN);
-  return `scrypt$${salt.toString('base64url')}$${key.toString('base64url')}`;
-}
-
-/**
- * Verify password against stored hash (scrypt or legacy bcrypt)
- *
- * Dispatches on stored hash prefix: `scrypt$` → native scrypt verify;
- * `$2` → bcryptjs (legacy users predating the scrypt migration).
- *
- * @async
- * @param password - Plain text password to verify
- * @param stored - Stored hash (scrypt or bcrypt format)
- * @returns True if password matches stored hash
- */
-async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  if (typeof stored !== 'string') return false;
-  if (stored.startsWith('scrypt$')) {
-    const [, saltB64, keyB64] = stored.split('$');
-    const salt = Buffer.from(saltB64, 'base64url');
-    const expected = Buffer.from(keyB64, 'base64url');
-    const candidate = await scryptAsync(password, salt, SCRYPT_KEYLEN);
-    return expected.length === candidate.length && crypto.timingSafeEqual(expected, candidate);
-  }
-  if (stored.startsWith('$2')) {
-    return await legacyBcryptCompare(password, stored);
-  }
-  return false;
-}
-
-/**
- * Whether a stored hash should be migrated to scrypt on next successful login
- *
- * @param stored - Stored hash
- * @returns True if the hash is in legacy bcrypt format
- */
-function needsRehash(stored: string): boolean {
-  return typeof stored === 'string' && !stored.startsWith('scrypt$');
-}
-
-/**
- * Calculate JWT expiration timestamp
- *
- * @returns Unix timestamp 30 days in the future
- */
-function tokenExpireTimestamp(): number {
-  return Math.floor(Date.now() / 1000) + tokenExpirationDays * 24 * 60 * 60; // 30 days from now
-}
-
-/**
- * Sign an HS256 JWT using node:crypto HMAC-SHA256
- *
- * Produces a token byte-compatible with jsonwebtoken: header
- * {"alg":"HS256","typ":"JWT"} followed by the payload, joined and signed
- * over `base64url(header).base64url(payload)`.
- *
- * @param payload - Payload to encode (must include exp)
- * @param secret - HMAC signing secret
- * @returns Compact JWT string
- */
-function jwtSign(payload: JwtPayload, secret: string): string {
-  const head = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
-  return `${head}.${body}.${sig}`;
-}
-
-/**
- * Validate a decoded JWT body matches the expected payload shape.
- *
- * Checks the fields jwtVerify and authMiddleware read: `userID` (string) and
- * `exp` (number). Narrows unknown JSON before it is trusted as a JwtPayload.
- *
- * @param value - Decoded JSON value from the token body
- * @returns True if the value is a valid JwtPayload
- */
-function isJwtPayload(value: unknown): value is JwtPayload {
-  if (typeof value !== 'object' || value === null) return false;
-  return 'userID' in value && typeof value.userID === 'string'
-    && 'exp' in value && typeof value.exp === 'number';
-}
-
-/**
- * Verify an HS256 JWT and return its payload
- *
- * Compatible with tokens issued by jsonwebtoken (same algorithm, same secret).
- * Throws an Error with name === 'TokenExpiredError' for expired tokens, or a
- * generic Error for malformed/invalid signatures.
- *
- * @param token - JWT string to verify
- * @param secret - HMAC verification secret
- * @returns Decoded payload
- * @throws If token is malformed, signature invalid, or expired
- */
-function jwtVerify(token: string, secret: string): JwtPayload {
-  const parts = token.split('.');
-  if (parts.length !== 3) throw new Error('Invalid token');
-  const [head, body, sig] = parts;
-  if (!head || !body || !sig) throw new Error('Invalid token');
-  const expected = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
-  const sigBuf = Buffer.from(sig);
-  const expBuf = Buffer.from(expected);
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-    throw new Error('Invalid signature');
-  }
-  const decoded: unknown = JSON.parse(Buffer.from(body, 'base64url').toString());
-  if (!isJwtPayload(decoded)) {
-    throw new Error('Invalid token');
-  }
-  const payload = decoded;
-  if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
-    const err = new Error('Token expired');
-    err.name = 'TokenExpiredError';
-    throw err;
-  }
-  return payload;
-}
-
 /**
  * Generate JWT token for user authentication
  *
@@ -930,89 +707,6 @@ async function authMiddleware(c: Context<AppEnv>, next: Next) {
 }
 
 /**
- * Generate RFC 4122 compliant UUID v4
- *
- * Uses crypto.randomUUID() for cryptographically secure unique identifiers.
- *
- * @returns UUID string
- */
-function generateUUID(): string {
-  return crypto.randomUUID();
-}
-
-/**
- * Escape HTML special characters to prevent XSS attacks
- *
- * Replaces &, <, >, ", ', / with HTML entities. Returns original value
- * if not a string.
- *
- * @param text - Text to escape
- * @returns HTML-escaped text
- */
-const escapeHtml = (text: string): string => {
-  if (typeof text !== 'string') return text;
-  const map: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#x27;',
-    '/': '&#x2F;',
-  };
-  return text.replace(/[&<>"'/]/g, (char) => map[char]);
-};
-
-/**
- * Validate email address format and length
- *
- * RFC 5321 compliant validation with robust regex checking local part,
- * domain, and TLD. Max length 254 characters. Prevents consecutive dots
- * and leading/trailing hyphens.
- *
- * @param email - Email address to validate
- * @returns True if valid email format
- */
-const validateEmail = (email: unknown): email is string => {
-  if (!email || typeof email !== 'string') return false;
-  if (email.length > 254) return false; // RFC 5321
-
-  // More robust email validation:
-  // - Local part: letters, numbers, and common special chars (no consecutive dots)
-  // - Domain: letters, numbers, hyphens (no consecutive dots or leading/trailing hyphens)
-  // - TLD: 2-63 characters
-  const emailRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]*[a-zA-Z0-9])?@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,63}$/;
-  return emailRegex.test(email);
-};
-
-/**
- * Validate password length within bcrypt limits
- *
- * Enforces 6-72 character range (bcrypt's maximum is 72 bytes).
- *
- * @param password - Password to validate
- * @returns True if valid password length
- */
-const validatePassword = (password: unknown): password is string => {
-  if (!password || typeof password !== 'string') return false;
-  if (password.length < 6 || password.length > 72) return false; // bcrypt limit
-  return true;
-};
-
-/**
- * Validate name length and non-empty after trim
- *
- * Enforces 1-100 character range after trimming whitespace.
- *
- * @param name - Name to validate
- * @returns True if valid name
- */
-const validateName = (name: unknown): name is string => {
-  if (!name || typeof name !== 'string') return false;
-  if (name.trim().length === 0 || name.length > 100) return false;
-  return true;
-};
-
-/**
  * Set authentication cookies and generate CSRF token for user session
  *
  * Creates CSRF token, stores it in memory, and sets both JWT (HttpOnly) and
@@ -1033,7 +727,7 @@ function setAuthCookies(c: Context<AppEnv>, userID: string, jwtToken: string): s
     secure: isProd(),
     sameSite: 'Strict',
     path: '/',
-    maxAge: tokenExpirationDays * 24 * 60 * 60
+    maxAge: TOKEN_EXPIRATION_DAYS * 24 * 60 * 60
   });
 
   // Set CSRF token cookie (readable by frontend)
@@ -1819,79 +1513,6 @@ app.onError((err, c) => {
     ...(!isProd() && { stack: err.stack })
   }, 500);
 });
-
-// ==== UTILITY FUNCTIONS ====
-
-/**
- * Check if the server is running in production mode
- *
- * Reads the NODE_ENV environment variable. Returns true only when
- * NODE_ENV is explicitly set to "production".
- *
- * @returns True if NODE_ENV === "production"
- */
-function isProd(): boolean {
-  return process.env.NODE_ENV === 'production';
-}
-
-/**
- * Load environment variables from .env and optional .env.local file.
- *
- * Reads in two passes: backend/.env first (may be symlink to shared creds),
- * then backend/.env.local for project-specific overrides (wins on conflict).
- * Creates .env from .env.example if it doesn't exist. Only called in
- * non-production mode — Railway injects vars directly in prod.
- */
-function loadLocalENV(): void {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  const envFilePath = resolve(__dirname, './.env');
-  const envLocalPath = resolve(__dirname, './.env.local');
-  const envExamplePath = resolve(__dirname, './.env.example');
-
-  // Check if .env exists, if not create it from .env.example
-  try {
-    statSync(envFilePath);
-  } catch (err) {
-    try {
-      const exampleData = readFileSync(envExamplePath, 'utf8');
-      writeFileSync(envFilePath, exampleData);
-    } catch (exampleErr) {
-      logger.error('Failed to create .env from template', { error: errorMessage(exampleErr) });
-      return;
-    }
-  }
-
-  // Load .env (may be symlink to shared creds)
-  loadEnvFile(envFilePath);
-
-  // Load .env.local overrides (project-specific, optional)
-  loadEnvFile(envLocalPath);
-}
-
-/**
- * Parse a .env file and apply key=value pairs to process.env.
- * Skips blank lines and comments. Handles quoted values and values containing '='.
- * Silently skips if file doesn't exist.
- * @param filePath - Absolute path to the .env file
- */
-function loadEnvFile(filePath: string): void {
-  try {
-    const data = readFileSync(filePath, 'utf8');
-    for (let line of data.split(/\r?\n/)) {
-      if (!line || line.trim().startsWith('#')) continue;
-      let [key, ...valueParts] = line.split('=');
-      let value = valueParts.join('=');
-      if (key && value) {
-        key = key.trim();
-        value = value.trim().replace(/^["']|["']$/g, '');
-        process.env[key] = value;
-      }
-    }
-  } catch {
-    // File doesn't exist or unreadable — silent
-  }
-}
 
 // ==== SERVER STARTUP ====
 let server: ReturnType<typeof serve> | null = null;

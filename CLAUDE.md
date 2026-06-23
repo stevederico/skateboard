@@ -20,7 +20,7 @@ npm install-all        # Install all dependencies (root + workspace)
 
 **Testing:**
 ```bash
-npm run test           # Run all tests (node --test, backend workspace)
+npm run test           # Typecheck + backend (node --test) + frontend (vitest) + build-script tests
 npm run test:watch     # Watch mode for development
 ```
 
@@ -286,8 +286,9 @@ When a project uses `constants.json`, include a `design` block:
 
 ### Test Runner
 
-- **Node's built-in test runner** (`node --test`) is the standard — never use Jest, Mocha, or Jasmine; no test framework dependency
-- Backend tests run via the workspace: root `npm run test` typechecks, then delegates to `backend` (`node --test server.test.ts`)
+- **Backend and build-script tests** use Node's built-in test runner (`node --test`) — never Jest, Mocha, or Jasmine for those
+- **Frontend component tests** use **Vitest + jsdom + @testing-library/react** — Node's runner can't render React components without heavy scaffolding. Vitest config lives in `vite.config.ts` under the `test` key; the jsdom setup file is `src/test/setup.js`
+- Backend tests run via the workspace: root `npm run test` typechecks, then runs `test:backend` (`node --test`), `test:frontend` (`vitest run`), and `test:build` (`node --test`)
 - Use `npm run test` for CI; `npm run test:watch` for development
 
 ### What to Test

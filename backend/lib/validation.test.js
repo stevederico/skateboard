@@ -5,7 +5,7 @@ import {
   validateEmail,
   validatePassword,
   validateName,
-} from './validation.js';
+} from './validation.ts';
 
 describe('validation.js', () => {
   describe('escapeHtml', () => {
