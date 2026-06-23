@@ -14,6 +14,13 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+3.6.3
+
+  Reach adapter coverage 100%
+  Add server lifecycle tests
+  Add injectable serve factory
+  Refactor postgres transactions
+
 3.6.2
 
   Add comprehensive test suite

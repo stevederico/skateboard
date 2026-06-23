@@ -515,24 +515,25 @@ export class PostgreSQLProvider {
    */
   async executeTransaction(pool, operations, startTime) {
     const client = await pool.connect();
+    let transactionError;
 
     try {
       const results = [];
       await client.query('BEGIN');
-      
+
       for (const operation of operations) {
         const { query, params = [] } = operation;
         const result = await client.query(query, params);
-        
+
         results.push({
           query,
           rowCount: result.rowCount || 0,
           rows: result.rows || []
         });
       }
-      
+
       await client.query('COMMIT');
-      
+
       return {
         success: true,
         data: results,
@@ -543,10 +544,18 @@ export class PostgreSQLProvider {
         }
       };
     } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
+      transactionError = error;
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Rollback failures should not mask the original transaction error
+      }
     } finally {
       client.release();
+    }
+
+    if (transactionError) {
+      throw transactionError;
     }
   }
 

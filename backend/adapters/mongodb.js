@@ -457,8 +457,6 @@ export class MongoDBProvider {
           dbType: 'mongodb'
         }
       };
-    } catch (error) {
-      throw error;
     } finally {
       await session.endSession();
     }

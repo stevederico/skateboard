@@ -537,6 +537,14 @@ describe('MongoDBProvider', () => {
   describe('executeTransaction', () => {
     it('runs supported operations inside a session transaction', async () => {
       const db = await provider.getDatabase('txn', 'mongodb://localhost/txn');
+      let sessionRef;
+      db.client.startSession.mock.mockImplementation(() => {
+        sessionRef = {
+          withTransaction: mock.fn(async (fn) => fn()),
+          endSession: mock.fn(async () => {}),
+        };
+        return sessionRef;
+      });
       const result = await provider.executeTransaction(db, [
         { collection: 'Users', operation: 'insertone', query: { _id: 'txn-1' } },
         { collection: 'Users', operation: 'updateone', query: { _id: 'txn-1' }, update: { $set: { name: 'Txn' } } },
@@ -545,6 +553,7 @@ describe('MongoDBProvider', () => {
       assert.equal(result.success, true);
       assert.equal(result.data.length, 3);
       assert.equal(db.client.startSession.mock.calls.length, 1);
+      assert.equal(sessionRef.endSession.mock.calls.length, 1);
     });
 
     it('returns cached database without reconnecting', async () => {

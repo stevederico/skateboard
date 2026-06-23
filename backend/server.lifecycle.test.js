@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { mkdir, rm, writeFile, rename, readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { serve } from '@hono/node-server';
 import { databaseManager } from './adapters/manager.js';
 
 process.env.SKIP_SERVER_START = '1';
@@ -55,6 +56,7 @@ const {
   __testDevRequestLogMiddleware,
   __testStartHttpServer,
   __testStartHttpServerIfNeeded,
+  __testSetServeFactory,
   __testInitializeStripe,
   __testSanitizeUserUpdateValue,
   __testResolveUsage,
@@ -418,6 +420,32 @@ describe('graceful shutdown hooks', () => {
     }
   });
 
+  it('invokes default force-exit timeout callback', async () => {
+    const exits = [];
+    const errors = [];
+    const originalExit = process.exit;
+    const originalError = console.error;
+    const originalSetTimeout = globalThis.setTimeout;
+    process.exit = (code) => { exits.push(code); };
+    console.error = (...args) => errors.push(args.join(' '));
+    globalThis.setTimeout = (fn) => {
+      fn();
+      return 1;
+    };
+    try {
+      __testGracefulShutdown({ close: (cb) => { void cb(); } }, 'SIGTERM');
+      await new Promise((resolve) => queueMicrotask(resolve));
+      await new Promise((resolve) => queueMicrotask(resolve));
+      assert.ok(exits.includes(0));
+      assert.ok(exits.includes(1));
+      assert.ok(errors.some((line) => line.includes('Forced shutdown after timeout')));
+    } finally {
+      process.exit = originalExit;
+      console.error = originalError;
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
+
   it('forces exit when graceful shutdown times out', () => {
     const exits = [];
     const errors = [];
@@ -477,6 +505,22 @@ describe('graceful shutdown hooks', () => {
       databaseManager.closeAll = originalCloseAll;
       console.error = originalError;
     }
+  });
+
+  it('awaits async close callback during shutdown', async () => {
+    let closeSettled = false;
+    const mockServer = {
+      close: async (cb) => {
+        await cb();
+        closeSettled = true;
+      },
+    };
+    __testGracefulShutdown(mockServer, 'SIGTERM', {
+      exit: () => {},
+      setForceExitTimeout: () => {},
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(closeSettled, true);
   });
 
   it('closes server and database connections', async () => {
@@ -712,6 +756,20 @@ describe('signin edge cases', () => {
     assert.equal(res.status, 500);
     db.findAuth = originalFindAuth;
   });
+
+  it('rejects signin when password is missing or not a string', async () => {
+    const missing = await request('POST', '/api/signin', {
+      body: { email: TEST_USER.email },
+    });
+    assert.equal(missing.status, 400);
+    assert.equal(missing.json.error, 'Invalid credentials');
+
+    const numeric = await request('POST', '/api/signin', {
+      body: { email: TEST_USER.email, password: 12345 },
+    });
+    assert.equal(numeric.status, 400);
+    assert.equal(numeric.json.error, 'Invalid credentials');
+  });
 });
 
 describe('signout edge cases', () => {
@@ -812,6 +870,26 @@ describe('POST /api/usage edge cases', () => {
     });
     assert.equal(res.status, 500);
     db.findUser = originalFindUser;
+  });
+
+  it('rejects invalid usage operations', async () => {
+    const { token } = await signupSession();
+    const res = await request('POST', '/api/usage', {
+      cookies: `token=${token}`,
+      body: { operation: 'bogus' },
+    });
+    assert.equal(res.status, 400);
+    assert.match(res.json.error, /Invalid operation/);
+  });
+
+  it('rejects usage requests with a missing operation', async () => {
+    const { token } = await signupSession();
+    const res = await request('POST', '/api/usage', {
+      cookies: `token=${token}`,
+      body: {},
+    });
+    assert.equal(res.status, 400);
+    assert.match(res.json.error, /Invalid operation/);
   });
 });
 
@@ -1165,6 +1243,20 @@ describe('remaining server branches', () => {
     assert.match(res.json.error, /Missing customerID/);
   });
 
+  it('rejects portal customerID that does not match subscription', async () => {
+    const { token, csrfToken, userId } = await signupSession();
+    await db.updateUser({ _id: userId }, {
+      $set: { subscription: { stripeID: 'cus_mine', expires: null, status: 'active' } },
+    });
+    const res = await request('POST', '/api/portal', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': csrfToken },
+      body: { customerID: 'cus_other' },
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.json.error, 'Unauthorized customerID');
+  });
+
   it('allows portal access when user has no subscription stripeID', async () => {
     const { token, csrfToken } = await signupSession();
     setStripeForTests({
@@ -1206,6 +1298,43 @@ describe('evictOldestEntries integration', () => {
   });
 });
 
+describe('exported auth helper functions', () => {
+  it('invokes lockout helpers directly', () => {
+    const email = 'helpers@example.com';
+    recordFailedLogin(email);
+    assert.equal(isAccountLocked(email).locked, false);
+    clearFailedLogins(email);
+    assert.equal(loginAttemptStore.has(email), false);
+  });
+});
+
+describe('db facade wrappers', () => {
+  it('invokes every database facade method', async () => {
+    const userId = generateUUID();
+    const email = 'facade@example.com';
+    await db.insertUser({ _id: userId, email, name: 'Facade', created_at: Date.now() });
+    await db.insertAuth({ email, password: 'hash', userID: userId });
+    const projected = await db.findUser({ _id: userId }, { name: 1 });
+    assert.equal(projected.name, 'Facade');
+    assert.ok(await db.findAuth({ email }));
+    await db.updateUser({ _id: userId }, { $set: { name: 'Updated Facade' } });
+    await db.updateAuth({ email }, { password: 'hash2' });
+    assert.equal(await db.findWebhookEvent('evt_facade_missing') ?? null, null);
+    await db.insertWebhookEvent('evt_facade', 'test.event', Date.now());
+    const queryResult = await db.executeQuery({ query: 'SELECT COUNT(*) AS count FROM Users WHERE _id = ?', params: [userId] });
+    assert.equal(queryResult.success, true);
+  });
+});
+
+describe('SPA fallback branches', () => {
+  it('returns 404 for asset-like paths and unknown API routes', async () => {
+    const asset = await request('GET', '/assets/missing-bundle.js');
+    assert.equal(asset.status, 404);
+    const api = await request('GET', '/api/not-a-real-endpoint');
+    assert.equal(api.status, 404);
+  });
+});
+
 describe('server registration hooks', () => {
   it('registers interval timers when startup is enabled', () => {
     const intervals = [];
@@ -1225,6 +1354,28 @@ describe('server registration hooks', () => {
       assert.equal(intervals.length, 6);
       __testRegisterCsrfIntervalIfStarted(false);
       assert.equal(intervals.length, 6);
+    } finally {
+      globalThis.setInterval = original;
+    }
+  });
+
+  it('invokes registered interval callbacks directly', () => {
+    const intervals = [];
+    const original = globalThis.setInterval;
+    globalThis.setInterval = (fn) => {
+      intervals.push(fn);
+      return intervals.length;
+    };
+    try {
+      __testRegisterCsrfInterval();
+      __testRegisterLockoutInterval();
+      __testRegisterProdHourlyInterval();
+      assert.doesNotThrow(() => {
+        for (const fn of intervals) {
+          fn();
+        }
+      });
+      assert.equal(intervals.length, 3);
     } finally {
       globalThis.setInterval = original;
     }
@@ -1285,7 +1436,49 @@ describe('server registration hooks', () => {
     assert.ok(httpServer);
   });
 
+  it('sets and resets the injectable serve factory', () => {
+    let called = false;
+    const sentinel = (options, onListen) => {
+      called = true;
+      onListen({ port: 8003 });
+      return { close: () => {} };
+    };
+    try {
+      __testSetServeFactory(sentinel);
+      __testStartHttpServer();
+      assert.ok(called);
+      const httpServer = __testStartHttpServerIfNeeded(true);
+      assert.ok(httpServer);
+    } finally {
+      __testSetServeFactory(serve);
+    }
+    assert.equal(__testStartHttpServerIfNeeded(false), null);
+  });
+
+  it('starts HTTP server with default serve factory parameter', () => {
+    let captured = false;
+    const mockServe = (options, onListen) => {
+      captured = true;
+      onListen({ port: 8002 });
+      return { close: () => {} };
+    };
+    try {
+      __testSetServeFactory(mockServe);
+      const httpServer = __testStartHttpServer();
+      assert.ok(captured);
+      assert.ok(httpServer);
+    } finally {
+      __testSetServeFactory(serve);
+    }
+  });
+
   it('initializes stripe as disabled when key is missing', () => {
     assert.equal(__testInitializeStripe(undefined), null);
+  });
+
+  it('initializes stripe client when key is provided', () => {
+    const client = __testInitializeStripe('sk_test_initialize');
+    assert.ok(client);
+    assert.equal(typeof client.webhooks, 'object');
   });
 });
