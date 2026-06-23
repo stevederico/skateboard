@@ -721,7 +721,11 @@ export class PostgreSQLProvider implements DatabaseProvider<PoolLike> {
         }
       };
     } catch (error) {
-      await client.query('ROLLBACK');
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Rollback failures should not mask the original transaction error
+      }
       throw error;
     } finally {
       client.release();

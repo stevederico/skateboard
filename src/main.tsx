@@ -37,7 +37,7 @@ import CalendarTestView from './components/CalendarTestView';
  *
  * @returns Layout with command menu
  */
-function AppLayout() {
+export function AppLayout() {
   return (
     <>
       <CommandMenu />
@@ -52,7 +52,7 @@ function AppLayout() {
  * Maps route paths to view components. Routes are relative to root (no leading slash).
  * The shell handles route registration, navigation, and layout.
  */
-const appRoutes: AppRoute[] = [
+export const appRoutes: AppRoute[] = [
   { path: 'home', element: <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner /></div>}><HomeView /></Suspense> },
   { path: 'chat', element: <ChatView /> },
   { path: 'analytics', element: <BlankView title="Analytics" description="Analytics will appear here once you have activity." buttonTitle="View Reports" /> },

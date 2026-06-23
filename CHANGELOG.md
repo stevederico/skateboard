@@ -1,3 +1,9 @@
+3.16.0
+
+  Merge test coverage suite
+  Add vitest frontend tests
+  Add adapter coverage tests
+
 3.15.0
 
   Pin skateboard-ui 4.6.0
