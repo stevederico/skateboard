@@ -546,6 +546,22 @@ describe('PostgreSQLProvider', () => {
         /txn failed/
       );
       assert.ok(clientQueries.some((q) => q.sql === 'ROLLBACK'));
+      assert.equal(pool._client.release.mock.calls.length, 1);
+    });
+
+    it('uses fallbacks when transaction operation results omit rowCount and rows', async () => {
+      const pool = await provider.getDatabase('txn-fallback', 'postgres://user:pass@localhost/txn-fallback');
+      pool.setHandler(async (sql) => {
+        if (sql === 'BEGIN' || sql === 'COMMIT') return { rows: [], rowCount: 0 };
+        return {};
+      });
+      const result = await provider.executeTransaction(pool, [
+        { query: 'INSERT INTO users VALUES ($1)' },
+      ], Date.now());
+      assert.equal(result.success, true);
+      assert.equal(result.data[0].rowCount, 0);
+      assert.deepEqual(result.data[0].rows, []);
+      assert.equal(pool._client.release.mock.calls.length, 1);
     });
   });
 

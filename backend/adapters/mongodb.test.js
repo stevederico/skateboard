@@ -429,6 +429,29 @@ describe('MongoDBProvider', () => {
       assert.equal(updateMany.rowCount, 0);
     });
 
+    it('uses zero fallback when deletemany omits deletedCount', async () => {
+      db.collection('Users').deleteMany.mock.mockImplementation(async () => ({}));
+      const result = await provider.execute(db, {
+        collection: 'Users',
+        operation: 'deletemany',
+        query: { stale: true },
+      });
+      assert.equal(result.success, true);
+      assert.equal(result.rowCount, 0);
+      assert.equal(result.data.deletedCount, undefined);
+    });
+
+    it('uses truthy deletedCount for deletemany rowCount', async () => {
+      db.collection('Users').deleteMany.mock.mockImplementation(async () => ({ deletedCount: 3 }));
+      const result = await provider.execute(db, {
+        collection: 'Users',
+        operation: 'deletemany',
+        query: { stale: true },
+      });
+      assert.equal(result.success, true);
+      assert.equal(result.rowCount, 3);
+    });
+
     it('uses zero fallbacks when modification counts are missing', async () => {
       db.collection('Users').insertOne.mock.mockImplementation(async () => ({ insertedId: 'x' }));
       const insert = await provider.execute(db, {
@@ -531,14 +554,42 @@ describe('MongoDBProvider', () => {
       assert.equal(mongoClients.length, 1);
     });
 
-    it('throws for unsupported transaction operations', async () => {
+    it('ends session when withTransaction throws before operations run', async () => {
+      const db = await provider.getDatabase('txn-outer-fail', 'mongodb://localhost/txn-outer-fail');
+      let sessionRef;
+      db.client.startSession.mock.mockImplementation(() => {
+        sessionRef = {
+          withTransaction: mock.fn(async () => { throw new Error('outer txn failed'); }),
+          endSession: mock.fn(async () => {}),
+        };
+        return sessionRef;
+      });
+      await assert.rejects(
+        () => provider.executeTransaction(db, [
+          { collection: 'Users', operation: 'insertone', query: { _id: 'x' } },
+        ], Date.now()),
+        /outer txn failed/
+      );
+      assert.equal(sessionRef.endSession.mock.calls.length, 1);
+    });
+
+    it('throws for unsupported transaction operations and ends the session', async () => {
       const db = await provider.getDatabase('txn-bad', 'mongodb://localhost/txn-bad');
+      let sessionRef;
+      db.client.startSession.mock.mockImplementation(() => {
+        sessionRef = {
+          withTransaction: mock.fn(async (fn) => fn()),
+          endSession: mock.fn(async () => {}),
+        };
+        return sessionRef;
+      });
       await assert.rejects(
         () => provider.executeTransaction(db, [
           { collection: 'Users', operation: 'find', query: {} },
         ], Date.now()),
         /Transaction operation find not supported/
       );
+      assert.equal(sessionRef.endSession.mock.calls.length, 1);
     });
   });
 
