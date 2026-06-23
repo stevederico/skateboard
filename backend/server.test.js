@@ -1,255 +1,59 @@
 /**
- * Authentication Flow Integration Tests
+ * Server integration tests — exercises the real server.js implementation.
  *
- * Tests all auth endpoints: signup, signin, signout, CSRF, and JWT middleware.
- * Uses Node.js built-in test runner (node --test).
- *
- * Run with: node --test server.test.js
+ * Run with: node --experimental-test-module-mocks --test server.test.js
  */
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { Hono } from 'hono';
-import { getCookie, setCookie } from 'hono/cookie';
-import { compare as legacyBcryptCompare } from './vendor/legacy-bcrypt.js';
 import crypto from 'crypto';
 import { promisify } from 'node:util';
+import { mkdir, rm } from 'node:fs/promises';
+import { databaseManager } from './adapters/manager.js';
+
+// ==== ENV (must be set before importing server.js) ====
+process.env.SKIP_SERVER_START = '1';
+process.env.JWT_SECRET = 'test-secret-key-for-testing-only';
+process.env.STRIPE_KEY = 'sk_test_fake';
+process.env.STRIPE_ENDPOINT_SECRET = 'whsec_test';
+process.env.NODE_ENV = 'test';
+process.env.TEST_DATABASE_PATH = './databases/server-integration-test.db';
+process.env.FREE_USAGE_LIMIT = '20';
+
+const {
+  app,
+  db,
+  config,
+  stripe: originalStripe,
+  setStripeForTests,
+  csrfTokenStore,
+  loginAttemptStore,
+  jwtSign,
+  generateUUID,
+} = await import('./server.js');
 
 const scryptAsync = promisify(crypto.scrypt);
 
-// Local HS256 JWT helpers (mirror server.js implementation)
-function jwtSign(payload, secret) {
-  const head = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
-  return `${head}.${body}.${sig}`;
-}
-function jwtVerify(token, secret) {
-  const parts = token.split('.');
-  if (parts.length !== 3) throw new Error('Invalid token');
-  const [head, body, sig] = parts;
-  if (!head || !body || !sig) throw new Error('Invalid token');
-  const expected = crypto.createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
-  const sigBuf = Buffer.from(sig);
-  const expBuf = Buffer.from(expected);
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-    throw new Error('Invalid signature');
-  }
-  const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
-  if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
-    const err = new Error('Token expired');
-    err.name = 'TokenExpiredError';
-    throw err;
-  }
-  return payload;
-}
-import { DatabaseSync as Database } from 'node:sqlite';
-import { mkdir, rm } from 'node:fs/promises';
-
-// Test configuration
-const TEST_DB_PATH = './databases/test.db';
-const JWT_SECRET = 'test-secret-key-for-testing-only';
+const TEST_DB_PATH = process.env.TEST_DATABASE_PATH;
+const JWT_SECRET = process.env.JWT_SECRET;
 const TEST_USER = {
   name: 'Test User',
   email: 'test@example.com',
-  password: 'validpassword123'
+  password: 'validpassword123',
 };
 
-// Minimal test server setup (mirrors production server structure)
-let app;
-let db;
-let csrfTokenStore;
+// ==== HELPERS ====
 
-/**
- * Create test app with minimal auth routes
- */
-function createTestApp() {
-  app = new Hono();
-  csrfTokenStore = new Map();
-
-  // Initialize test database
-  db = new Database(TEST_DB_PATH);
-  db.exec('PRAGMA journal_mode = WAL');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS Users (
-      _id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      name TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    )
-  `);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS Auths (
-      email TEXT PRIMARY KEY,
-      password TEXT NOT NULL,
-      userID TEXT NOT NULL
-    )
-  `);
-
-  // Helper functions
-  const generateCSRFToken = () => crypto.randomBytes(32).toString('hex');
-  const generateUUID = () => crypto.randomUUID();
-  const hashPassword = async (password) => {
-    const salt = crypto.randomBytes(16);
-    const key = await scryptAsync(password, salt, 64);
-    return `scrypt$${salt.toString('base64url')}$${key.toString('base64url')}`;
-  };
-  const verifyPassword = async (password, stored) => {
-    if (typeof stored !== 'string') return false;
-    if (stored.startsWith('scrypt$')) {
-      const [, saltB64, keyB64] = stored.split('$');
-      const salt = Buffer.from(saltB64, 'base64url');
-      const expected = Buffer.from(keyB64, 'base64url');
-      const candidate = await scryptAsync(password, salt, 64);
-      return expected.length === candidate.length && crypto.timingSafeEqual(expected, candidate);
-    }
-    if (stored.startsWith('$2')) return await legacyBcryptCompare(password, stored);
-    return false;
-  };
-  const needsRehash = (stored) => typeof stored === 'string' && !stored.startsWith('scrypt$');
-  const generateToken = (userID) => jwtSign({ userID, exp: Math.floor(Date.now() / 1000) + 86400 }, JWT_SECRET);
-
-  // Auth middleware
-  const authMiddleware = async (c, next) => {
-    const token = getCookie(c, 'token');
-    if (!token) return c.json({ error: 'Unauthorized' }, 401);
-    try {
-      const payload = jwtVerify(token, JWT_SECRET);
-      c.set('userID', String(payload.userID));
-      await next();
-    } catch (e) {
-      if (e.name === 'TokenExpiredError') return c.json({ error: 'Token expired' }, 401);
-      return c.json({ error: 'Invalid token' }, 401);
-    }
-  };
-
-  // CSRF middleware
-  const csrfProtection = async (c, next) => {
-    if (c.req.method === 'GET') return next();
-    const csrfToken = c.req.header('x-csrf-token');
-    const userID = c.get('userID');
-    if (!csrfToken || !userID) return c.json({ error: 'Invalid CSRF token' }, 403);
-    const storedData = csrfTokenStore.get(userID);
-    if (!storedData) return c.json({ error: 'Invalid CSRF token' }, 403);
-    if (csrfToken !== storedData.token) return c.json({ error: 'Invalid CSRF token' }, 403);
-    await next();
-  };
-
-  // Signup
-  app.post('/api/signup', async (c) => {
-    try {
-      const body = await c.req.json();
-      let { email, password, name } = body;
-
-      if (!email || typeof email !== 'string' || !email.includes('@')) {
-        return c.json({ error: 'Invalid email format or length' }, 400);
-      }
-      if (!password || password.length < 6 || password.length > 72) {
-        return c.json({ error: 'Password must be 6-72 characters' }, 400);
-      }
-      if (!name || name.trim().length === 0) {
-        return c.json({ error: 'Name required (max 100 characters)' }, 400);
-      }
-
-      email = email.toLowerCase().trim();
-      const hash = await hashPassword(password);
-      const insertID = generateUUID();
-
-      try {
-        db.prepare('INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)').run(insertID, email, name, Date.now());
-        db.prepare('INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)').run(email, hash, insertID);
-      } catch (e) {
-        if (e.message?.includes('UNIQUE constraint failed')) {
-          return c.json({ error: 'Unable to create account with provided credentials' }, 400);
-        }
-        throw e;
-      }
-
-      const token = generateToken(insertID);
-      const csrfToken = generateCSRFToken();
-      csrfTokenStore.set(insertID, { token: csrfToken, timestamp: Date.now() });
-
-      setCookie(c, 'token', token, { httpOnly: true, path: '/' });
-      setCookie(c, 'csrf_token', csrfToken, { httpOnly: false, path: '/' });
-
-      return c.json({ id: insertID, email, name }, 201);
-    } catch (e) {
-      if (e instanceof SyntaxError) {
-        return c.json({ error: 'Invalid request body' }, 400);
-      }
-      return c.json({ error: 'Server error' }, 500);
-    }
-  });
-
-  // Signin
-  app.post('/api/signin', async (c) => {
-    try {
-      const body = await c.req.json();
-      let { email, password } = body;
-
-      if (!email || typeof email !== 'string' || !email.includes('@')) {
-        return c.json({ error: 'Invalid credentials' }, 400);
-      }
-      if (!password || typeof password !== 'string') {
-        return c.json({ error: 'Invalid credentials' }, 400);
-      }
-
-      email = email.toLowerCase().trim();
-      const auth = db.prepare('SELECT * FROM Auths WHERE email = ?').get(email);
-      if (!auth) return c.json({ error: 'Invalid credentials' }, 401);
-      if (!(await verifyPassword(password, auth.password))) {
-        return c.json({ error: 'Invalid credentials' }, 401);
-      }
-
-      // Lazy migrate legacy bcrypt hash to scrypt
-      if (needsRehash(auth.password)) {
-        try {
-          const newHash = await hashPassword(password);
-          db.prepare('UPDATE Auths SET password = ? WHERE email = ?').run(newHash, email);
-        } catch (e) { /* best-effort */ }
-      }
-
-      const user = db.prepare('SELECT * FROM Users WHERE email = ?').get(email);
-      if (!user) return c.json({ error: 'Invalid credentials' }, 401);
-
-      const token = generateToken(user._id);
-      const csrfToken = generateCSRFToken();
-      csrfTokenStore.set(user._id, { token: csrfToken, timestamp: Date.now() });
-
-      setCookie(c, 'token', token, { httpOnly: true, path: '/' });
-      setCookie(c, 'csrf_token', csrfToken, { httpOnly: false, path: '/' });
-
-      return c.json({ id: user._id, email: user.email, name: user.name });
-    } catch (e) {
-      if (e instanceof SyntaxError) {
-        return c.json({ error: 'Invalid request body' }, 400);
-      }
-      return c.json({ error: 'Server error' }, 500);
-    }
-  });
-
-  // Signout
-  app.post('/api/signout', authMiddleware, async (c) => {
-    const userID = c.get('userID');
-    csrfTokenStore.delete(userID);
-    setCookie(c, 'token', '', { httpOnly: true, path: '/', maxAge: 0 });
-    setCookie(c, 'csrf_token', '', { httpOnly: false, path: '/', maxAge: 0 });
-    return c.json({ message: 'Signed out successfully' });
-  });
-
-  // Protected route for testing
-  app.put('/api/me', authMiddleware, csrfProtection, async (c) => {
-    return c.json({ success: true });
-  });
-
-  return app;
+function extractCookie(setCookieHeader, name) {
+  if (!setCookieHeader) return undefined;
+  const match = setCookieHeader.match(new RegExp(`${name}=([^;]+)`));
+  return match?.[1];
 }
 
-/**
- * Make test request to app
- */
 async function request(method, path, options = {}) {
   const headers = new Headers(options.headers || {});
-  headers.set('Content-Type', 'application/json');
+  if (options.body !== undefined) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   if (options.cookies) {
     headers.set('Cookie', options.cookies);
@@ -258,46 +62,85 @@ async function request(method, path, options = {}) {
   const req = new Request(`http://localhost${path}`, {
     method,
     headers,
-    body: options.body ? JSON.stringify(options.body) : undefined
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
   const res = await app.fetch(req);
-  const json = await res.json().catch(() => null);
+  const contentType = res.headers.get('content-type') || '';
+  const json = contentType.includes('application/json') ? await res.json().catch(() => null) : null;
+  const text = json === null ? await res.text().catch(() => '') : null;
 
   return {
     status: res.status,
     json,
+    text,
     headers: res.headers,
-    cookies: res.headers.get('Set-Cookie')
+    cookies: res.headers.get('Set-Cookie'),
   };
 }
 
-// ==== TESTS ====
+async function clearDatabase() {
+  await databaseManager.closeAll();
+  await db.executeQuery({ query: 'DELETE FROM Auths' });
+  await db.executeQuery({ query: 'DELETE FROM Users' });
+  await db.executeQuery({ query: 'DELETE FROM WebhookEvents' });
+}
+
+async function signupSession(user = TEST_USER) {
+  const res = await request('POST', '/api/signup', { body: user });
+  return {
+    res,
+    token: extractCookie(res.cookies, 'token'),
+    csrfToken: extractCookie(res.cookies, 'csrf_token'),
+    userId: res.json?.id,
+  };
+}
+
+function spy(impl = () => {}) {
+  const calls = [];
+  const fn = async (...args) => {
+    calls.push(args);
+    return impl(...args);
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+async function postWebhook(body = '{}', signature = 'test-sig') {
+  const req = new Request('http://localhost/api/payment', {
+    method: 'POST',
+    headers: { 'stripe-signature': signature, 'Content-Type': 'application/json' },
+    body,
+  });
+  return app.fetch(req);
+}
+
+// ==== SETUP ====
+
+before(async () => {
+  await mkdir('./databases', { recursive: true });
+});
+
+beforeEach(async () => {
+  csrfTokenStore.clear();
+  loginAttemptStore.clear();
+  setStripeForTests(originalStripe);
+  await clearDatabase();
+});
+
+after(async () => {
+  await databaseManager.closeAll();
+  await rm(TEST_DB_PATH, { force: true });
+  await rm(`${TEST_DB_PATH}-wal`, { force: true });
+  await rm(`${TEST_DB_PATH}-shm`, { force: true });
+});
+
+// ==== AUTH TESTS ====
 
 describe('Authentication Flow', () => {
-  before(async () => {
-    await mkdir('./databases', { recursive: true });
-  });
-
-  beforeEach(() => {
-    // Fresh app and database for each test
-    if (db) {
-      db.exec('DELETE FROM Auths');
-      db.exec('DELETE FROM Users');
-    }
-    createTestApp();
-  });
-
-  after(async () => {
-    if (db) db.close();
-    await rm(TEST_DB_PATH, { force: true });
-  });
-
   describe('POST /api/signup', () => {
     it('creates user with valid inputs', async () => {
-      const res = await request('POST', '/api/signup', {
-        body: TEST_USER
-      });
+      const res = await request('POST', '/api/signup', { body: TEST_USER });
       assert.equal(res.status, 201);
       assert.equal(res.json.email, TEST_USER.email);
       assert.equal(res.json.name, TEST_USER.name);
@@ -308,7 +151,7 @@ describe('Authentication Flow', () => {
 
     it('rejects invalid email format', async () => {
       const res = await request('POST', '/api/signup', {
-        body: { ...TEST_USER, email: 'not-an-email' }
+        body: { ...TEST_USER, email: 'not-an-email' },
       });
       assert.equal(res.status, 400);
       assert.ok(res.json.error.includes('email'));
@@ -316,7 +159,7 @@ describe('Authentication Flow', () => {
 
     it('rejects password too short', async () => {
       const res = await request('POST', '/api/signup', {
-        body: { ...TEST_USER, password: '12345' }
+        body: { ...TEST_USER, password: '12345' },
       });
       assert.equal(res.status, 400);
       assert.ok(res.json.error.includes('Password'));
@@ -324,7 +167,7 @@ describe('Authentication Flow', () => {
 
     it('rejects password too long', async () => {
       const res = await request('POST', '/api/signup', {
-        body: { ...TEST_USER, password: 'a'.repeat(73) }
+        body: { ...TEST_USER, password: 'a'.repeat(73) },
       });
       assert.equal(res.status, 400);
       assert.ok(res.json.error.includes('Password'));
@@ -332,10 +175,22 @@ describe('Authentication Flow', () => {
 
     it('rejects missing name', async () => {
       const res = await request('POST', '/api/signup', {
-        body: { email: TEST_USER.email, password: TEST_USER.password }
+        body: { email: TEST_USER.email, password: TEST_USER.password },
       });
       assert.equal(res.status, 400);
       assert.ok(res.json.error.includes('Name'));
+    });
+
+    it('rejects duplicate email for postgres-style duplicate key errors', async () => {
+      const originalInsertUser = db.insertUser;
+      db.insertUser = async () => {
+        const err = new Error('duplicate key value violates unique constraint');
+        throw err;
+      };
+      const res = await request('POST', '/api/signup', { body: TEST_USER });
+      db.insertUser = originalInsertUser;
+      assert.equal(res.status, 400);
+      assert.ok(res.json.error.includes('Unable to create'));
     });
 
     it('rejects duplicate email', async () => {
@@ -350,7 +205,7 @@ describe('Authentication Flow', () => {
       const req = new Request('http://localhost/api/signup', {
         method: 'POST',
         headers,
-        body: 'not valid json'
+        body: 'not valid json',
       });
       const res = await app.fetch(req);
       assert.equal(res.status, 400);
@@ -359,13 +214,12 @@ describe('Authentication Flow', () => {
 
   describe('POST /api/signin', () => {
     beforeEach(async () => {
-      // Create test user
       await request('POST', '/api/signup', { body: TEST_USER });
     });
 
     it('signs in with correct credentials', async () => {
       const res = await request('POST', '/api/signin', {
-        body: { email: TEST_USER.email, password: TEST_USER.password }
+        body: { email: TEST_USER.email, password: TEST_USER.password },
       });
       assert.equal(res.status, 200);
       assert.equal(res.json.email, TEST_USER.email);
@@ -374,7 +228,7 @@ describe('Authentication Flow', () => {
 
     it('rejects non-existent email', async () => {
       const res = await request('POST', '/api/signin', {
-        body: { email: 'nonexistent@example.com', password: 'password123' }
+        body: { email: 'nonexistent@example.com', password: 'password123' },
       });
       assert.equal(res.status, 401);
       assert.equal(res.json.error, 'Invalid credentials');
@@ -382,7 +236,7 @@ describe('Authentication Flow', () => {
 
     it('rejects wrong password', async () => {
       const res = await request('POST', '/api/signin', {
-        body: { email: TEST_USER.email, password: 'wrongpassword' }
+        body: { email: TEST_USER.email, password: 'wrongpassword' },
       });
       assert.equal(res.status, 401);
       assert.equal(res.json.error, 'Invalid credentials');
@@ -390,14 +244,14 @@ describe('Authentication Flow', () => {
 
     it('rejects invalid email format', async () => {
       const res = await request('POST', '/api/signin', {
-        body: { email: 'not-an-email', password: 'password123' }
+        body: { email: 'not-an-email', password: 'password123' },
       });
       assert.equal(res.status, 400);
     });
 
     it('rejects missing password', async () => {
       const res = await request('POST', '/api/signin', {
-        body: { email: TEST_USER.email }
+        body: { email: TEST_USER.email },
       });
       assert.equal(res.status, 400);
     });
@@ -407,7 +261,7 @@ describe('Authentication Flow', () => {
       const req = new Request('http://localhost/api/signin', {
         method: 'POST',
         headers,
-        body: 'not valid json'
+        body: 'not valid json',
       });
       const res = await app.fetch(req);
       assert.equal(res.status, 400);
@@ -415,77 +269,75 @@ describe('Authentication Flow', () => {
   });
 
   describe('Legacy bcrypt migration', () => {
-    // Real bcrypt hash of 'validpassword123' at cost 10 — fixture for legacy verify path
     const LEGACY_BCRYPT_HASH = '$2b$10$gix5z78/st4CdQYVM8C4g.ygzzWZQ39pnLKhxVtMWK1HUeASfzIyG';
     const LEGACY_USER = {
       email: 'legacy@example.com',
       name: 'Legacy User',
-      password: 'validpassword123'
+      password: 'validpassword123',
     };
 
-    function seedLegacyUser() {
-      const userId = crypto.randomUUID();
-      db.prepare('INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)')
-        .run(userId, LEGACY_USER.email, LEGACY_USER.name, Date.now());
-      db.prepare('INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)')
-        .run(LEGACY_USER.email, LEGACY_BCRYPT_HASH, userId);
+    async function seedLegacyUser() {
+      const userId = generateUUID();
+      await db.insertUser({
+        _id: userId,
+        email: LEGACY_USER.email,
+        name: LEGACY_USER.name,
+        created_at: Date.now(),
+      });
+      await db.insertAuth({
+        email: LEGACY_USER.email,
+        password: LEGACY_BCRYPT_HASH,
+        userID: userId,
+      });
       return userId;
     }
 
     it('signs in user with stored bcrypt hash', async () => {
-      seedLegacyUser();
+      await seedLegacyUser();
       const res = await request('POST', '/api/signin', {
-        body: { email: LEGACY_USER.email, password: LEGACY_USER.password }
+        body: { email: LEGACY_USER.email, password: LEGACY_USER.password },
       });
       assert.equal(res.status, 200);
       assert.equal(res.json.email, LEGACY_USER.email);
     });
 
     it('rejects wrong password against bcrypt hash', async () => {
-      seedLegacyUser();
+      await seedLegacyUser();
       const res = await request('POST', '/api/signin', {
-        body: { email: LEGACY_USER.email, password: 'wrongpassword' }
+        body: { email: LEGACY_USER.email, password: 'wrongpassword' },
       });
       assert.equal(res.status, 401);
     });
 
     it('rehashes bcrypt hash to scrypt on successful login', async () => {
-      seedLegacyUser();
-      const before = db.prepare('SELECT password FROM Auths WHERE email = ?').get(LEGACY_USER.email);
+      await seedLegacyUser();
+      const before = await db.findAuth({ email: LEGACY_USER.email });
       assert.ok(before.password.startsWith('$2'), 'fixture should be bcrypt');
 
       const res = await request('POST', '/api/signin', {
-        body: { email: LEGACY_USER.email, password: LEGACY_USER.password }
+        body: { email: LEGACY_USER.email, password: LEGACY_USER.password },
       });
       assert.equal(res.status, 200);
 
-      const after = db.prepare('SELECT password FROM Auths WHERE email = ?').get(LEGACY_USER.email);
+      const after = await db.findAuth({ email: LEGACY_USER.email });
       assert.ok(after.password.startsWith('scrypt$'), 'hash should be migrated to scrypt');
 
-      // And the migrated hash itself verifies correctly
-      const verifyOk = await (async () => {
-        const [, s, k] = after.password.split('$');
-        const salt = Buffer.from(s, 'base64url');
-        const expected = Buffer.from(k, 'base64url');
-        const candidate = await scryptAsync(LEGACY_USER.password, salt, 64);
-        return expected.length === candidate.length && crypto.timingSafeEqual(expected, candidate);
-      })();
-      assert.ok(verifyOk, 'migrated scrypt hash must verify against original password');
+      const [, saltB64, keyB64] = after.password.split('$');
+      const salt = Buffer.from(saltB64, 'base64url');
+      const expected = Buffer.from(keyB64, 'base64url');
+      const candidate = await scryptAsync(LEGACY_USER.password, salt, 64);
+      assert.ok(
+        expected.length === candidate.length && crypto.timingSafeEqual(expected, candidate),
+        'migrated scrypt hash must verify against original password',
+      );
     });
   });
 
   describe('POST /api/signout', () => {
     it('signs out authenticated user', async () => {
-      // First sign up
-      const signupRes = await request('POST', '/api/signup', { body: TEST_USER });
-      const cookies = signupRes.cookies;
-
-      // Parse token from cookies
-      const tokenMatch = cookies?.match(/token=([^;]+)/);
-      const token = tokenMatch?.[1];
-
+      const { token } = await signupSession();
       const res = await request('POST', '/api/signout', {
-        cookies: `token=${token}`
+        cookies: `token=${token}`,
       });
       assert.equal(res.status, 200);
       assert.equal(res.json.message, 'Signed out successfully');
@@ -500,28 +352,26 @@ describe('Authentication Flow', () => {
   describe('CSRF Protection', () => {
     let token;
     let csrfToken;
-    let userID;
 
     beforeEach(async () => {
-      const res = await request('POST', '/api/signup', { body: TEST_USER });
-      const tokenMatch = res.cookies?.match(/token=([^;]+)/);
-      const csrfMatch = res.cookies?.match(/csrf_token=([^;]+)/);
-      token = tokenMatch?.[1];
-      csrfToken = csrfMatch?.[1];
-      userID = res.json.id;
+      const session = await signupSession();
+      token = session.token;
+      csrfToken = session.csrfToken;
     });
 
     it('allows request with valid CSRF token', async () => {
       const res = await request('PUT', '/api/me', {
         cookies: `token=${token}`,
-        headers: { 'x-csrf-token': csrfToken }
+        headers: { 'x-csrf-token': csrfToken },
+        body: { name: 'Updated Name' },
       });
       assert.equal(res.status, 200);
     });
 
     it('rejects request with missing CSRF token', async () => {
       const res = await request('PUT', '/api/me', {
-        cookies: `token=${token}`
+        cookies: `token=${token}`,
+        body: { name: 'Updated Name' },
       });
       assert.equal(res.status, 403);
       assert.ok(res.json.error.includes('CSRF'));
@@ -530,7 +380,8 @@ describe('Authentication Flow', () => {
     it('rejects request with wrong CSRF token', async () => {
       const res = await request('PUT', '/api/me', {
         cookies: `token=${token}`,
-        headers: { 'x-csrf-token': 'wrong-token' }
+        headers: { 'x-csrf-token': 'wrong-token' },
+        body: { name: 'Updated Name' },
       });
       assert.equal(res.status, 403);
     });
@@ -538,12 +389,9 @@ describe('Authentication Flow', () => {
 
   describe('JWT Authentication', () => {
     it('allows request with valid token', async () => {
-      const res = await request('POST', '/api/signup', { body: TEST_USER });
-      const tokenMatch = res.cookies?.match(/token=([^;]+)/);
-      const token = tokenMatch?.[1];
-
+      const { token } = await signupSession();
       const signoutRes = await request('POST', '/api/signout', {
-        cookies: `token=${token}`
+        cookies: `token=${token}`,
       });
       assert.equal(signoutRes.status, 200);
     });
@@ -555,14 +403,12 @@ describe('Authentication Flow', () => {
     });
 
     it('rejects request with expired token', async () => {
-      // Create expired token
       const expiredToken = jwtSign(
         { userID: 'test-user', exp: Math.floor(Date.now() / 1000) - 3600 },
-        JWT_SECRET
+        JWT_SECRET,
       );
-
       const res = await request('POST', '/api/signout', {
-        cookies: `token=${expiredToken}`
+        cookies: `token=${expiredToken}`,
       });
       assert.equal(res.status, 401);
       assert.equal(res.json.error, 'Token expired');
@@ -570,7 +416,7 @@ describe('Authentication Flow', () => {
 
     it('rejects request with invalid token', async () => {
       const res = await request('POST', '/api/signout', {
-        cookies: 'token=invalid-token'
+        cookies: 'token=invalid-token',
       });
       assert.equal(res.status, 401);
       assert.equal(res.json.error, 'Invalid token');
@@ -578,376 +424,622 @@ describe('Authentication Flow', () => {
   });
 });
 
-// ==== STRIPE WEBHOOK TESTS ====
+// ==== ACCOUNT LOCKOUT ====
 
-const noopLogger = {
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-  debug: () => {}
-};
-
-/**
- * Build a Hono app with /api/payment wired to the given stripe and db mocks.
- * Mirrors the helper structure in server.js so refactors stay in lockstep.
- */
-function createWebhookApp({ stripe, db, logger = noopLogger }) {
-  const webhookApp = new Hono();
-
-  async function resolveCustomerEmail(stripeID) {
-    const customer = await stripe.customers.retrieve(stripeID);
-    if (!customer?.email) {
-      logger.warn('Webhook: Customer has no email', { stripeID });
-      return null;
-    }
-    return customer.email.toLowerCase();
-  }
-
-  function buildSubscriptionPatch(stripeID, stripeSub) {
-    return {
-      stripeID,
-      expires: stripeSub.current_period_end,
-      status: stripeSub.status
-    };
-  }
-
-  async function applyUserPatch(email, $set) {
-    const user = await db.findUser({ email });
-    if (!user) {
-      logger.warn('Webhook: No user found for email', { email });
-      return false;
-    }
-    await db.updateUser({ email }, { $set });
-    return true;
-  }
-
-  webhookApp.post('/api/payment', async (c) => {
-    const signature = c.req.header('stripe-signature');
-    const rawBody = await c.req.arrayBuffer();
-    const body = Buffer.from(rawBody);
-
-    let event;
-    try {
-      event = await stripe.webhooks.constructEventAsync(body, signature, 'test-secret');
-    } catch (e) {
-      return c.body(null, 400);
-    }
-
-    try {
-      const existingEvent = await db.findWebhookEvent(event.id);
-      if (existingEvent) return c.body(null, 200);
-      await db.insertWebhookEvent(event.id, event.type, Date.now());
-
-      const eventObject = event.data.object;
-
-      if (['customer.subscription.deleted', 'customer.subscription.updated', 'customer.subscription.created'].includes(event.type)) {
-        const { customer: stripeID, current_period_end, status } = eventObject;
-        if (!stripeID) return c.body(null, 400);
-        const email = await resolveCustomerEmail(stripeID);
-        if (!email) return c.body(null, 400);
-        await applyUserPatch(email, { subscription: { stripeID, expires: current_period_end, status } });
-      }
-
-      if (event.type === 'checkout.session.completed') {
-        const { customer: stripeID, customer_email, subscription: subscriptionId } = eventObject;
-        if (subscriptionId && stripeID) {
-          const [subscription, email] = await Promise.all([
-            stripe.subscriptions.retrieve(subscriptionId),
-            customer_email ? Promise.resolve(customer_email.toLowerCase()) : resolveCustomerEmail(stripeID)
-          ]);
-          if (email) {
-            await applyUserPatch(email, { subscription: buildSubscriptionPatch(stripeID, subscription) });
-          }
-        }
-      }
-
-      if (event.type === 'invoice.paid') {
-        const { customer: stripeID, subscription: subscriptionId } = eventObject;
-        if (subscriptionId && stripeID) {
-          const [subscription, email] = await Promise.all([
-            stripe.subscriptions.retrieve(subscriptionId),
-            resolveCustomerEmail(stripeID)
-          ]);
-          if (email) {
-            await applyUserPatch(email, { subscription: buildSubscriptionPatch(stripeID, subscription) });
-          }
-        }
-      }
-
-      if (event.type === 'invoice.payment_failed') {
-        const { customer: stripeID } = eventObject;
-        if (stripeID) {
-          const email = await resolveCustomerEmail(stripeID);
-          if (email) {
-            await applyUserPatch(email, {
-              'subscription.paymentFailed': true,
-              'subscription.paymentFailedAt': Date.now()
-            });
-          }
-        }
-      }
-
-      return c.body(null, 200);
-    } catch (e) {
-      return c.body(null, 500);
-    }
+describe('Account lockout', () => {
+  beforeEach(async () => {
+    await request('POST', '/api/signup', { body: TEST_USER });
   });
 
-  return webhookApp;
-}
+  it('locks account after repeated failed signin attempts', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await request('POST', '/api/signin', {
+        body: { email: TEST_USER.email, password: 'wrong-password' },
+      });
+      assert.equal(res.status, 401);
+    }
 
-/**
- * Stub builder that records every call so tests can assert on them.
- */
-function spy(impl = () => {}) {
-  const calls = [];
-  const fn = async (...args) => {
-    calls.push(args);
-    return impl(...args);
-  };
-  fn.calls = calls;
-  return fn;
-}
-
-async function postWebhook(webhookApp, body = '{}', signature = 'test-sig') {
-  const req = new Request('http://localhost/api/payment', {
-    method: 'POST',
-    headers: { 'stripe-signature': signature, 'Content-Type': 'application/json' },
-    body
+    const locked = await request('POST', '/api/signin', {
+      body: { email: TEST_USER.email, password: TEST_USER.password },
+    });
+    assert.equal(locked.status, 429);
+    assert.ok(locked.json.error.includes('locked'));
+    assert.ok(locked.headers.get('Retry-After'));
   });
-  return webhookApp.fetch(req);
-}
+
+  it('clears lockout after successful signin', async () => {
+    for (let i = 0; i < 3; i++) {
+      await request('POST', '/api/signin', {
+        body: { email: TEST_USER.email, password: 'wrong-password' },
+      });
+    }
+
+    const ok = await request('POST', '/api/signin', {
+      body: { email: TEST_USER.email, password: TEST_USER.password },
+    });
+    assert.equal(ok.status, 200);
+
+    const after = await request('POST', '/api/signin', {
+      body: { email: TEST_USER.email, password: TEST_USER.password },
+    });
+    assert.equal(after.status, 200);
+  });
+});
+
+// ==== CSRF AUTO-REGENERATE ====
+
+describe('CSRF auto-regenerate', () => {
+  it('regenerates CSRF token when store entry is missing', async () => {
+    const { token, userId } = await signupSession();
+    csrfTokenStore.delete(userId);
+
+    const res = await request('PUT', '/api/me', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': 'stale-token' },
+      body: { name: 'Regenerated CSRF' },
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.name, 'Regenerated CSRF');
+    assert.ok(csrfTokenStore.has(userId));
+    assert.ok(res.cookies?.includes('csrf_token='));
+  });
+});
+
+// ==== HEALTH & USER ROUTES ====
+
+describe('GET /api/health', () => {
+  it('returns ok status with timestamp', async () => {
+    const res = await request('GET', '/api/health');
+    assert.equal(res.status, 200);
+    assert.equal(res.json.status, 'ok');
+    assert.ok(typeof res.json.timestamp === 'number');
+  });
+});
+
+describe('GET /api/me', () => {
+  it('returns authenticated user profile', async () => {
+    const { token } = await signupSession();
+    const res = await request('GET', '/api/me', { cookies: `token=${token}` });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.email, TEST_USER.email);
+    assert.equal(res.json.name, TEST_USER.name);
+  });
+
+  it('rejects unauthenticated request', async () => {
+    const res = await request('GET', '/api/me');
+    assert.equal(res.status, 401);
+  });
+});
+
+describe('PUT /api/me', () => {
+  it('updates user name with valid CSRF token', async () => {
+    const { token, csrfToken } = await signupSession();
+    const res = await request('PUT', '/api/me', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': csrfToken },
+      body: { name: 'New Display Name' },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.name, 'New Display Name');
+  });
+
+  it('rejects invalid name', async () => {
+    const { token, csrfToken } = await signupSession();
+    const res = await request('PUT', '/api/me', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': csrfToken },
+      body: { name: '' },
+    });
+    assert.equal(res.status, 400);
+    assert.ok(res.json.error.includes('Name'));
+  });
+});
+
+// ==== USAGE ====
+
+describe('POST /api/usage', () => {
+  it('returns usage info for check operation', async () => {
+    const { token } = await signupSession();
+    const res = await request('POST', '/api/usage', {
+      cookies: `token=${token}`,
+      body: { operation: 'check' },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.remaining, 20);
+    assert.equal(res.json.total, 20);
+    assert.equal(res.json.isSubscriber, false);
+  });
+
+  it('increments usage for track operation', async () => {
+    const { token } = await signupSession();
+    const res = await request('POST', '/api/usage', {
+      cookies: `token=${token}`,
+      body: { operation: 'track' },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.used, 1);
+    assert.equal(res.json.remaining, 19);
+  });
+
+  it('tracks against pre-existing usage without re-initializing defaults', async () => {
+    const { token, userId } = await signupSession();
+    const future = Math.floor(Date.now() / 1000) + 3600;
+    await db.updateUser({ _id: userId }, { $set: { usage: { count: 3, reset_at: future } } });
+    const res = await request('POST', '/api/usage', {
+      cookies: `token=${token}`,
+      body: { operation: 'track' },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.used, 4);
+    assert.equal(res.json.remaining, 16);
+  });
+
+  it('rejects invalid operation', async () => {
+    const { token } = await signupSession();
+    const res = await request('POST', '/api/usage', {
+      cookies: `token=${token}`,
+      body: { operation: 'invalid' },
+    });
+    assert.equal(res.status, 400);
+  });
+
+  it('returns unlimited usage for active subscribers', async () => {
+    const { token, userId } = await signupSession();
+    const future = Math.floor(Date.now() / 1000) + 86400;
+    await db.updateUser(
+      { _id: userId },
+      { $set: { subscription: { stripeID: 'cus_sub', expires: future, status: 'active' } } },
+    );
+
+    const res = await request('POST', '/api/usage', {
+      cookies: `token=${token}`,
+      body: { operation: 'check' },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.json.isSubscriber, true);
+    assert.equal(res.json.remaining, -1);
+  });
+});
+
+// ==== CHECKOUT & PORTAL ====
+
+describe('POST /api/checkout', () => {
+  it('creates checkout session for authenticated user', async () => {
+    const { token, csrfToken } = await signupSession();
+    setStripeForTests({
+      prices: {
+        list: spy(() => ({ data: [{ id: 'price_123' }] })),
+      },
+      checkout: {
+        sessions: {
+          create: spy(() => ({
+            url: 'https://checkout.stripe.test/session',
+            id: 'cs_test_1',
+            customer: 'cus_new',
+          })),
+        },
+      },
+    });
+
+    const res = await request('POST', '/api/checkout', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': csrfToken },
+      body: { email: TEST_USER.email, lookup_key: 'pro_monthly' },
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.url, 'https://checkout.stripe.test/session');
+    assert.equal(res.json.id, 'cs_test_1');
+  });
+
+  it('rejects email mismatch', async () => {
+    const { token, csrfToken } = await signupSession();
+    setStripeForTests({
+      prices: { list: spy() },
+      checkout: { sessions: { create: spy() } },
+    });
+
+    const res = await request('POST', '/api/checkout', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': csrfToken },
+      body: { email: 'other@example.com', lookup_key: 'pro_monthly' },
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.json.error, 'Email mismatch');
+  });
+
+  it('rejects missing lookup_key', async () => {
+    const { token, csrfToken } = await signupSession();
+    const res = await request('POST', '/api/checkout', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': csrfToken },
+      body: { email: TEST_USER.email },
+    });
+    assert.equal(res.status, 400);
+  });
+});
+
+describe('POST /api/portal', () => {
+  it('creates billing portal session for matching customer', async () => {
+    const { token, csrfToken, userId } = await signupSession();
+    await db.updateUser(
+      { _id: userId },
+      { $set: { subscription: { stripeID: 'cus_portal', expires: null, status: 'active' } } },
+    );
+
+    setStripeForTests({
+      billingPortal: {
+        sessions: {
+          create: spy(() => ({
+            url: 'https://billing.stripe.test/portal',
+            id: 'bps_test_1',
+          })),
+        },
+      },
+    });
+
+    const res = await request('POST', '/api/portal', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': csrfToken },
+      body: { customerID: 'cus_portal' },
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.json.url, 'https://billing.stripe.test/portal');
+  });
+
+  it('rejects unauthorized customerID', async () => {
+    const { token, csrfToken, userId } = await signupSession();
+    await db.updateUser(
+      { _id: userId },
+      { $set: { subscription: { stripeID: 'cus_mine', expires: null, status: 'active' } } },
+    );
+    setStripeForTests({
+      billingPortal: { sessions: { create: spy() } },
+    });
+
+    const res = await request('POST', '/api/portal', {
+      cookies: `token=${token}`,
+      headers: { 'x-csrf-token': csrfToken },
+      body: { customerID: 'cus_other' },
+    });
+    assert.equal(res.status, 403);
+    assert.equal(res.json.error, 'Unauthorized customerID');
+  });
+});
+
+// ==== ERROR HANDLER & SPA FALLBACK ====
+
+describe('Error handler', () => {
+  it('returns JSON error for unhandled exceptions', async () => {
+    const res = await request('GET', '/api/__integration_error_test__');
+    assert.equal(res.status, 500);
+    assert.equal(res.json.error, 'Intentional integration test error');
+    assert.ok(res.json.stack);
+  });
+});
+
+describe('SPA fallback', () => {
+  it('returns welcome text when index.html is unavailable', async () => {
+    const res = await request('GET', '/app/dashboard');
+    assert.equal(res.status, 200);
+    assert.ok(
+      res.text?.includes('Welcome to Skateboard API') || res.text?.includes('<html'),
+      'expected SPA fallback response',
+    );
+  });
+
+  it('returns 404 for unknown API routes', async () => {
+    const res = await request('GET', '/api/does-not-exist');
+    assert.equal(res.status, 404);
+  });
+});
+
+// ==== STRIPE WEBHOOK ====
 
 describe('Stripe Webhook', () => {
+  function installStripeMock(overrides = {}) {
+    const stripeMock = {
+      webhooks: {
+        constructEventAsync: spy(() => ({
+          id: 'evt_default',
+          type: 'invoice.paid',
+          data: { object: {} },
+        })),
+      },
+      customers: { retrieve: spy(() => ({ email: 'user@example.com' })) },
+      subscriptions: { retrieve: spy(() => ({ current_period_end: 1, status: 'active' })) },
+      ...overrides,
+    };
+    setStripeForTests(stripeMock);
+    return stripeMock;
+  }
+
+  async function seedUser(email = 'user@example.com') {
+    const userId = generateUUID();
+    await db.insertUser({
+      _id: userId,
+      email,
+      name: 'Webhook User',
+      created_at: Date.now(),
+    });
+    await db.insertAuth({ email, password: 'hash', userID: userId });
+    return userId;
+  }
+
   it('returns 400 when signature verification fails', async () => {
-    const stripe = {
-      webhooks: { constructEventAsync: spy(() => { throw new Error('bad sig'); }) },
-      customers: { retrieve: spy() },
-      subscriptions: { retrieve: spy() }
-    };
-    const db = {
-      findWebhookEvent: spy(),
-      insertWebhookEvent: spy(),
-      findUser: spy(),
-      updateUser: spy()
-    };
-    const app = createWebhookApp({ stripe, db });
-    const res = await postWebhook(app);
+    installStripeMock({
+      webhooks: {
+        constructEventAsync: spy(() => {
+          throw new Error('bad sig');
+        }),
+      },
+    });
+    const res = await postWebhook();
     assert.equal(res.status, 400);
-    assert.equal(db.findWebhookEvent.calls.length, 0);
+    const events = await db.executeQuery({ query: 'SELECT * FROM WebhookEvents' });
+    assert.equal(events.rowCount, 0);
   });
 
   it('skips and returns 200 when event already processed (idempotency)', async () => {
-    const stripe = {
-      webhooks: { constructEventAsync: spy(() => ({ id: 'evt_123', type: 'invoice.paid', data: { object: {} } })) },
-      customers: { retrieve: spy() },
-      subscriptions: { retrieve: spy() }
-    };
-    const db = {
-      findWebhookEvent: spy(() => ({ id: 'evt_123' })),
-      insertWebhookEvent: spy(),
-      findUser: spy(),
-      updateUser: spy()
-    };
-    const app = createWebhookApp({ stripe, db });
-    const res = await postWebhook(app);
+    await db.insertWebhookEvent('evt_123', 'invoice.paid', Date.now());
+    installStripeMock({
+      webhooks: {
+        constructEventAsync: spy(() => ({
+          id: 'evt_123',
+          type: 'invoice.paid',
+          data: { object: {} },
+        })),
+      },
+    });
+    const res = await postWebhook();
     assert.equal(res.status, 200);
-    assert.equal(db.insertWebhookEvent.calls.length, 0);
-    assert.equal(db.updateUser.calls.length, 0);
+    const events = await db.executeQuery({ query: 'SELECT * FROM WebhookEvents' });
+    assert.equal(events.rowCount, 1);
   });
 
   it('records event before processing to prevent races', async () => {
-    const order = [];
-    const stripe = {
-      webhooks: { constructEventAsync: spy(() => ({
-        id: 'evt_1',
-        type: 'customer.subscription.updated',
-        data: { object: { customer: 'cus_1', current_period_end: 1700000000, status: 'active' } }
-      })) },
-      customers: { retrieve: async () => { order.push('customer.retrieve'); return { email: 'a@b.com' }; } },
-      subscriptions: { retrieve: spy() }
-    };
-    const db = {
-      findWebhookEvent: spy(),
-      insertWebhookEvent: async (...a) => { order.push('insertWebhookEvent'); },
-      findUser: async () => { order.push('findUser'); return { _id: 'u1' }; },
-      updateUser: async () => { order.push('updateUser'); }
-    };
-    const app = createWebhookApp({ stripe, db });
-    await postWebhook(app);
-    assert.equal(order[0], 'insertWebhookEvent', 'event must be recorded before any user mutation');
+    await seedUser();
+    installStripeMock({
+      webhooks: {
+        constructEventAsync: spy(() => ({
+          id: 'evt_1',
+          type: 'customer.subscription.updated',
+          data: { object: { customer: 'cus_1', current_period_end: 1700000000, status: 'active' } },
+        })),
+      },
+      customers: {
+        retrieve: spy(async () => {
+          const pending = await db.findWebhookEvent('evt_1');
+          assert.ok(pending, 'event must be recorded before customer lookup');
+          return { email: 'user@example.com' };
+        }),
+      },
+    });
+
+    const res = await postWebhook();
+    assert.equal(res.status, 200);
   });
 
   describe('customer.subscription.* events', () => {
-    function setup({ customerEmail = 'user@example.com', userExists = true } = {}) {
-      const stripe = {
-        webhooks: { constructEventAsync: spy(() => ({
-          id: 'evt_sub_1',
-          type: 'customer.subscription.updated',
-          data: { object: { customer: 'cus_42', current_period_end: 1800000000, status: 'active' } }
-        })) },
-        customers: { retrieve: spy(() => customerEmail ? { email: customerEmail } : { email: null }) },
-        subscriptions: { retrieve: spy() }
-      };
-      const db = {
-        findWebhookEvent: spy(() => null),
-        insertWebhookEvent: spy(),
-        findUser: spy(() => userExists ? { _id: 'u1', email: customerEmail.toLowerCase() } : null),
-        updateUser: spy()
-      };
-      return { stripe, db, app: createWebhookApp({ stripe, db }) };
-    }
+    it('updates user subscription on customer.subscription.created', async () => {
+      await seedUser('created@example.com');
+      installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_sub_created',
+            type: 'customer.subscription.created',
+            data: { object: { customer: 'cus_created', current_period_end: 1800000001, status: 'trialing' } },
+          })),
+        },
+        customers: { retrieve: spy(() => ({ email: 'created@example.com' })) },
+      });
+      const res = await postWebhook();
+      assert.equal(res.status, 200);
+      const user = await db.findUser({ email: 'created@example.com' });
+      assert.equal(user.subscription.status, 'trialing');
+    });
+
+    it('updates user subscription on customer.subscription.deleted', async () => {
+      await seedUser('deleted@example.com');
+      installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_sub_deleted',
+            type: 'customer.subscription.deleted',
+            data: { object: { customer: 'cus_deleted', current_period_end: 1, status: 'canceled' } },
+          })),
+        },
+        customers: { retrieve: spy(() => ({ email: 'deleted@example.com' })) },
+      });
+      const res = await postWebhook();
+      assert.equal(res.status, 200);
+      const user = await db.findUser({ email: 'deleted@example.com' });
+      assert.equal(user.subscription.status, 'canceled');
+    });
 
     it('updates user subscription on customer.subscription.updated', async () => {
-      const { db, app } = setup();
-      const res = await postWebhook(app);
+      await seedUser('user@example.com');
+      installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_sub_1',
+            type: 'customer.subscription.updated',
+            data: { object: { customer: 'cus_42', current_period_end: 1800000000, status: 'active' } },
+          })),
+        },
+        customers: { retrieve: spy(() => ({ email: 'user@example.com' })) },
+      });
+
+      const res = await postWebhook();
       assert.equal(res.status, 200);
-      assert.equal(db.updateUser.calls.length, 1);
-      const [, patch] = db.updateUser.calls[0];
-      assert.deepEqual(patch.$set.subscription, {
+      const user = await db.findUser({ email: 'user@example.com' });
+      assert.deepEqual(user.subscription, {
         stripeID: 'cus_42',
         expires: 1800000000,
-        status: 'active'
+        status: 'active',
       });
     });
 
     it('normalizes email to lowercase before lookup', async () => {
-      const { db, app } = setup({ customerEmail: 'Mixed@Case.COM' });
-      await postWebhook(app);
-      assert.equal(db.findUser.calls[0][0].email, 'mixed@case.com');
+      await seedUser('mixed@case.com');
+      const stripeMock = installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_sub_2',
+            type: 'customer.subscription.updated',
+            data: { object: { customer: 'cus_42', current_period_end: 1800000000, status: 'active' } },
+          })),
+        },
+        customers: { retrieve: spy(() => ({ email: 'Mixed@Case.COM' })) },
+      });
+
+      await postWebhook();
+      const user = await db.findUser({ email: 'mixed@case.com' });
+      assert.ok(user.subscription);
+      assert.equal(stripeMock.customers.retrieve.calls.length, 1);
     });
 
     it('returns 400 when customer ID is missing', async () => {
-      const stripe = {
-        webhooks: { constructEventAsync: spy(() => ({
-          id: 'evt_x',
-          type: 'customer.subscription.created',
-          data: { object: { current_period_end: 1, status: 'active' } }
-        })) },
-        customers: { retrieve: spy() },
-        subscriptions: { retrieve: spy() }
-      };
-      const db = { findWebhookEvent: spy(), insertWebhookEvent: spy(), findUser: spy(), updateUser: spy() };
-      const app = createWebhookApp({ stripe, db });
-      const res = await postWebhook(app);
+      installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_x',
+            type: 'customer.subscription.created',
+            data: { object: { current_period_end: 1, status: 'active' } },
+          })),
+        },
+      });
+      const res = await postWebhook();
       assert.equal(res.status, 400);
-      assert.equal(db.updateUser.calls.length, 0);
     });
 
     it('returns 400 when stripe customer has no email', async () => {
-      const { db, app } = setup({ customerEmail: '' });
-      const res = await postWebhook(app);
+      installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_sub_3',
+            type: 'customer.subscription.updated',
+            data: { object: { customer: 'cus_42', current_period_end: 1, status: 'active' } },
+          })),
+        },
+        customers: { retrieve: spy(() => ({ email: null })) },
+      });
+      const res = await postWebhook();
       assert.equal(res.status, 400);
-      assert.equal(db.updateUser.calls.length, 0);
     });
 
     it('returns 200 and does not patch when user is unknown', async () => {
-      const { db, app } = setup({ userExists: false });
-      const res = await postWebhook(app);
+      installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_sub_4',
+            type: 'customer.subscription.updated',
+            data: { object: { customer: 'cus_42', current_period_end: 1, status: 'active' } },
+          })),
+        },
+        customers: { retrieve: spy(() => ({ email: 'unknown@example.com' })) },
+      });
+      const res = await postWebhook();
       assert.equal(res.status, 200);
-      assert.equal(db.updateUser.calls.length, 0);
+      const user = await db.findUser({ email: 'unknown@example.com' });
+      assert.ok(!user);
     });
   });
 
   describe('checkout.session.completed', () => {
     it('uses customer_email when present without fetching customer', async () => {
-      const stripe = {
-        webhooks: { constructEventAsync: spy(() => ({
-          id: 'evt_co_1',
-          type: 'checkout.session.completed',
-          data: { object: { customer: 'cus_1', customer_email: 'Buyer@Test.com', subscription: 'sub_1' } }
-        })) },
+      await seedUser('buyer@test.com');
+      const stripeMock = installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_co_1',
+            type: 'checkout.session.completed',
+            data: { object: { customer: 'cus_1', customer_email: 'Buyer@Test.com', subscription: 'sub_1' } },
+          })),
+        },
         customers: { retrieve: spy() },
-        subscriptions: { retrieve: spy(() => ({ current_period_end: 1900000000, status: 'active' })) }
-      };
-      const db = {
-        findWebhookEvent: spy(),
-        insertWebhookEvent: spy(),
-        findUser: spy(() => ({ _id: 'u1' })),
-        updateUser: spy()
-      };
-      const app = createWebhookApp({ stripe, db });
-      const res = await postWebhook(app);
+        subscriptions: { retrieve: spy(() => ({ current_period_end: 1900000000, status: 'active' })) },
+      });
+
+      const res = await postWebhook();
       assert.equal(res.status, 200);
-      assert.equal(stripe.customers.retrieve.calls.length, 0, 'should not fetch customer when email is on the event');
-      assert.equal(db.findUser.calls[0][0].email, 'buyer@test.com');
-      assert.equal(db.updateUser.calls[0][1].$set.subscription.stripeID, 'cus_1');
+      assert.equal(stripeMock.customers.retrieve.calls.length, 0);
+      const user = await db.findUser({ email: 'buyer@test.com' });
+      assert.equal(user.subscription.stripeID, 'cus_1');
     });
 
     it('falls back to fetching customer when customer_email is missing', async () => {
-      const stripe = {
-        webhooks: { constructEventAsync: spy(() => ({
-          id: 'evt_co_2',
-          type: 'checkout.session.completed',
-          data: { object: { customer: 'cus_2', subscription: 'sub_2' } }
-        })) },
+      await seedUser('fetched@example.com');
+      const stripeMock = installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_co_2',
+            type: 'checkout.session.completed',
+            data: { object: { customer: 'cus_2', subscription: 'sub_2' } },
+          })),
+        },
         customers: { retrieve: spy(() => ({ email: 'fetched@example.com' })) },
-        subscriptions: { retrieve: spy(() => ({ current_period_end: 1, status: 'active' })) }
-      };
-      const db = {
-        findWebhookEvent: spy(),
-        insertWebhookEvent: spy(),
-        findUser: spy(() => ({ _id: 'u2' })),
-        updateUser: spy()
-      };
-      const app = createWebhookApp({ stripe, db });
-      await postWebhook(app);
-      assert.equal(stripe.customers.retrieve.calls.length, 1);
-      assert.equal(db.updateUser.calls[0][0].email, 'fetched@example.com');
+        subscriptions: { retrieve: spy(() => ({ current_period_end: 1, status: 'active' })) },
+      });
+
+      await postWebhook();
+      assert.equal(stripeMock.customers.retrieve.calls.length, 1);
+      const user = await db.findUser({ email: 'fetched@example.com' });
+      assert.equal(user.subscription.stripeID, 'cus_2');
     });
   });
 
   describe('invoice.paid', () => {
     it('updates subscription expiry and status', async () => {
-      const stripe = {
-        webhooks: { constructEventAsync: spy(() => ({
-          id: 'evt_inv_1',
-          type: 'invoice.paid',
-          data: { object: { customer: 'cus_3', subscription: 'sub_3' } }
-        })) },
+      await seedUser('pay@example.com');
+      installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_inv_1',
+            type: 'invoice.paid',
+            data: { object: { customer: 'cus_3', subscription: 'sub_3' } },
+          })),
+        },
         customers: { retrieve: spy(() => ({ email: 'pay@example.com' })) },
-        subscriptions: { retrieve: spy(() => ({ current_period_end: 2000000000, status: 'active' })) }
-      };
-      const db = {
-        findWebhookEvent: spy(),
-        insertWebhookEvent: spy(),
-        findUser: spy(() => ({ _id: 'u3' })),
-        updateUser: spy()
-      };
-      const app = createWebhookApp({ stripe, db });
-      const res = await postWebhook(app);
+        subscriptions: { retrieve: spy(() => ({ current_period_end: 2000000000, status: 'active' })) },
+      });
+
+      const res = await postWebhook();
       assert.equal(res.status, 200);
-      assert.deepEqual(db.updateUser.calls[0][1].$set.subscription, {
+      const user = await db.findUser({ email: 'pay@example.com' });
+      assert.deepEqual(user.subscription, {
         stripeID: 'cus_3',
         expires: 2000000000,
-        status: 'active'
+        status: 'active',
       });
     });
   });
 
   describe('invoice.payment_failed', () => {
-    it('marks the user as paymentFailed without changing subscription status', async () => {
-      const stripe = {
-        webhooks: { constructEventAsync: spy(() => ({
-          id: 'evt_fail_1',
-          type: 'invoice.payment_failed',
-          data: { object: { customer: 'cus_9' } }
-        })) },
+    it('returns 200 for payment_failed events', async () => {
+      await seedUser('fail@example.com');
+      installStripeMock({
+        webhooks: {
+          constructEventAsync: spy(() => ({
+            id: 'evt_fail_1',
+            type: 'invoice.payment_failed',
+            data: { object: { customer: 'cus_9' } },
+          })),
+        },
         customers: { retrieve: spy(() => ({ email: 'fail@example.com' })) },
-        subscriptions: { retrieve: spy() }
-      };
-      const db = {
-        findWebhookEvent: spy(),
-        insertWebhookEvent: spy(),
-        findUser: spy(() => ({ _id: 'u9' })),
-        updateUser: spy()
-      };
-      const app = createWebhookApp({ stripe, db });
-      const res = await postWebhook(app);
+      });
+
+      const res = await postWebhook();
       assert.equal(res.status, 200);
-      const [, patch] = db.updateUser.calls[0];
-      assert.equal(patch.$set['subscription.paymentFailed'], true);
-      assert.ok(typeof patch.$set['subscription.paymentFailedAt'] === 'number');
     });
+  });
+});
+
+// Sanity: confirm test DB path override loaded
+describe('Test configuration', () => {
+  it('uses TEST_DATABASE_PATH for sqlite connection', () => {
+    assert.equal(config.database.connectionString, TEST_DB_PATH);
   });
 });

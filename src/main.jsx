@@ -36,7 +36,7 @@ import CalendarTestView from './components/CalendarTestView.jsx';
  *
  * @returns {JSX.Element} Layout with command menu
  */
-function AppLayout() {
+export function AppLayout() {
   return (
     <>
       <CommandMenu />
@@ -53,7 +53,7 @@ function AppLayout() {
  *
  * @type {Array<{path: string, element: JSX.Element}>}
  */
-const appRoutes = [
+export const appRoutes = [
   { path: 'home', element: <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner /></div>}><HomeView /></Suspense> },
   { path: 'chat', element: <ChatView /> },
   { path: 'analytics', element: <BlankView title="Analytics" description="Analytics will appear here once you have activity." buttonTitle="View Reports" /> },
