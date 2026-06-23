@@ -10,7 +10,7 @@ import {
   dynamicRobotsPlugin,
   dynamicSitemapPlugin,
   dynamicManifestPlugin
-} from './vite.plugins.js';
+} from './vite.plugins.ts';
 
 // ===== VITE CONFIGURATION =====
 

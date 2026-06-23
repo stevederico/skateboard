@@ -45,7 +45,7 @@ mock.module('node:fs', {
   }
 });
 
-const { verifyUiVersion } = await import('./verify-ui-version.js');
+const { verifyUiVersion } = await import('./verify-ui-version.ts');
 
 describe('verifyUiVersion', () => {
   beforeEach(() => {

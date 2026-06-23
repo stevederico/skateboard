@@ -9,7 +9,7 @@ import {
   loadLocalENV,
   resolveEnvironmentVariables,
   validateEnvironmentVariables,
-} from './env.js';
+} from './env.ts';
 
 describe('env.js', () => {
   const originalEnv = { ...process.env };
@@ -60,13 +60,16 @@ describe('env.js', () => {
       assert.doesNotThrow(() => loadEnvFile(join(tempDir, 'missing.env')));
     });
 
-    it('skips lines without both key and value', () => {
+    it('sets empty values and skips lines with an empty key', () => {
       const envPath = join(tempDir, '.env');
       writeFileSync(envPath, 'NOVALUE=\n=novalue\nVALID=yes\n');
       delete process.env.NOVALUE;
       loadEnvFile(envPath);
       assert.equal(process.env.VALID, 'yes');
-      assert.equal(process.env.NOVALUE, undefined);
+      // `KEY=` explicitly clears a value — set to '' rather than dropped.
+      assert.equal(process.env.NOVALUE, '');
+      // `=novalue` has no key — skipped, must not create an empty-named var.
+      assert.equal(process.env[''], undefined);
     });
   });
 

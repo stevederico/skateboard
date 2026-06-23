@@ -14,5 +14,5 @@
     "resolveJsonModule": true,
     "types": ["vite/client", "vitest/config", "node"]
   },
-  "include": ["src", "vite.config.ts", "vite.plugins.d.ts"]
+  "include": ["src", "vite.config.ts", "vite.plugins.ts", "scripts/verify-ui-version.ts"]
 }
