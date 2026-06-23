@@ -14,6 +14,14 @@
   - Downstream apps create and maintain their own `changelog.md` on first commit
 -->
 
+3.6.2
+
+  Add comprehensive test suite
+  Add coverage npm scripts
+  Extract backend lib modules
+  Add adapter branch tests
+  Add server startup test
+
 3.6.1
 
   Require Node 24+

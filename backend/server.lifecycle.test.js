@@ -53,6 +53,7 @@ const {
   __testBuildSecureHeadersOptions,
   __testApacheLogMiddleware,
   __testDevRequestLogMiddleware,
+  __testStartHttpServer,
   __testStartHttpServerIfNeeded,
   __testInitializeStripe,
   __testSanitizeUserUpdateValue,
@@ -1268,6 +1269,19 @@ describe('server registration hooks', () => {
     const httpServer = __testStartHttpServerIfNeeded(true, mockServe);
     assert.equal(captured.options.port, __testResolvePort());
     assert.equal(typeof captured.onListen, 'function');
+    assert.ok(httpServer);
+  });
+
+  it('starts HTTP server directly via __testStartHttpServer', () => {
+    let captured;
+    const mockServe = (options, onListen) => {
+      captured = { options, onListen };
+      onListen({ port: 8001 });
+      return { close: () => {} };
+    };
+    const httpServer = __testStartHttpServer(mockServe);
+    assert.equal(captured.options.hostname, '::');
+    assert.equal(typeof captured.options.fetch, 'function');
     assert.ok(httpServer);
   });
 
