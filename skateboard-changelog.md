@@ -15,6 +15,12 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+3.22.0
+
+  Fix mock-broken tests
+  Inject fs seams
+  Drop node:fs mocks
+
 3.21.0
 
   Fix symlink corruption

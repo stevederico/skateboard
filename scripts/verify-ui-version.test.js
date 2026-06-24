@@ -1,6 +1,7 @@
-import { describe, it, beforeEach, mock } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
+import { verifyUiVersion, __setFsForTests } from './verify-ui-version.ts';
 
 const ROOT = '/fake/project';
 const UI_PKG = '@stevederico/skateboard-ui';
@@ -14,38 +15,22 @@ const existingPaths = new Set([
   join(ROOT, 'node_modules', '@stevederico', 'skateboard-ui', 'package.json')
 ]);
 
-mock.module('node:fs', {
-  exports: {
-    existsSync(path) {
-      return existingPaths.has(path);
-    },
-    readFileSync(path) {
-      if (path === join(ROOT, 'package.json')) {
-        return JSON.stringify(pkgJson);
-      }
-      if (path === join(ROOT, 'node_modules', '@stevederico', 'skateboard-ui', 'package.json')) {
-        return JSON.stringify(uiPkgJson);
-      }
-      throw new Error(`Unexpected readFileSync path: ${path}`);
-    },
-    default: {
-      existsSync(path) {
-        return existingPaths.has(path);
-      },
-      readFileSync(path) {
-        if (path === join(ROOT, 'package.json')) {
-          return JSON.stringify(pkgJson);
-        }
-        if (path === join(ROOT, 'node_modules', '@stevederico', 'skateboard-ui', 'package.json')) {
-          return JSON.stringify(uiPkgJson);
-        }
-        throw new Error(`Unexpected readFileSync path: ${path}`);
-      }
+// Inject an in-memory filesystem instead of mocking node:fs — closes over the live
+// fixtures so beforeEach/it mutations take effect.
+__setFsForTests({
+  existsSync(path) {
+    return existingPaths.has(path);
+  },
+  readFileSync(path) {
+    if (path === join(ROOT, 'package.json')) {
+      return JSON.stringify(pkgJson);
     }
+    if (path === join(ROOT, 'node_modules', '@stevederico', 'skateboard-ui', 'package.json')) {
+      return JSON.stringify(uiPkgJson);
+    }
+    throw new Error(`Unexpected readFileSync path: ${path}`);
   }
 });
-
-const { verifyUiVersion } = await import('./verify-ui-version.ts');
 
 describe('verifyUiVersion', () => {
   beforeEach(() => {
