@@ -348,14 +348,17 @@ describe('config and stripe hooks', () => {
   it('defaults staticDir when config omits staticDir', async () => {
     const original = process.env.TEST_DATABASE_PATH;
     delete process.env.TEST_DATABASE_PATH;
-    const raw = JSON.parse(await readFile(CONFIG_PATH, 'utf8'));
+    const originalText = await readFile(CONFIG_PATH, 'utf8');
+    const raw = JSON.parse(originalText);
     const trimmed = { database: raw.database };
     await writeFile(CONFIG_PATH, JSON.stringify(trimmed));
     try {
       const loaded = await __testLoadApplicationConfig();
       assert.equal(loaded.staticDir, '../dist');
     } finally {
-      await writeFile(CONFIG_PATH, JSON.stringify(raw));
+      // Restore the original bytes verbatim — re-stringifying `raw` would drop
+      // the file's pretty-printing and trailing newline, dirtying the tree.
+      await writeFile(CONFIG_PATH, originalText);
       process.env.TEST_DATABASE_PATH = original;
     }
   });
