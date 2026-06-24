@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+import { readFileSync } from 'node:fs';
 import type { Plugin } from 'vite';
 
 /**
@@ -10,6 +10,20 @@ interface AppConstants {
   companyWebsite: string;
 }
 
+/** Sources the raw constants.json text. Overridable in tests via {@link __setConstantsReaderForTests}. */
+let constantsReader: () => string = () => readFileSync('src/constants.json', 'utf8');
+
+/**
+ * Test-only seam: override how {@link readConstants} sources its raw JSON, so tests
+ * don't have to mock the `node:fs` builtin (whose named/default exports don't survive
+ * `--experimental-test-module-mocks` reliably across Node versions).
+ *
+ * @param reader - Returns the raw constants.json string
+ */
+export function __setConstantsReaderForTests(reader: () => string): void {
+  constantsReader = reader;
+}
+
 /**
  * Read and validate src/constants.json at the filesystem boundary.
  *
@@ -17,7 +31,7 @@ interface AppConstants {
  * @throws If constants.json is missing required string fields
  */
 function readConstants(): AppConstants {
-  const parsed: unknown = JSON.parse(fs.readFileSync('src/constants.json', 'utf8'));
+  const parsed: unknown = JSON.parse(constantsReader());
   if (
     typeof parsed !== 'object' ||
     parsed === null ||

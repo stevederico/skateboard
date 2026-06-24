@@ -1,5 +1,13 @@
-import { describe, it, beforeEach, mock } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  __setConstantsReaderForTests,
+  customLoggerPlugin,
+  htmlReplacePlugin,
+  dynamicRobotsPlugin,
+  dynamicSitemapPlugin,
+  dynamicManifestPlugin
+} from './vite.plugins.ts';
 
 const constantsWithoutHttp = {
   appName: 'Test App',
@@ -14,34 +22,11 @@ const constantsWithHttp = {
 
 let constantsMode = 'without-http';
 
-mock.module('node:fs', {
-  exports: {
-    default: {
-      readFileSync(path) {
-        if (path === 'src/constants.json') {
-          const data = constantsMode === 'with-http' ? constantsWithHttp : constantsWithoutHttp;
-          return JSON.stringify(data);
-        }
-        throw new Error(`Unexpected readFileSync path: ${path}`);
-      }
-    },
-    readFileSync(path) {
-      if (path === 'src/constants.json') {
-        const data = constantsMode === 'with-http' ? constantsWithHttp : constantsWithoutHttp;
-        return JSON.stringify(data);
-      }
-      throw new Error(`Unexpected readFileSync path: ${path}`);
-    }
-  }
-});
-
-const {
-  customLoggerPlugin,
-  htmlReplacePlugin,
-  dynamicRobotsPlugin,
-  dynamicSitemapPlugin,
-  dynamicManifestPlugin
-} = await import('./vite.plugins.ts');
+// Inject the constants source instead of mocking node:fs — the reader closes over the
+// live `constantsMode`, so flipping it in beforeEach/it switches the fixture.
+__setConstantsReaderForTests(() =>
+  JSON.stringify(constantsMode === 'with-http' ? constantsWithHttp : constantsWithoutHttp)
+);
 
 describe('customLoggerPlugin', () => {
   it('overrides printUrls with a single localhost message', () => {

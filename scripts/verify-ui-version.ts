@@ -3,6 +3,26 @@ import { join } from 'node:path';
 
 const UI_PKG = '@stevederico/skateboard-ui';
 
+/** Filesystem operations this module needs — injectable so tests avoid mocking `node:fs`. */
+interface FsSeam {
+  existsSync(path: string): boolean;
+  readFileSync(path: string, encoding: 'utf8'): string;
+}
+
+/** Live filesystem seam. Overridden in tests via {@link __setFsForTests}. */
+let fs: FsSeam = { existsSync, readFileSync };
+
+/**
+ * Test-only seam: swap the filesystem backend. Avoids `mock.module('node:fs')`, whose
+ * named/default exports don't survive `--experimental-test-module-mocks` reliably across
+ * Node versions (Node 24.14 breaks named-import resolution on the mocked builtin).
+ *
+ * @param seam - Replacement existsSync/readFileSync implementations
+ */
+export function __setFsForTests(seam: FsSeam): void {
+  fs = seam;
+}
+
 const DENO_ARTIFACTS = ['deno.lock', 'deno.json', 'backend/deno.json', 'backend/deno.lock'];
 
 /**
@@ -49,7 +69,7 @@ function asStringRecord(value: unknown): Record<string, string> | undefined {
  * @returns Parsed manifest with optional dependency/version fields
  */
 function readManifest(path: string): PackageManifest {
-  const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+  const parsed: unknown = JSON.parse(fs.readFileSync(path, 'utf8'));
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error(`verify-ui-version: invalid package.json at ${path}`);
   }
@@ -81,17 +101,17 @@ export function verifyUiVersion(root: string = process.cwd()): VerifyResult {
   }
 
   for (const rel of DENO_ARTIFACTS) {
-    if (existsSync(join(root, rel))) {
+    if (fs.existsSync(join(root, rel))) {
       return { ok: false, message: `verify-ui-version: remove ${rel} (npm-only stack)` };
     }
   }
 
-  if (existsSync(join(root, 'node_modules', '.deno'))) {
+  if (fs.existsSync(join(root, 'node_modules', '.deno'))) {
     return { ok: false, message: 'verify-ui-version: remove node_modules/.deno and reinstall with npm' };
   }
 
   const uiPkgPath = join(root, 'node_modules', '@stevederico', 'skateboard-ui', 'package.json');
-  if (!existsSync(uiPkgPath)) {
+  if (!fs.existsSync(uiPkgPath)) {
     return { ok: false, message: `verify-ui-version: run npm install (${UI_PKG} missing)` };
   }
 
