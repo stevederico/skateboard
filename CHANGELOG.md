@@ -1,3 +1,8 @@
+3.18.0
+
+  Pin skateboard-ui 4.10.0
+  Reinstall after version bump
+
 3.17.0
 
   Centralize backend lib

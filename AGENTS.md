@@ -624,8 +624,8 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@3.14.0
-- skateboard-ui@4.3.0
+- skateboard@3.18.0
+- skateboard-ui@4.10.0
 
 ## Updating from Skateboard Boilerplate
 
@@ -640,6 +640,18 @@ This project was created from the skateboard boilerplate. The `skateboardVersion
 3. Update skateboard-ui: `npm install @stevederico/skateboard-ui@latest`
 4. Compare and update boilerplate files
 5. Update `skateboardVersion` field after applying changes
+
+**CRITICAL — never bump a version in `package.json` without installing it.** Editing the
+dependency string (or running `npm install <pkg>@x` then reverting node_modules) leaves the
+*declared* version ahead of the *installed* one — the lockfile and `node_modules` still hold
+the old code, so builds/tests pass against stale deps and the bump is a lie. After ANY change to
+a version in `package.json`:
+1. Run `npm install` (and `npm install --workspace=backend` if backend deps changed) so the
+   lockfile + `node_modules` actually match.
+2. Verify declared == installed before committing:
+   `npm run verify:ui` (for skateboard-ui), or
+   `npm ls <pkg>` / compare `package.json` vs `node_modules/<pkg>/package.json`.
+3. Commit `package.json` **and** `package-lock.json` together — never one without the other.
 
 ### Safe to Update (review and apply)
 - `backend/server.ts` - Server logic, security updates
