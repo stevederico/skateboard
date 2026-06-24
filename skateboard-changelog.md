@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.0.0
+
+  Bump major version
+
 3.23.0
 
   Fix backend mocks
