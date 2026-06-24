@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.3.0
+
+  Update skateboard-ui 4.11.0
+
 4.2.0
 
   Test empty buttonTitle
