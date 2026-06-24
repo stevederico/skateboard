@@ -1901,59 +1901,29 @@ See [ARCHITECTURE.md](ARCHITECTURE.md#production-configuration) for environment 
 
 ## Migration
 
+Upgrade an existing skateboard project with the bundled updater — it is version-agnostic
+(reads the current pins from the reference repo, no hardcoded versions to go stale) and
+handles the TypeScript file renames (`backend/server.js` → `backend/server.ts`, etc.) with a
+3-way merge that preserves your edits:
 
-Paste the prompt below into Claude Code (or any coding agent) from the root of your skateboard 2.x or 3.0.x–3.1.x project. It upgrades to the current latest (3.1.7).
-
----
-
+```bash
+node scripts/update-skateboard.js          # interactive — diff per file
+node scripts/update-skateboard.js --yes    # apply all without prompts
 ```
-Upgrade this skateboard project to the latest version (3.1.7). Do not skip steps, do not guess — verify each change.
 
-1. Read package.json. Note the current skateboardVersion. Update dependencies to these exact pins:
-   - "@stevederico/skateboard-ui": "3.0.2"
-   - "react": "19.2.6"
-   - "react-dom": "19.2.6"
-   - "react-router-dom": "7.15.0"
-   Remove "react-router" if present — it's pulled in transitively by react-router-dom and no longer needs to be a direct dep.
-   Update devDependencies to these exact pins:
-   - "@tailwindcss/vite": "4.3.0"
-   - "@vitejs/plugin-react-swc": "4.3.0"
-   - "tailwindcss": "4.3.0"
-   - "vite": "7.3.3"
-   Bump "version" and "skateboardVersion" to 3.1.7.
+Then install, sync the version label, and validate:
 
-2. Read backend/package.json. Backend deps in 3.1.7 are only:
-   - "@hono/node-server"
-   - "hono"
-   - "stripe"
-   Remove "jsonwebtoken" (replaced by native node:crypto HMAC in server.js).
-   Remove "bcryptjs" (replaced by node:crypto scrypt for new hashes; legacy bcrypt verification is vendored at backend/vendor/legacy-bcrypt.js).
-   Remove "pg" and "mongodb" UNLESS this app actually uses them — grep with:
-   `grep -r "from 'pg'\|from 'mongodb'\|require('pg')\|require('mongodb')" backend/`.
-
-3. Grep src/ for these imports — they were removed in 3.0:
-   - `@stevederico/skateboard-ui/DataTable`
-   - `@stevederico/skateboard-ui/Chart` or `ChartAreaInteractive`
-   - `@stevederico/skateboard-ui/shadcn/ui/sonner` or `Toaster` from skateboard-ui
-   If found, tell the user — these need manual replacement (they were demo-only and are gone in 3.0+).
-
-4. Grep src/ for these — they're now optional peer deps (only install if imported):
-   - `embla-carousel-react`
-   - `react-resizable-panels`
-   - `recharts`
-   For each one found in src/, add to package.json dependencies with the latest version pinned exact.
-
-5. Grep src/ for `from "lucide-react"`. If found, rewrite all such imports to `from "@stevederico/skateboard-ui/icons"` and remove `lucide-react` from package.json dependencies — icons are vendored in skateboard-ui 3.0+.
-
-6. Read vite.config.js. Ensure resolve.dedupe includes 'react-router-dom'. The 'react-router' entry can stay (it resolves transitively) but isn't required.
-
-7. (Optional, 3.1.0+) If the user wants the refined landing variant, copy `src/components/LandingSpecSheet.jsx` from the skateboard reference repo (https://github.com/stevederico/skateboard) and wire it in `src/main.jsx` via `createSkateboardApp`'s `landingPage` prop. Skip if the user prefers the default LandingView.
-
-8. Run `npm install` at the project root. Then `npm run build`. If build fails, read the error and fix it — common issues:
-   - Missing import → add to package.json per step 4
-   - "X is not exported by Y" → check skateboard-ui 3.0+ changelog, the export may have moved
-
-9. Update skateboard-changelog.md: add a "3.1.7" entry above the current top entry, with one line: "Upgrade to skateboard 3.1.7".
-
-10. Report back: list every file you changed and confirm `npm run build` passed. Do NOT commit — leave that to the user.
+```bash
+npm install                                # root deps + lockfile
+npm install --workspace=backend            # backend deps
+npm run typecheck && npm run test          # gate the upgrade
 ```
+
+After applying, bump both `version` and `skateboardVersion` in `package.json` to match the
+release you upgraded to (these must stay equal — a stale `skateboardVersion` is a lie).
+
+> Full step-by-step guide, the pre-TypeScript (`.jsx` → `.tsx`) migration path, and an agent
+> prompt that automates the whole upgrade: **[docs/UPGRADE.md](UPGRADE.md)**.
+>
+> Do NOT hardcode dependency pins in this doc — they rot every release. Always resolve current
+> versions from the reference repo's `package.json`: https://github.com/stevederico/skateboard

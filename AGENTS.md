@@ -53,11 +53,18 @@ When making ANY code changes, you MUST update:
 - API docs if endpoints change
 - CHANGELOG.md for all changes (see commit protocol)
 
+**Version & dependency bumps MUST propagate to every doc that names them (no exceptions):**
+- Bumping a version in `package.json` (the app `version`, `skateboardVersion`, or any dependency) is NOT done until you have grepped the docs for the old value and updated every hit: `README.md` (the Technology/Version table, version floors), `docs/GUIDE.md`, `docs/UPGRADE.md`, and the AGENTS.md "Version" block.
+- `version` and `skateboardVersion` in `package.json` must always be equal — a stale `skateboardVersion` is a lie.
+- **Never hardcode dependency pins inside prose/docs.** Embedded "upgrade to X" prompts with literal pins rot every release. Reference the current pins from `package.json` / the reference repo instead, or point at the version-agnostic updater (`scripts/update-skateboard.js`).
+- Quick audit before committing a bump: `grep -rn "<old-version>" README.md docs/ AGENTS.md` must return nothing.
+
 **Before committing:**
 1. Review all modified functions — do JSDoc comments match current signatures and behavior?
 2. Check that parameter names, types, and descriptions are accurate
 3. Remove doc comments for deleted functions — don't leave orphaned docs
 4. Verify examples in docs still work with changes
+5. If any version changed, run the grep audit above and confirm zero stale hits
 
 **Out-of-date documentation is worse than no documentation.**
 
