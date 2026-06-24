@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.2.0
+
+  Test empty buttonTitle
+
 4.1.0
 
   Fix BlankView ternary
