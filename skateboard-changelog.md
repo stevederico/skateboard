@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.4.0
+
+  Fix README footprint
+  Update version tables
+
 4.3.0
 
   Update skateboard-ui 4.11.0

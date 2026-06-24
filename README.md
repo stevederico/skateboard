@@ -175,12 +175,12 @@ See [Guide → Architecture](docs/GUIDE.md#architecture) for details.
 
 ## 🪶 Dependency Footprint
 
-Skateboard is intentionally lean. As of v3.3.0:
+Skateboard is intentionally lean — current footprint (counting what ships at runtime):
 
 | | Frontend runtime | Frontend dev | Backend runtime |
 |---|---|---|---|
 | Before (v2.x) | 12 | 4 | 7 |
-| **Now (v3.3.0)** | **4** | **4** | **3** |
+| **Now** | **4** | **13** | **3** |
 
 Backend `jsonwebtoken` and `bcryptjs` were both dropped — JWT signing/verification now uses `node:crypto` HMAC, and password hashing uses `node:crypto` scrypt. Legacy bcrypt hashes from older versions still verify (vendored at `backend/vendor/legacy-bcrypt.js`) and are silently re-hashed to scrypt on next login.
 
@@ -188,7 +188,7 @@ Backend `pg` and `mongodb` are not hard deps — `create-skateboard-app` injects
 
 The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui), which itself runs on a single hard dep (`@base-ui/react`) plus optional peer deps for heavy components users opt into.
 
-v3.8.0 adds `typescript` and `@types/*` as dev-only dependencies for the strict typecheck — zero runtime additions, and no build step: Node 24 strips types natively and Vite compiles `.tsx` directly.
+Frontend dev deps grew from 4 to 13 because v3.8.0 added `typescript` + `@types/*` for the strict typecheck and the suite pulls in `vitest` + `@testing-library/*` — all dev-only, zero runtime additions. There's still no build step for types: Node 24 strips them natively and Vite compiles `.tsx` directly.
 
 <br />
 
@@ -199,7 +199,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v4.10+ | Application Shell, Components, Theming |
+| **skateboard-ui** | v4.11+ | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (Oxc/Rolldown) |
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.15+ | Routing |
