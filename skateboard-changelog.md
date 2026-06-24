@@ -8,17 +8,146 @@
   cause merge conflicts on every boilerplate upgrade.
 
   Rules for maintainers of the skateboard repo itself:
-  - Record skateboard releases in THIS file, not `changelog.md`
-  - The project-level CLAUDE.md still references `CHANGELOG.md` generically
-    because it is copied into downstream apps; do not "fix" that reference
-  - Downstream apps create and maintain their own `changelog.md` on first commit
+  - Record skateboard releases in THIS file. This repo has NO `CHANGELOG.md`
+    (it was merged here) — do not recreate one; the /commit skill's default
+    `CHANGELOG.md` target is overridden by AGENTS.md's Commit Process for this repo.
+  - Downstream apps create and maintain their own `CHANGELOG.md` on first commit;
+    that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
+
+3.20.0
+
+  Merge changelogs
+  Remove CHANGELOG.md
+  Use skateboard-changelog
+
+3.19.0
+
+  Sync skateboardVersion label
+  Replace stale migration prompt
+  Raise ui floor
+  Mandate doc sync
+
+3.18.0
+
+  Pin skateboard-ui 4.10.0
+  Reinstall after version bump
+
+3.17.0
+
+  Centralize backend lib
+  Validate JWT payload
+  Set empty env-values
+  Bound store growth
+  Optimize store eviction
+  Type build scripts
+  Document vitest runner
+
+3.16.0
+
+  Merge coverage suite
+  Add vitest tests
+  Add adapter tests
+
+3.15.0
+
+  Pin skateboard-ui 4.6.0
+
+3.14.0
+
+  Narrow backend catch errors
+  Validate JSON.parse boundaries
+  Guard non-null assertions
+  Type-guard dynamic driver imports
+
+3.13.0
+
+  Pin skateboard-ui 4.3.0
+  Inherit accessibility fixes
+
+3.12.0
+
+  Sync CLAUDE.md
+  Updater propagates rules
+
+3.11.0
+
+  Prohibit ts-nocheck
+
+3.10.0
+
+  Update CLAUDE.md TypeScript
+  Add TS anti-patterns
+  Fix stale docs
+
+3.9.0
+
+  Pin skateboard-ui 3.11.0
+  Drop ui shim
+  Updater removes shim
+
+3.8.0
+
+  Convert to TypeScript
+  Add strict typecheck
+  Type database adapters
+  Add ambient declarations
+  Gate build typecheck
+  Gate test typecheck
+  Add pre-commit hook
+  Migrate update script
+  Add upgrade prompt
+  Update README
+  Fix basil webhooks
+  Add deleteUser rollback
+  Lazy-load db drivers
+  Fix typecheck gates
+  Harden update script
+
+3.7.0
+
+  Bump skateboard-ui 3.9.0
+  Add root test scripts
+  Document node:test runner
+  Add CHANGELOG
+  Refresh version docs
 
 3.6.1
 
-  Require Node 24+
-  Drop --experimental-sqlite (stable in Node 24)
+  Require Node 24
+  Drop --experimental-sqlite
   Dockerfile node:24-alpine
+  Add verify-ui script
+  Remove fleet scripts
+  Add backend watch
+
+3.6.0
+
+  Update Dockerfile pattern
+
+3.5.0
+
+  Adopt package landing
+  Drop vendored LandingSpecSheet
+
+3.4.0
+
+  Upgrade skateboard-ui 3.7.0
+  Migrate react-router
+
+3.3.0
+
+  Upgrade Vite 8
+
+3.2.0
+
+  Pin skateboard-ui 3.6.1
+  Remove dead shims
+
+3.1.7
+
+  Vendor legacy bcrypt
+  Drop bcryptjs dep
 
 3.1.3
 
