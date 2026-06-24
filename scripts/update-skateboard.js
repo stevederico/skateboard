@@ -40,9 +40,10 @@
  */
 
 import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, chmodSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, chmodSync, readdirSync, lstatSync, readlinkSync, symlinkSync, unlinkSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 
 const APP_ROOT = process.cwd();
@@ -66,13 +67,20 @@ const ALLOWLIST = [
   'backend/package.json',
   'tsconfig.json',
   'vite.config.ts',
-  'CLAUDE.md',
+  'AGENTS.md',
   'Dockerfile',
   '.dockerignore',
   '.gitignore',
   '.githooks/pre-commit',
   'scripts/update-skateboard.js'
 ];
+
+// Template-owned symlinks: link path → target path (both relative to app root).
+// CLAUDE.md is a symlink to AGENTS.md (the open-standard source of truth). It is NOT
+// on the ALLOWLIST because `git show HEAD:CLAUDE.md` serves the symlink's TARGET STRING
+// ("AGENTS.md"), not file content — syncing it as a regular file would overwrite the
+// app's CLAUDE.md with the 9-byte string "AGENTS.md". ensureSymlink recreates the link.
+const SYMLINKS = { 'CLAUDE.md': 'AGENTS.md' };
 
 // Files the template deleted that apps should drop too. A stale copy is harmful
 // (ambient declarations shadow the real types: backend/ambient.d.ts hid pg/mongodb
@@ -91,7 +99,11 @@ const RENAMES = {
   'backend/adapters/sqlite.ts': 'backend/adapters/sqlite.js',
   'backend/adapters/postgres.ts': 'backend/adapters/postgres.js',
   'backend/adapters/mongodb.ts': 'backend/adapters/mongodb.js',
-  'vite.config.ts': 'vite.config.js'
+  'vite.config.ts': 'vite.config.js',
+  // The instruction file flipped from CLAUDE.md (real file) to AGENTS.md (real file)
+  // + CLAUDE.md symlink. An app whose CLAUDE.md is still a regular file gets its edits
+  // 3-way merged into AGENTS.md; SYMLINKS then recreates CLAUDE.md as the symlink.
+  'AGENTS.md': 'CLAUDE.md'
 };
 
 const SKIP_NOTE = `
@@ -418,6 +430,63 @@ async function migrateRenamedFile(relPath, oldRel, baselineTag, newContent) {
 }
 
 /**
+ * Ensure `linkRel` is a symlink pointing at `targetRel` (both relative to the app root).
+ *
+ * Recreates the template's `CLAUDE.md → AGENTS.md` symlink. Unlike ALLOWLIST files this
+ * is NOT copied via `git show` (which would yield the 9-byte target string, not content)
+ * — it is materialized with `symlinkSync` so the app gets a real symlink.
+ *
+ * - link absent            → create it
+ * - link already correct   → no-op
+ * - link wrong target      → retarget
+ * - link is a regular file → offer to replace (legacy real CLAUDE.md; its content should
+ *                            already have migrated into AGENTS.md via RENAMES)
+ * - target missing         → skip (nothing to point at)
+ *
+ * @returns {Promise<'ok'|'wrote'|'declined'|'error'>}
+ */
+async function ensureSymlink(linkRel, targetRel, { root = APP_ROOT, confirmFn = confirm } = {}) {
+  const linkPath = join(root, linkRel);
+  if (!existsSync(join(root, targetRel))) {
+    console.log(`[skip] ${linkRel} symlink — target ${targetRel} not present`);
+    return 'ok';
+  }
+  let stat = null;
+  try { stat = lstatSync(linkPath); } catch { /* absent */ }
+
+  if (stat?.isSymbolicLink()) {
+    if (readlinkSync(linkPath) === targetRel) {
+      console.log(`[ok]   ${linkRel} → ${targetRel}`);
+      return 'ok';
+    }
+    unlinkSync(linkPath);
+    symlinkSync(targetRel, linkPath);
+    console.log(`[wrote] ${linkRel} → ${targetRel} (retargeted)`);
+    return 'wrote';
+  }
+
+  if (stat) {
+    if (stat.isDirectory()) {
+      console.log(`[error] ${linkRel} is a directory — cannot convert to a symlink; resolve by hand`);
+      return 'error';
+    }
+    console.log(`\n[symlink] ${linkRel} is a regular file; the template now ships it as a symlink → ${targetRel}`);
+    if (await confirmFn(`Replace ${linkRel} with a symlink → ${targetRel}? (its content should already be in ${targetRel})`)) {
+      unlinkSync(linkPath);
+      symlinkSync(targetRel, linkPath);
+      console.log(`[wrote] ${linkRel} → ${targetRel}`);
+      return 'wrote';
+    }
+    console.log(`[kept]  ${linkRel}`);
+    return 'declined';
+  }
+
+  symlinkSync(targetRel, linkPath);
+  console.log(`[wrote] ${linkRel} → ${targetRel} (new symlink)`);
+  return 'wrote';
+}
+
+/**
  * Merge the template's package.json deps/scripts into the app's (add/prune/update via
  * the baseline). Stamps `skateboardVersion` only when `stamp` is true — callers pass
  * false when any file ended declined/conflicted/errored so a re-run can finish the job.
@@ -586,6 +655,12 @@ async function main() {
     }
   }
 
+  // Recreate template-owned symlinks (CLAUDE.md → AGENTS.md). Runs after the ALLOWLIST
+  // loop so AGENTS.md exists and any legacy real CLAUDE.md has already migrated via RENAMES.
+  for (const [linkRel, targetRel] of Object.entries(SYMLINKS)) {
+    statuses.push(await ensureSymlink(linkRel, targetRel));
+  }
+
   // Any declined/conflicted/errored file means the upgrade is incomplete — don't stamp
   // skateboardVersion (the dep/script merges are still offered above).
   const blocked = statuses.filter(s => s === 'declined' || s === 'conflicts' || s === 'error').length;
@@ -621,4 +696,12 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+/** True when this file is the process entry point (not imported by a test). */
+const isMain = (() => {
+  try { return !!process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url); }
+  catch { return false; }
+})();
+
+if (isMain) main().catch(e => { console.error(e); process.exit(1); });
+
+export { ALLOWLIST, REMOVED, RENAMES, SYMLINKS, ensureSymlink, findMergeDefects, threeWayMerge };

@@ -15,6 +15,12 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+3.21.0
+
+  Fix symlink corruption
+  Allowlist AGENTS.md
+  Add updater test
+
 3.20.0
 
   Merge changelogs
