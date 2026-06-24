@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "4.2.0",
-  "skateboardVersion": "4.2.0",
+  "version": "4.3.0",
+  "skateboardVersion": "4.3.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -31,7 +31,7 @@
     "test:coverage:build": "node --experimental-test-module-mocks --experimental-test-coverage --test vite.plugins.test.js scripts/verify-ui-version.test.js"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "4.10.0",
+    "@stevederico/skateboard-ui": "4.11.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-router": "7.15.0"
