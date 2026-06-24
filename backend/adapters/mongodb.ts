@@ -112,6 +112,26 @@ interface MongoModule {
 // Variable specifier keeps tsc from resolving the optional module.
 const MONGODB_SPECIFIER = 'mongodb';
 
+/**
+ * Module loader seam. Live default dynamically imports the real `mongodb`
+ * driver; tests override it via {@link __setMongoModuleLoaderForTests} to
+ * avoid `mock.module('mongodb')`, whose exports don't survive
+ * `--experimental-test-module-mocks` reliably across Node versions (Node 24.14
+ * breaks named-import resolution on the mocked module).
+ */
+let loadMongoModule = (): Promise<unknown> => import(MONGODB_SPECIFIER);
+
+/**
+ * Test-only seam: swap the `mongodb` module loader. Inject an async loader
+ * that resolves to a fake `{ MongoClient }` surface so the adapter can be
+ * exercised without the real driver installed.
+ *
+ * @param loader - Replacement loader resolving to the module namespace
+ */
+export function __setMongoModuleLoaderForTests(loader: () => Promise<unknown>): void {
+  loadMongoModule = loader;
+}
+
 /** Cached driver module, loaded once by loadMongoDriver(). */
 let mongoDriver: MongoModule | null = null;
 
@@ -142,7 +162,7 @@ function isMongoModule(mod: unknown): mod is MongoModule {
  */
 async function loadMongoDriver(): Promise<MongoModule> {
   if (!mongoDriver) {
-    const mod: unknown = await import(MONGODB_SPECIFIER);
+    const mod: unknown = await loadMongoModule();
     if (!isMongoModule(mod)) {
       throw new Error("The 'mongodb' package is not installed or does not export MongoClient");
     }

@@ -16,6 +16,67 @@ import type {
   ExecuteResult
 } from '../types.ts';
 
+/** Constructor for a no-arg database provider, as loaded from a sibling adapter module. */
+type ProviderConstructor = new () => DatabaseProvider;
+
+/**
+ * Narrow an unknown loaded value to a {@link ProviderConstructor}.
+ *
+ * Loaders resolve sibling modules whose exports are typed `unknown` at the boundary;
+ * this guard proves the value is a constructable class before it is invoked with `new`.
+ *
+ * @param value - Candidate loaded provider export
+ * @returns True if the value can be used as a no-arg provider constructor
+ */
+function isProviderConstructor(value: unknown): value is ProviderConstructor {
+  return typeof value === 'function';
+}
+
+/**
+ * Resolve a provider constructor from a loaded module value.
+ *
+ * @param loaded - Value returned by a provider loader
+ * @param label - Human-readable provider name for error messages
+ * @returns The validated provider constructor
+ * @throws {Error} If the loaded value is not a constructable class
+ */
+function resolveProviderConstructor(loaded: unknown, label: string): ProviderConstructor {
+  if (!isProviderConstructor(loaded)) {
+    throw new Error(`Invalid ${label} provider export: expected a constructor`);
+  }
+  return loaded;
+}
+
+/** Live loader for the PostgreSQL provider. Overridden in tests via {@link __setProviderLoadersForTests}. */
+let loadPostgresProvider: () => Promise<unknown> = async () =>
+  (await import('./postgres.ts')).PostgreSQLProvider;
+
+/** Live loader for the MongoDB provider. Overridden in tests via {@link __setProviderLoadersForTests}. */
+let loadMongoProvider: () => Promise<unknown> = async () =>
+  (await import('./mongodb.ts')).MongoDBProvider;
+
+/**
+ * Test-only seam: swap the postgres/mongodb provider loaders. Avoids
+ * `mock.module('./postgres.ts')` / `mock.module('./mongodb.ts')`, whose exports don't
+ * survive `--experimental-test-module-mocks` reliably across Node versions (Node 24.14
+ * breaks dynamic-import resolution on the mocked sibling modules).
+ *
+ * Only the loaders provided are overridden; omitted ones keep their live defaults.
+ *
+ * @param loaders - Replacement loaders returning a provider constructor (as `unknown`)
+ */
+export function __setProviderLoadersForTests(loaders: {
+  postgres?: () => Promise<unknown>;
+  mongodb?: () => Promise<unknown>;
+}): void {
+  if (loaders.postgres) {
+    loadPostgresProvider = loaders.postgres;
+  }
+  if (loaders.mongodb) {
+    loadMongoProvider = loaders.mongodb;
+  }
+}
+
 /**
  * Database manager implementing factory pattern for multi-database support
  *
@@ -59,13 +120,13 @@ class DatabaseManager {
           break;
         case 'postgresql':
         case 'postgres': {
-          const { PostgreSQLProvider } = await import('./postgres.ts');
+          const PostgreSQLProvider = resolveProviderConstructor(await loadPostgresProvider(), 'postgres');
           provider = new PostgreSQLProvider();
           break;
         }
         case 'mongodb':
         case 'mongo': {
-          const { MongoDBProvider } = await import('./mongodb.ts');
+          const MongoDBProvider = resolveProviderConstructor(await loadMongoProvider(), 'mongodb');
           provider = new MongoDBProvider();
           break;
         }

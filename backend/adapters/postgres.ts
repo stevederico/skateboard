@@ -88,6 +88,25 @@ const INT8_OID = 20;
 // Variable specifier keeps tsc from resolving the optional module.
 const PG_SPECIFIER = 'pg';
 
+/**
+ * Live driver-import seam. Production loads the real optional `pg` module via a
+ * variable-specifier dynamic import; tests swap it through {@link __setPgModuleLoaderForTests}.
+ *
+ * @returns The raw `pg` module namespace (validated downstream by isPgModule)
+ */
+let loadPgModule: () => Promise<unknown> = () => import(PG_SPECIFIER);
+
+/**
+ * Test-only seam: replace the `pg` module loader. Avoids `mock.module('pg')`,
+ * whose mocked dynamic import no longer applies under Node 24.14, leaving
+ * assertPgModule to reject the real (unmocked) surface.
+ *
+ * @param loader - Replacement loader returning the pg module namespace
+ */
+export function __setPgModuleLoaderForTests(loader: () => Promise<unknown>): void {
+  loadPgModule = loader;
+}
+
 /** Cached driver module, loaded once by loadPgDriver(). */
 let pgDriver: PgModule | null = null;
 
@@ -104,7 +123,7 @@ let pgDriver: PgModule | null = null;
 async function loadPgDriver(): Promise<PgModule> {
   if (!pgDriver) {
     // pg is CommonJS: the namespace's `default` carries module.exports.
-    const namespace: unknown = await import(PG_SPECIFIER);
+    const namespace: unknown = await loadPgModule();
     const exported =
       typeof namespace === 'object' && namespace !== null && 'default' in namespace
         ? namespace.default

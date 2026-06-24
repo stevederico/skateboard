@@ -34,30 +34,25 @@ describe('production server import', () => {
     assert.equal(result.status, 0, result.stderr || result.stdout);
   });
 
-  it('starts HTTP server using the default serve factory', () => {
+  it('starts HTTP server using an injected serve factory', () => {
     const script = `
-      import { mock } from 'node:test';
       let serveCalled = false;
-      mock.module('@hono/node-server', {
-        namedExports: {
-          serve: (options, onListen) => {
-            serveCalled = true;
-            onListen({ port: options.port || 8000 });
-            return { close: () => {} };
-          },
-        },
-      });
+      const fakeServe = (options, onListen) => {
+        serveCalled = true;
+        onListen({ port: options.port || 8000 });
+        return { close: () => {} };
+      };
       process.env.SKIP_SERVER_START = '1';
       process.env.JWT_SECRET = 'startup-test-secret';
       process.env.STRIPE_KEY = 'sk_test_startup';
       process.env.STRIPE_ENDPOINT_SECRET = 'whsec_startup';
       process.env.TEST_DATABASE_PATH = './databases/startup-serve-test.db';
-      const { __testStartHttpServer } = await import('./server.ts');
+      const { __testSetServeFactory, __testStartHttpServer } = await import('./server.ts');
+      __testSetServeFactory(fakeServe);
       const httpServer = __testStartHttpServer();
       if (!serveCalled || !httpServer) process.exit(2);
     `;
     const result = spawnSync(process.execPath, [
-      '--experimental-test-module-mocks',
       '--input-type=module',
       '-e',
       script,

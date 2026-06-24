@@ -2,6 +2,9 @@ import { DatabaseSync as Database } from "node:sqlite";
 import { mkdir } from 'node:fs';
 import { promisify } from 'node:util';
 import type {
+  MakeDirectoryOptions
+} from 'node:fs';
+import type {
   AuthQuery,
   AuthRecord,
   AuthUpdate,
@@ -20,6 +23,28 @@ import type {
   UserUpdate,
   WebhookEventRecord
 } from '../types.ts';
+
+/** Promisified node:fs.mkdir — the live default for the {@link FsSeam}. */
+const mkdirAsync = promisify(mkdir);
+
+/** Filesystem operations this module needs — injectable so tests avoid mocking `node:fs`. */
+interface FsSeam {
+  mkdir(path: string, options: MakeDirectoryOptions): Promise<string | undefined>;
+}
+
+/** Live filesystem seam. Overridden in tests via {@link __setFsForTests}. */
+let fs: FsSeam = { mkdir: mkdirAsync };
+
+/**
+ * Test-only seam: swap the filesystem backend. Avoids `mock.module('node:fs')`, whose
+ * named/default exports don't survive `--experimental-test-module-mocks` reliably across
+ * Node versions (Node 24.14 breaks named-import resolution on the mocked builtin).
+ *
+ * @param seam - Replacement mkdir implementation
+ */
+export function __setFsForTests(seam: FsSeam): void {
+  fs = seam;
+}
 
 /**
  * Raw Users table row as returned by SELECT *, with flat subscription_* and
@@ -148,7 +173,7 @@ export class SQLiteProvider implements DatabaseProvider<Database> {
    */
   async initializeSQLite(): Promise<void> {
     try {
-      await promisify(mkdir)('./databases', { recursive: true });
+      await fs.mkdir('./databases', { recursive: true });
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
         console.error("Failed to create databases directory:", err);

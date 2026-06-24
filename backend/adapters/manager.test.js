@@ -1,6 +1,7 @@
-import { describe, it, before, after, beforeEach, mock } from 'node:test';
+import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { rm } from 'node:fs/promises';
+import { databaseManager, __setProviderLoadersForTests } from './manager.ts';
 
 const SQLITE_DB_PATH = './databases/manager-test-coverage.db';
 const SQLITE_DB_NAME = 'manager-test-coverage';
@@ -38,27 +39,23 @@ function createTrackingProvider(label) {
 const postgresProvider = createTrackingProvider('postgres');
 const mongoProvider = createTrackingProvider('mongo');
 
-mock.module('./postgres.ts', {
-  exports: {
-    PostgreSQLProvider: class {
+// Inject fake provider constructors via the manager's test seam instead of mock.module.
+// Each fake class returns the shared tracking provider from its constructor — same
+// behavior the previous mock.module exports gave.
+__setProviderLoadersForTests({
+  postgres: async () =>
+    class {
       constructor() {
         return postgresProvider;
       }
     },
-  },
-});
-
-mock.module('./mongodb.ts', {
-  exports: {
-    MongoDBProvider: class {
+  mongodb: async () =>
+    class {
       constructor() {
         return mongoProvider;
       }
     },
-  },
 });
-
-const { databaseManager } = await import('./manager.ts');
 
 describe('DatabaseManager sqlite integration', () => {
   before(async () => {

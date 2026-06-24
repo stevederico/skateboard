@@ -1,5 +1,6 @@
-import { describe, it, before, after, beforeEach, mock } from 'node:test';
+import { describe, it, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { PostgreSQLProvider, __setPgModuleLoaderForTests } from './postgres.ts';
 
 const poolConfigs = [];
 const poolInstances = [];
@@ -34,18 +35,17 @@ class MockPool {
   }
 }
 
-mock.module('pg', {
-  exports: {
-    default: {
-      Pool: MockPool,
-      types: {
-        setTypeParser: () => {},
-      },
+// Inject a fake `pg` surface through the module loader seam instead of
+// mock.module('pg') (which no longer applies under Node 24.14). The shape
+// mirrors pg's CommonJS namespace: `default` carries module.exports.
+__setPgModuleLoaderForTests(async () => ({
+  default: {
+    Pool: MockPool,
+    types: {
+      setTypeParser: () => {},
     },
   },
-});
-
-const { PostgreSQLProvider } = await import('./postgres.ts');
+}));
 
 describe('PostgreSQLProvider', () => {
   let provider;
