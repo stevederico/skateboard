@@ -53,6 +53,16 @@ describe('BlankView', () => {
     expect(screen.getByTestId('custom-icon')).toBeInTheDocument();
   });
 
+  it('renders no CTA button when buttonTitle is empty', () => {
+    const { container } = render(<BlankView title="Projects" buttonTitle="" />);
+
+    // Behavioral guard: an empty buttonTitle shows the empty state with no CTA.
+    // (This does not distinguish the `&&` vs ternary fix — for "" both render no
+    // <button>; the ternary's only gain is returning null over an empty text node.)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-testid="plus-icon"]')).toBeNull();
+  });
+
   it('renders children instead of empty state when provided', () => {
     render(
       <BlankView title="Analytics">
