@@ -1,3 +1,10 @@
+3.19.0
+
+  Sync skateboardVersion label
+  Replace stale migration prompt
+  Raise ui floor
+  Mandate doc sync
+
 3.18.0
 
   Pin skateboard-ui 4.10.0
