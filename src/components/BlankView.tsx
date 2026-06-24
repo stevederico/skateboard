@@ -45,12 +45,12 @@ export default function BlankView({ title = "Blank", description, buttonTitle, o
                   {description || `${title} will appear here once you get started.`}
                 </EmptyDescription>
               </EmptyHeader>
-              {buttonTitle && (
+              {buttonTitle ? (
                 <Button onClick={onButtonClick}>
                   <Plus size={18} />
                   {buttonTitle}
                 </Button>
-              )}
+              ) : null}
             </Empty>
           </div>
         )}
