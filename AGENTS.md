@@ -631,7 +631,7 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@3.18.0
+- skateboard@3.19.0
 - skateboard-ui@4.10.0
 
 ## Updating from Skateboard Boilerplate
