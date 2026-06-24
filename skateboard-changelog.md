@@ -15,6 +15,12 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+3.23.0
+
+  Fix backend mocks
+  Inject adapter loaders
+  Drop module mocks
+
 3.22.0
 
   Fix mock-broken tests

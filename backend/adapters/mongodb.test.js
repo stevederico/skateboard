@@ -1,5 +1,6 @@
 import { describe, it, before, after, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { MongoDBProvider, __setMongoModuleLoaderForTests } from './mongodb.ts';
 
 const mongoClientConfigs = [];
 const mongoClients = [];
@@ -63,13 +64,9 @@ class MockMongoClient {
   }
 }
 
-mock.module('mongodb', {
-  exports: {
-    MongoClient: MockMongoClient,
-  },
-});
-
-const { MongoDBProvider } = await import('./mongodb.ts');
+// Inject a fake `mongodb` surface via the module-loader seam instead of
+// mock.module('mongodb'), which breaks named-import resolution under Node 24.14.
+__setMongoModuleLoaderForTests(async () => ({ MongoClient: MockMongoClient }));
 
 describe('MongoDBProvider', () => {
   let provider;

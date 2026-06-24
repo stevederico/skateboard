@@ -1,29 +1,29 @@
-import { describe, it, before, after, beforeEach, mock } from 'node:test';
+import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir as realMkdir } from 'node:fs';
+import { mkdir as realMkdir } from 'node:fs/promises';
 import { rm } from 'node:fs/promises';
+import { SQLiteProvider, __setFsForTests } from './sqlite.ts';
 
 const TEST_DB_PATH = './databases/test-coverage.db';
 const TEST_DB_NAME = 'test-coverage';
 
 let mkdirMode = 'real';
+let mkdirCalls = [];
 
-mock.module('node:fs', {
-  exports: {
-    mkdir: (path, options, callback) => {
-      const cb = typeof options === 'function' ? options : callback;
-      if (mkdirMode === 'eexist') {
-        return cb(Object.assign(new Error('exists'), { code: 'EEXIST' }));
-      }
-      if (mkdirMode === 'error') {
-        return cb(Object.assign(new Error('permission denied'), { code: 'EACCES' }));
-      }
-      return realMkdir(path, options, cb);
-    },
+// Inject an in-memory fs seam instead of mocking node:fs — closes over the live
+// mkdirMode/mkdirCalls so beforeEach/it mutations take effect.
+__setFsForTests({
+  async mkdir(path, options) {
+    mkdirCalls.push({ path, options });
+    if (mkdirMode === 'eexist') {
+      throw Object.assign(new Error('exists'), { code: 'EEXIST' });
+    }
+    if (mkdirMode === 'error') {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    }
+    return realMkdir(path, options);
   },
 });
-
-const { SQLiteProvider } = await import('./sqlite.ts');
 
 describe('SQLiteProvider', () => {
   let provider;
@@ -37,6 +37,7 @@ describe('SQLiteProvider', () => {
 
   beforeEach(() => {
     mkdirMode = 'real';
+    mkdirCalls = [];
     provider = new SQLiteProvider();
     db = provider.getDatabase(TEST_DB_NAME, TEST_DB_PATH);
     db.exec('DELETE FROM Auths');
@@ -55,6 +56,7 @@ describe('SQLiteProvider', () => {
     it('creates databases directory successfully', async () => {
       const p = new SQLiteProvider();
       await p.initialize();
+      assert.deepEqual(mkdirCalls, [{ path: './databases', options: { recursive: true } }]);
     });
 
     it('ignores EEXIST when mkdir reports directory already exists', async () => {
