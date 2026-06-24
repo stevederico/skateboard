@@ -51,7 +51,7 @@ When making ANY code changes, you MUST update:
 - README.md if user-facing behavior changes
 - CLAUDE.md if architecture/patterns change
 - API docs if endpoints change
-- CHANGELOG.md for all changes (see commit protocol)
+- the changelog for all changes (`skateboard-changelog.md` in this repo; `CHANGELOG.md` in apps — see commit protocol)
 
 **Version & dependency bumps MUST propagate to every doc that names them (no exceptions):**
 - Bumping a version in `package.json` (the app `version`, `skateboardVersion`, or any dependency) is NOT done until you have grepped the docs for the old value and updated every hit: `README.md` (the Technology/Version table, version floors), `docs/GUIDE.md`, `docs/UPGRADE.md`, and the AGENTS.md "Version" block.
@@ -367,7 +367,9 @@ describe('fetchUser', () => {
 
 ### Commit Process
 
-1. **Update CHANGELOG.md** — never remove anything. To-do list (dash-prefixed) stays at top. Insert new version notes below to-do section, above previous versions. List changes with 2-space indent, no dashes, 3 words or less, present tense.
+> **Which changelog?** In *this* skateboard boilerplate repo, releases are recorded in **`skateboard-changelog.md`** (NOT `CHANGELOG.md` — that filename is reserved so scaffolded apps don't inherit skateboard's history). Downstream apps created from skateboard use their own `CHANGELOG.md`. So: working on skateboard itself → `skateboard-changelog.md`; working on an app → `CHANGELOG.md`.
+
+1. **Update the changelog** (`skateboard-changelog.md` in this repo; `CHANGELOG.md` in apps) — never remove anything. To-do list (dash-prefixed) stays at top. Insert new version notes below to-do section, above previous versions. List changes with 2-space indent, no dashes, 3 words or less, present tense.
 2. **Update package.json** — bump version to match CHANGELOG (semver)
 3. **Stage files** — only stage files you directly modified (no `git add .`)
 4. **Commit** — message starts with version number, followed by descriptive summary
@@ -631,7 +633,7 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@3.19.0
+- skateboard@3.20.0
 - skateboard-ui@4.10.0
 
 ## Updating from Skateboard Boilerplate
@@ -643,7 +645,7 @@ This project was created from the skateboard boilerplate. The `skateboardVersion
 ### Update Workflow
 
 1. Check `skateboardVersion` in package.json against latest release
-2. Review CHANGELOG.md in the reference repo for changes
+2. Review `skateboard-changelog.md` in the reference repo for changes
 3. Update skateboard-ui: `npm install @stevederico/skateboard-ui@latest`
 4. Compare and update boilerplate files
 5. Update `skateboardVersion` field after applying changes
