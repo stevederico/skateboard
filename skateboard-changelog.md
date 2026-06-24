@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.5.0
+
+  Fix config.json churn
+  Restore original bytes
+
 4.4.0
 
   Fix README footprint
