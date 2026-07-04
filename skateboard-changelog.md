@@ -15,6 +15,26 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.9.0
+
+  Guard version consistency
+  Backfill changelog entries
+
+4.8.0
+
+  Harden completeness test
+  Sync version drift
+
+4.7.0
+
+  Isolate lifecycle tests
+  Guard completeness suite
+
+4.6.0
+
+  Fix updater allowlist
+  Add completeness test
+
 4.5.0
 
   Fix config.json churn
