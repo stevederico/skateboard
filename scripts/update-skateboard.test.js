@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, symlinkSync, lstatSync, readlinkSync, readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, symlinkSync, lstatSync, readlinkSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +11,12 @@ function walkRepo(dir, out = []) {
   for (const name of readdirSync(dir)) {
     if (name === 'node_modules' || name === 'databases' || name === 'dist') continue;
     const full = join(dir, name);
-    if (statSync(full).isDirectory()) walkRepo(full, out);
+    // lstat (not stat): never follow symlinks. A symlinked backend/.env pointing at an
+    // absent DefaultEnv would make statSync throw ENOENT and crash the whole suite. A
+    // symlink is never template-owned boilerplate to allowlist anyway — skip it.
+    const st = lstatSync(full);
+    if (st.isSymbolicLink()) continue;
+    if (st.isDirectory()) walkRepo(full, out);
     else out.push(full.slice(REPO.length));
   }
   return out;
@@ -35,11 +40,12 @@ describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
     assert.deepEqual(missing, [], `ALLOWLIST references missing files: ${missing.join(', ')}`);
   });
 
-  it('every backend boilerplate file (.ts / .test.js) is allowlisted', () => {
-    // backend/ is entirely template-owned; vendor/ is covered by explicit entries,
-    // databases/ is runtime data (both skipped by walkRepo / the filter).
+  it('every backend boilerplate code file (.ts / .js) is allowlisted', () => {
+    // backend/ code is template-owned; vendor/ is covered by explicit entries, databases/
+    // is runtime data. Covers .ts AND .js (incl. .test.js). NOT .json: backend/config.json
+    // is app-owned (each app's db config) and correctly stays off the allowlist.
     const missing = walkRepo(join(REPO, 'backend'))
-      .filter(f => (f.endsWith('.ts') || f.endsWith('.test.js')) && !f.includes('/vendor/'))
+      .filter(f => (f.endsWith('.ts') || f.endsWith('.js')) && !f.includes('/vendor/'))
       .filter(f => !ALLOWLIST.includes(f));
     assert.deepEqual(missing, [], `backend boilerplate missing from ALLOWLIST: ${missing.join(', ')}`);
   });
