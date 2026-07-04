@@ -1,9 +1,55 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, symlinkSync, lstatSync, readlinkSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, symlinkSync, lstatSync, readlinkSync, readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { ALLOWLIST, SYMLINKS, RENAMES, ensureSymlink } from './update-skateboard.js';
+
+const REPO = fileURLToPath(new URL('..', import.meta.url));
+function walkRepo(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    if (name === 'node_modules' || name === 'databases' || name === 'dist') continue;
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walkRepo(full, out);
+    else out.push(full.slice(REPO.length));
+  }
+  return out;
+}
+
+// Regression guard for the 4.5.0 omission: the updater REFERENCED new boilerplate
+// (backend/lib/*, vite.plugins.ts, src/test/setup.js) but they were absent from the
+// ALLOWLIST, so `node scripts/update-skateboard.js` left apps with a broken build —
+// imports resolved to nothing. The invariant below makes a new backend file fail CI
+// unless it is allowlisted (or explicitly runtime/vendor).
+// This suite guards the TEMPLATE's own allowlist. It ships to apps (the test file is
+// allowlisted) but must NOT run there — an app legitimately has non-allowlisted backend
+// files (custom routes/services), which would false-fail. Run only in the skateboard repo.
+const IS_TEMPLATE = (() => {
+  try { return JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).name === 'skateboard'; }
+  catch { return false; }
+})();
+describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
+  it('every ALLOWLIST entry exists in the repo', () => {
+    const missing = ALLOWLIST.filter(f => !existsSync(join(REPO, f)));
+    assert.deepEqual(missing, [], `ALLOWLIST references missing files: ${missing.join(', ')}`);
+  });
+
+  it('every backend boilerplate file (.ts / .test.js) is allowlisted', () => {
+    // backend/ is entirely template-owned; vendor/ is covered by explicit entries,
+    // databases/ is runtime data (both skipped by walkRepo / the filter).
+    const missing = walkRepo(join(REPO, 'backend'))
+      .filter(f => (f.endsWith('.ts') || f.endsWith('.test.js')) && !f.includes('/vendor/'))
+      .filter(f => !ALLOWLIST.includes(f));
+    assert.deepEqual(missing, [], `backend boilerplate missing from ALLOWLIST: ${missing.join(', ')}`);
+  });
+
+  it('allowlists the build/test infra new in 4.5.0', () => {
+    for (const f of ['vite.plugins.ts', 'src/test/setup.js']) {
+      assert.ok(ALLOWLIST.includes(f), `${f} must be synced or apps fail to build/test`);
+    }
+  });
+});
 
 // Regression guard for the CLAUDE.md → AGENTS.md symlink flip. The bug: CLAUDE.md was a
 // regular allowlisted file, but once it became a symlink, `git show HEAD:CLAUDE.md` serves
