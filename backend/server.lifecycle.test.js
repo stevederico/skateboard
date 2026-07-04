@@ -209,8 +209,17 @@ after(async () => {
 
 describe('re-exported server helpers', () => {
   it('exposes auth and env helpers from the server module', async () => {
-    assert.doesNotThrow(() => loadEnvFile(resolve(BACKEND_DIR, '.env.example')));
-    assert.doesNotThrow(() => loadLocalENV());
+    // loadEnvFile/loadLocalENV mutate the shared process.env. An app's .env.example may
+    // carry `STRIPE_ENDPOINT_SECRET=` (empty) — loading it would clobber the test's value
+    // and 503 every later Stripe test. Snapshot and restore so this stays hermetic.
+    const envSnapshot = { ...process.env };
+    try {
+      assert.doesNotThrow(() => loadEnvFile(resolve(BACKEND_DIR, '.env.example')));
+      assert.doesNotThrow(() => loadLocalENV());
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in envSnapshot)) delete process.env[k];
+      Object.assign(process.env, envSnapshot);
+    }
     const { c } = createMockContext({ method: 'GET', path: '/api/me' });
     const csrf = setAuthCookies(c, 'user-1', jwtSign({ userID: 'user-1', exp: Math.floor(Date.now() / 1000) + 3600 }, JWT_SECRET));
     assert.equal(csrf.length, 64);
@@ -339,7 +348,11 @@ describe('config and stripe hooks', () => {
     delete process.env.TEST_DATABASE_PATH;
     try {
       const loaded = await __testLoadApplicationConfig();
-      assert.equal(loaded.database.connectionString, './databases/MyApp.db');
+      // Assert against the app's OWN config.json, not a hardcoded canonical path — this
+      // test ships to every app and their connectionString is app-owned (e.g. an app's
+      // './backend/databases/<App>.db'). Hardcoding './databases/MyApp.db' failed on all.
+      const expected = JSON.parse(await readFile(CONFIG_PATH, 'utf8')).database.connectionString;
+      assert.equal(loaded.database.connectionString, expected);
     } finally {
       process.env.TEST_DATABASE_PATH = original;
     }
