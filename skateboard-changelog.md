@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.9.2
+
+  Fix updater concurrency
+  Per-process temp paths
+
 4.9.1
 
   Allowlist guard test

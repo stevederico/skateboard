@@ -47,7 +47,8 @@ import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 
 const APP_ROOT = process.cwd();
-const TMP_DIR = '/tmp/skateboard-update';
+// Per-process clone dir so concurrent fleet runs don't clobber each other's checkout.
+const TMP_DIR = join(tmpdir(), `skateboard-update-${process.pid}`);
 const REPO = process.env.SKATEBOARD_REPO || 'https://github.com/stevederico/skateboard.git';
 const BRANCH = process.env.SKATEBOARD_BRANCH || '';
 
@@ -226,9 +227,10 @@ function writeSynced(dst, relPath, content) {
  *   the app's file untouched — writing the empty merge output would destroy it.
  */
 function threeWayMerge(appContent, baseContent, newContent) {
-  const cur = join(tmpdir(), 'sk-mf-cur.tmp');
-  const base = join(tmpdir(), 'sk-mf-base.tmp');
-  const other = join(tmpdir(), 'sk-mf-new.tmp');
+  // PID-scoped so concurrent fleet runs don't overwrite each other's merge temp files.
+  const cur = join(tmpdir(), `sk-mf-cur.${process.pid}.tmp`);
+  const base = join(tmpdir(), `sk-mf-base.${process.pid}.tmp`);
+  const other = join(tmpdir(), `sk-mf-new.${process.pid}.tmp`);
   writeFileSync(cur, appContent);
   writeFileSync(base, baseContent);
   writeFileSync(other, newContent);
