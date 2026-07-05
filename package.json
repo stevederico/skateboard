@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "4.9.0",
-  "skateboardVersion": "4.9.0",
+  "version": "4.9.1",
+  "skateboardVersion": "4.9.1",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"

@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.9.1
+
+  Allowlist guard test
+  Fix apps test:build
+
 4.9.0
 
   Guard version consistency
