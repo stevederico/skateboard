@@ -95,7 +95,8 @@ const ALLOWLIST = [
   'scripts/update-skateboard.test.js',
   'scripts/verify-ui-version.mjs',
   'scripts/verify-ui-version.ts',
-  'scripts/verify-ui-version.test.js'
+  'scripts/verify-ui-version.test.js',
+  'scripts/version-consistency.test.js'
 ];
 
 // Template-owned symlinks: link path → target path (both relative to app root).
