@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.10.0
+
+  HomeViewSkeleton content load
+  Suspense uses skeleton
+
 4.9.2
 
   Fix updater concurrency
