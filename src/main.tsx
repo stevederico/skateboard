@@ -20,9 +20,9 @@ import './assets/styles.css';
 import { lazy, Suspense } from 'react';
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
 import type { AppRoute } from '@stevederico/skateboard-ui/App';
-import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
 import Layout from '@stevederico/skateboard-ui/Layout';
 import CommandMenu from './components/CommandMenu';
+import HomeViewSkeleton from './components/HomeViewSkeleton';
 import constants from './constants.json';
 const HomeView = lazy(() => import('./components/HomeView'));
 import ChatView from './components/ChatView';
@@ -53,7 +53,7 @@ export function AppLayout() {
  * The shell handles route registration, navigation, and layout.
  */
 export const appRoutes: AppRoute[] = [
-  { path: 'home', element: <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner /></div>}><HomeView /></Suspense> },
+  { path: 'home', element: <Suspense fallback={<HomeViewSkeleton />}><HomeView /></Suspense> },
   { path: 'chat', element: <ChatView /> },
   { path: 'analytics', element: <BlankView title="Analytics" description="Analytics will appear here once you have activity." buttonTitle="View Reports" /> },
   { path: 'projects', element: <BlankView title="Projects" description="Create your first project to get started." buttonTitle="Create Project" /> },

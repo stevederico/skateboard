@@ -65,12 +65,33 @@ const { data, loading, error, refetch } = useListData("/deals");
 
 ## Loading States
 
-Match the skeleton to the content layout:
+Match the skeleton to the content layout. Prefer composed recipes from skateboard-ui, or a view-shaped local skeleton for unique layouts (see `HomeViewSkeleton`).
+
+```jsx
+import {
+  Skeleton,
+  PageSkeleton,
+  CardListSkeleton,
+} from "@stevederico/skateboard-ui/ui/skeleton";
+
+// Generic main content
+if (loading) return <PageSkeleton />;
+
+// List/grid of cards
+if (loading) return <CardListSkeleton count={6} />;
+
+// Lazy route — Suspense fallback should be view-shaped, not a Spinner
+<Suspense fallback={<HomeViewSkeleton />}>
+  <HomeView />
+</Suspense>
+```
+
+Custom view skeleton when the layout is unique:
 
 ```jsx
 function ViewSkeleton() {
   return (
-    <main className="flex flex-col gap-6 p-6">
+    <main className="flex flex-col gap-6 p-6" aria-busy="true" aria-live="polite">
       <div className="flex items-center justify-between">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-10 w-24" />
@@ -84,6 +105,11 @@ function ViewSkeleton() {
   );
 }
 ```
+
+**Rules:**
+- Content waits → skeleton; button/form actions → spinner/disabled
+- Keep shell (sidebar, tab bar) mounted — skeleton lives in main content only
+- Never use a centered Spinner as a lazy-route Suspense fallback
 
 ## Empty States
 

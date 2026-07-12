@@ -13,8 +13,8 @@ vi.mock('@stevederico/skateboard-ui/Layout', () => ({
   default: () => <div data-testid="layout">Layout</div>
 }));
 
-vi.mock('@stevederico/skateboard-ui/shadcn/ui/spinner', () => ({
-  Spinner: () => <div data-testid="spinner">Loading</div>
+vi.mock('./components/HomeViewSkeleton', () => ({
+  default: () => <div data-testid="home-view-skeleton">Loading</div>
 }));
 
 vi.mock('./components/CommandMenu.jsx', () => ({
@@ -96,11 +96,11 @@ describe('appRoutes', () => {
     expect(appRoutes.every((route) => route.element)).toBe(true);
   });
 
-  it('wraps home route in suspense with spinner fallback', async () => {
+  it('wraps home route in suspense with HomeViewSkeleton fallback', async () => {
     const { appRoutes } = await import('./main.jsx');
     const homeRoute = appRoutes.find((route) => route.path === 'home');
     render(homeRoute.element);
 
-    expect(screen.getByTestId('spinner')).toBeInTheDocument();
+    expect(screen.getByTestId('home-view-skeleton')).toBeInTheDocument();
   });
 });
