@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.11.0
+
+  Pin skateboard-ui 4.13.0
+
 4.10.0
 
   HomeViewSkeleton content load
