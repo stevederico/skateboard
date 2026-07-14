@@ -23,6 +23,15 @@ npm-debug.log*
 # Build artifacts
 dist/
 build/
+backend/coverage/
+
+# Local data — never bake into railway up images
+backend/databases/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+uploads/
+**/uploads/
 
 # Misc
 *.md
