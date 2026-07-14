@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.11.1
+
+  Exclude local DB uploads from docker
+
 4.11.0
 
   Pin skateboard-ui 4.13.0
