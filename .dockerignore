@@ -16,9 +16,15 @@ npm-debug.log*
 .vscode/
 .idea/
 
-# Environment
+# Environment — never bake secrets (symlinks to shared secret files are the classic leak)
 .env
 .env.*
+**/.env
+**/.env.*
+!**/.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 
 # Build artifacts
 dist/

@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.12.0
+
+  Refuse .env symlinks
+  Docker env find-guard
+
 4.11.1
 
   Exclude local DB uploads from docker

@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, existsSync, symlinkSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -57,7 +57,7 @@ describe('env.js', () => {
     });
 
     it('silently skips when file does not exist', () => {
-      assert.doesNotThrow(() => loadEnvFile(join(tempDir, 'missing.env')));
+      assert.equal(loadEnvFile(join(tempDir, 'missing.env')), false);
     });
 
     it('sets empty values and skips lines with an empty key', () => {
@@ -71,6 +71,20 @@ describe('env.js', () => {
       // `=novalue` has no key — skipped, must not create an empty-named var.
       assert.equal(process.env[''], undefined);
     });
+
+    it('refuses to load a symlink .env (external symlink landmine)', () => {
+      const target = join(tempDir, 'secrets.env');
+      const link = join(tempDir, '.env');
+      writeFileSync(target, 'LEAKED=secret-value\n');
+      symlinkSync(target, link);
+      delete process.env.LEAKED;
+      const errors = [];
+      const loaded = loadEnvFile(link, { error: (msg) => errors.push(msg) });
+      assert.equal(loaded, false);
+      assert.equal(process.env.LEAKED, undefined);
+      assert.equal(errors.length, 1);
+      assert.match(errors[0], /symlink/);
+    });
   });
 
   describe('loadLocalENV', () => {
@@ -78,6 +92,7 @@ describe('env.js', () => {
       writeFileSync(join(tempDir, '.env.example'), 'FROM_EXAMPLE=1\n');
       loadLocalENV({ baseDir: tempDir });
       assert.equal(existsSync(join(tempDir, '.env')), true);
+      assert.equal(lstatSync(join(tempDir, '.env')).isSymbolicLink(), false);
       assert.equal(process.env.FROM_EXAMPLE, '1');
     });
 
@@ -87,6 +102,21 @@ describe('env.js', () => {
       loadLocalENV({ baseDir: tempDir });
       assert.equal(process.env.BASE, 'from-env');
       assert.equal(process.env.OVERRIDE, 'local');
+    });
+
+    it('replaces a symlink .env with a regular file from .env.example', () => {
+      const target = join(tempDir, 'shared-secrets.env');
+      writeFileSync(target, 'LEAKED=from-symlink\n');
+      symlinkSync(target, join(tempDir, '.env'));
+      writeFileSync(join(tempDir, '.env.example'), 'SAFE=from-example\n');
+      delete process.env.LEAKED;
+      delete process.env.SAFE;
+      const errors = [];
+      loadLocalENV({ baseDir: tempDir, logger: { error: (msg) => errors.push(msg) } });
+      assert.equal(lstatSync(join(tempDir, '.env')).isSymbolicLink(), false);
+      assert.equal(process.env.LEAKED, undefined);
+      assert.equal(process.env.SAFE, 'from-example');
+      assert.ok(errors.some((m) => /symlink/.test(m)));
     });
 
     it('uses default backend baseDir when options.baseDir is omitted', () => {
