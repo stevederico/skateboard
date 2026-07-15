@@ -1,6 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, lstatSync, unlinkSync } from 'node:fs';
 import type { Logger } from '../types.ts';
 
 /**
@@ -16,16 +16,55 @@ export function isProd(): boolean {
 }
 
 /**
+ * True when path exists and is a symbolic link (does not follow the link).
+ *
+ * @param filePath - Absolute path to check
+ * @returns Whether the path is a symlink
+ */
+export function isEnvSymlink(filePath: string): boolean {
+  try {
+    return lstatSync(filePath).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when path exists as a regular file (not a symlink).
+ *
+ * @param filePath - Absolute path to check
+ * @returns Whether a regular file is present
+ */
+function isRegularFile(filePath: string): boolean {
+  try {
+    const st = lstatSync(filePath);
+    return st.isFile() && !st.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Parse a .env file and apply key=value pairs to process.env.
  *
  * Skips blank lines, comments, and lines with an empty key. A line with a key
  * but no value (e.g. `STRIPE_KEY=`) sets the variable to an empty string —
  * this lets an operator explicitly clear/disable a value. Handles quoted
  * values and values containing '='. Silently skips if file doesn't exist.
+ * **Refuses symlinks** — packaging tools dereference them and bake secrets
+ * into release artifacts; use a regular file only.
  *
  * @param filePath - Absolute path to the .env file
+ * @param logger - Optional logger for refusal warnings
+ * @returns True if a regular file was loaded, false if skipped/missing
  */
-export function loadEnvFile(filePath: string): void {
+export function loadEnvFile(filePath: string, logger?: Partial<Logger>): boolean {
+  if (isEnvSymlink(filePath)) {
+    logger?.error?.('Refusing to load .env symlink (secret-leak risk). Use a regular file.', {
+      filePath,
+    });
+    return false;
+  }
   try {
     const data = readFileSync(filePath, 'utf8');
     for (const line of data.split(/\r?\n/)) {
@@ -37,18 +76,61 @@ export function loadEnvFile(filePath: string): void {
         process.env[key] = value;
       }
     }
+    return true;
   } catch {
     // File doesn't exist or unreadable — silent
+    return false;
+  }
+}
+
+/**
+ * Ensure backend/.env is a regular file, never a symlink outside the project.
+ *
+ * Removes a symlink if present, then creates from .env.example when missing.
+ *
+ * @param envFilePath - Absolute path to .env
+ * @param envExamplePath - Absolute path to .env.example
+ * @param logger - Optional logger
+ * @returns True if a regular .env is ready to load
+ */
+function ensureRegularEnvFile(
+  envFilePath: string,
+  envExamplePath: string,
+  logger?: Partial<Logger>
+): boolean {
+  if (isEnvSymlink(envFilePath)) {
+    logger?.error?.('backend/.env is a symlink — removing (secret-leak risk)', { filePath: envFilePath });
+    try {
+      unlinkSync(envFilePath);
+    } catch (err) {
+      logger?.error?.('Failed to remove .env symlink', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
+  }
+
+  if (isRegularFile(envFilePath)) return true;
+
+  try {
+    const exampleData = readFileSync(envExamplePath, 'utf8');
+    writeFileSync(envFilePath, exampleData);
+    return true;
+  } catch (exampleErr) {
+    logger?.error?.('Failed to create .env from template', {
+      error: exampleErr instanceof Error ? exampleErr.message : String(exampleErr),
+    });
+    return false;
   }
 }
 
 /**
  * Load environment variables from .env and optional .env.local file.
  *
- * Reads in two passes: backend/.env first (may be symlink to shared creds),
- * then backend/.env.local for project-specific overrides (wins on conflict).
- * Creates .env from .env.example if it doesn't exist. Only called in
- * non-production mode — Railway injects vars directly in prod.
+ * Reads in two passes: backend/.env first, then backend/.env.local (wins on
+ * conflict). Creates a **regular** .env from .env.example if missing. Symlinked
+ * env files are refused and removed when possible. Only called in non-production
+ * mode — Railway injects vars directly in prod.
  *
  * @param options - Load options
  * @param options.baseDir - Backend directory (defaults to parent of this module)
@@ -61,24 +143,12 @@ export function loadLocalENV(options: { baseDir?: string; logger?: Partial<Logge
   const envLocalPath = resolve(baseDir, './.env.local');
   const envExamplePath = resolve(baseDir, './.env.example');
 
-  // Check if .env exists, if not create it from .env.example
-  try {
-    statSync(envFilePath);
-  } catch {
-    try {
-      const exampleData = readFileSync(envExamplePath, 'utf8');
-      writeFileSync(envFilePath, exampleData);
-    } catch (exampleErr) {
-      logger?.error?.('Failed to create .env from template', { error: exampleErr instanceof Error ? exampleErr.message : String(exampleErr) });
-      return;
-    }
+  if (ensureRegularEnvFile(envFilePath, envExamplePath, logger)) {
+    loadEnvFile(envFilePath, logger);
   }
 
-  // Load .env (may be symlink to shared creds)
-  loadEnvFile(envFilePath);
-
-  // Load .env.local overrides (project-specific, optional)
-  loadEnvFile(envLocalPath);
+  // .env.local is optional; still refuse symlinks
+  loadEnvFile(envLocalPath, logger);
 }
 
 /**

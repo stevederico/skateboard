@@ -12,7 +12,7 @@ function walkRepo(dir, out = []) {
     if (name === 'node_modules' || name === 'databases' || name === 'dist') continue;
     const full = join(dir, name);
     // lstat (not stat): never follow symlinks. A symlinked backend/.env pointing at an
-    // absent DefaultEnv would make statSync throw ENOENT and crash the whole suite. A
+    // a broken .env symlink would make statSync throw ENOENT and crash the whole suite. A
     // symlink is never template-owned boilerplate to allowlist anyway — skip it.
     const st = lstatSync(full);
     if (st.isSymbolicLink()) continue;
