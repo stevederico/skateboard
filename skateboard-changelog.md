@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.13.0
+
+  Refresh agent skill
+  Upgrade recipe plus skeletons
+
 4.12.0
 
   Refuse .env symlinks
