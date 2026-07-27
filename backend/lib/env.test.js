@@ -64,12 +64,24 @@ describe('env.js', () => {
       const envPath = join(tempDir, '.env');
       writeFileSync(envPath, 'NOVALUE=\n=novalue\nVALID=yes\n');
       delete process.env.NOVALUE;
+      delete process.env.VALID;
       loadEnvFile(envPath);
       assert.equal(process.env.VALID, 'yes');
-      // `KEY=` explicitly clears a value — set to '' rather than dropped.
+      // `KEY=` sets '' only when the key was not already on process.env.
       assert.equal(process.env.NOVALUE, '');
       // `=novalue` has no key — skipped, must not create an empty-named var.
       assert.equal(process.env[''], undefined);
+    });
+
+    it('does not override keys already set on process.env', () => {
+      const envPath = join(tempDir, '.env');
+      writeFileSync(envPath, 'PRESET=from-file\nEMPTY_CLOBBER=\n');
+      process.env.PRESET = 'from-shell';
+      process.env.EMPTY_CLOBBER = 'keep-me';
+      loadEnvFile(envPath);
+      assert.equal(process.env.PRESET, 'from-shell');
+      // Blank KEY= in .env must not wipe a test/shell default (webhook 503 bug).
+      assert.equal(process.env.EMPTY_CLOBBER, 'keep-me');
     });
 
     it('refuses to load a symlink .env (external symlink landmine)', () => {
@@ -99,9 +111,18 @@ describe('env.js', () => {
     it('loads existing .env and .env.local overrides', () => {
       writeFileSync(join(tempDir, '.env'), 'BASE=from-env\nOVERRIDE=base\n');
       writeFileSync(join(tempDir, '.env.local'), 'OVERRIDE=local\n');
+      delete process.env.BASE;
+      delete process.env.OVERRIDE;
       loadLocalENV({ baseDir: tempDir });
       assert.equal(process.env.BASE, 'from-env');
       assert.equal(process.env.OVERRIDE, 'local');
+    });
+
+    it('does not let blank .env values clobber process.env (shell/test win)', () => {
+      writeFileSync(join(tempDir, '.env'), 'STRIPE_ENDPOINT_SECRET=\n');
+      process.env.STRIPE_ENDPOINT_SECRET = 'whsec_test';
+      loadLocalENV({ baseDir: tempDir });
+      assert.equal(process.env.STRIPE_ENDPOINT_SECRET, 'whsec_test');
     });
 
     it('replaces a symlink .env with a regular file from .env.example', () => {

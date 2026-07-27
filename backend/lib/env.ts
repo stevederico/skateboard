@@ -45,42 +45,66 @@ function isRegularFile(filePath: string): boolean {
 }
 
 /**
- * Parse a .env file and apply key=value pairs to process.env.
+ * Parse a .env file into a key/value map (does not touch process.env).
  *
  * Skips blank lines, comments, and lines with an empty key. A line with a key
- * but no value (e.g. `STRIPE_KEY=`) sets the variable to an empty string —
- * this lets an operator explicitly clear/disable a value. Handles quoted
- * values and values containing '='. Silently skips if file doesn't exist.
- * **Refuses symlinks** — packaging tools dereference them and bake secrets
- * into release artifacts; use a regular file only.
+ * but no value (e.g. `STRIPE_KEY=`) yields an empty string — operators can
+ * explicitly clear a value when the key is not already set in the process.
+ * Handles quoted values and values containing '='. **Refuses symlinks.**
+ *
+ * @param filePath - Absolute path to the .env file
+ * @param logger - Optional logger for refusal warnings
+ * @returns Parsed map, or null if missing/unreadable/refused
+ */
+export function parseEnvFile(
+  filePath: string,
+  logger?: Partial<Logger>
+): Record<string, string> | null {
+  if (isEnvSymlink(filePath)) {
+    logger?.error?.('Refusing to load .env symlink (secret-leak risk). Use a regular file.', {
+      filePath,
+    });
+    return null;
+  }
+  try {
+    const data = readFileSync(filePath, 'utf8');
+    const parsed: Record<string, string> = {};
+    for (const line of data.split(/\r?\n/)) {
+      if (!line || line.trim().startsWith('#')) continue;
+      const [rawKey, ...valueParts] = line.split('=');
+      const key = rawKey.trim();
+      if (key) {
+        parsed[key] = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
+      }
+    }
+    return parsed;
+  } catch {
+    // File doesn't exist or unreadable — silent
+    return null;
+  }
+}
+
+/**
+ * Apply key=value pairs from a .env file onto process.env.
+ *
+ * Same parsing rules as {@link parseEnvFile}. **Does not override** keys that
+ * are already set on `process.env` (including empty string) — matches dotenv
+ * and keeps shell/CI/test defaults from being clobbered by a blank local
+ * `KEY=` line (e.g. empty `STRIPE_ENDPOINT_SECRET=` 503-ing webhook tests).
  *
  * @param filePath - Absolute path to the .env file
  * @param logger - Optional logger for refusal warnings
  * @returns True if a regular file was loaded, false if skipped/missing
  */
 export function loadEnvFile(filePath: string, logger?: Partial<Logger>): boolean {
-  if (isEnvSymlink(filePath)) {
-    logger?.error?.('Refusing to load .env symlink (secret-leak risk). Use a regular file.', {
-      filePath,
-    });
-    return false;
-  }
-  try {
-    const data = readFileSync(filePath, 'utf8');
-    for (const line of data.split(/\r?\n/)) {
-      if (!line || line.trim().startsWith('#')) continue;
-      const [rawKey, ...valueParts] = line.split('=');
-      const key = rawKey.trim();
-      if (key) {
-        const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
-        process.env[key] = value;
-      }
+  const parsed = parseEnvFile(filePath, logger);
+  if (!parsed) return false;
+  for (const [key, value] of Object.entries(parsed)) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
     }
-    return true;
-  } catch {
-    // File doesn't exist or unreadable — silent
-    return false;
   }
+  return true;
 }
 
 /**
@@ -127,10 +151,11 @@ function ensureRegularEnvFile(
 /**
  * Load environment variables from .env and optional .env.local file.
  *
- * Reads in two passes: backend/.env first, then backend/.env.local (wins on
- * conflict). Creates a **regular** .env from .env.example if missing. Symlinked
- * env files are refused and removed when possible. Only called in non-production
- * mode — Railway injects vars directly in prod.
+ * Merges backend/.env then backend/.env.local (local wins on conflict within
+ * the files), then applies only keys **not already set** on `process.env`
+ * (shell / CI / tests win). Creates a **regular** .env from .env.example if
+ * missing. Symlinked env files are refused and removed when possible. Only
+ * called in non-production mode — Railway injects vars directly in prod.
  *
  * @param options - Load options
  * @param options.baseDir - Backend directory (defaults to parent of this module)
@@ -143,12 +168,21 @@ export function loadLocalENV(options: { baseDir?: string; logger?: Partial<Logge
   const envLocalPath = resolve(baseDir, './.env.local');
   const envExamplePath = resolve(baseDir, './.env.example');
 
+  /** File-layer merge: .env then .env.local (local wins). */
+  const fromFiles: Record<string, string> = {};
+
   if (ensureRegularEnvFile(envFilePath, envExamplePath, logger)) {
-    loadEnvFile(envFilePath, logger);
+    Object.assign(fromFiles, parseEnvFile(envFilePath, logger) ?? {});
   }
 
   // .env.local is optional; still refuse symlinks
-  loadEnvFile(envLocalPath, logger);
+  Object.assign(fromFiles, parseEnvFile(envLocalPath, logger) ?? {});
+
+  for (const [key, value] of Object.entries(fromFiles)) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
 }
 
 /**
