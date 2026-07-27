@@ -109,8 +109,9 @@ export default defineConfig({
     include: ['src/**/*.test.{js,jsx}'],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.{js,jsx}'],
-      exclude: ['src/**/*.test.{js,jsx}', 'src/test/**'],
+      // Sources are .ts/.tsx; old js/jsx-only globs reported a false 0% (no files matched).
+      include: ['src/**/*.{js,jsx,ts,tsx}'],
+      exclude: ['src/**/*.test.{js,jsx,ts,tsx}', 'src/test/**'],
       thresholds: {
         lines: 100,
         functions: 100,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../test/dom.js';
 import { SectionCards } from './SectionCards.jsx';
 
 vi.mock('@stevederico/skateboard-ui/icons', () => ({
