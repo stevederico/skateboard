@@ -188,7 +188,7 @@ Backend `pg` and `mongodb` are not hard deps — `create-skateboard-app` injects
 
 The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui), which itself runs on a single hard dep (`@base-ui/react`) plus optional peer deps for heavy components users opt into.
 
-Frontend dev deps grew from 4 to 13 because v3.8.0 added `typescript` + `@types/*` for the strict typecheck and the suite pulls in `vitest` + `@testing-library/*` — all dev-only, zero runtime additions. There's still no build step for types: Node 24 strips them natively and Vite compiles `.tsx` directly.
+Frontend dev deps include `typescript` + `@types/*` for the strict typecheck plus `vitest` + `jsdom` for component tests (local `src/test/dom.js` helpers — no `@testing-library/*`) — all dev-only, zero runtime additions. There's still no build step for types: Node 24 strips them natively and Vite compiles `.tsx` directly.
 
 <br />
 
