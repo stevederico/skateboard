@@ -19,6 +19,7 @@
 
   Drop testing-library deps
   Local src/test/dom helpers
+  Fix vitest coverage globs
 
 4.13.0
 
