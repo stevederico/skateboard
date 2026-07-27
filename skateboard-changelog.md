@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.14.0
+
+  Drop testing-library deps
+  Local src/test/dom helpers
+
 4.13.0
 
   Refresh agent skill
