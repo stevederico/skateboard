@@ -501,6 +501,20 @@ export class SQLiteProvider implements DatabaseProvider<Database> {
   }
 
   /**
+   * Remove a webhook event record
+   *
+   * Lets a delivery that failed mid-processing be retried: without this the
+   * idempotency check would skip Stripe's retry and the update would be lost.
+   *
+   * @param db - SQLite database instance
+   * @param eventId - Stripe event id to forget
+   * @returns Nothing
+   */
+  async deleteWebhookEvent(db: Database, eventId: string): Promise<void> {
+    db.prepare("DELETE FROM WebhookEvents WHERE event_id = ?").run(eventId);
+  }
+
+  /**
    * Execute custom SQL query with unified response format
    *
    * Handles both SELECT (uses .all()) and modification queries (uses .run()).

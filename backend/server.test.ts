@@ -704,6 +704,7 @@ interface WebhookStripe {
 interface WebhookDb {
   findWebhookEvent(eventId: string): Promise<unknown>;
   insertWebhookEvent(eventId: string, eventType: string, processedAt: number): Promise<unknown>;
+  deleteWebhookEvent?(eventId: string): Promise<unknown>;
   findUser(query: UserQuery): Promise<unknown>;
   updateUser(query: UserQuery, update: WebhookUpdate): Promise<unknown>;
 }
@@ -746,6 +747,15 @@ function createWebhookApp({ stripe, db, logger = noopLogger }: { stripe: Webhook
     return true;
   }
 
+  /** Mirror of rollbackWebhookEvent in server.ts: forget the record so a retry is not skipped. */
+  async function rollback(eventId: string): Promise<void> {
+    try {
+      await db.deleteWebhookEvent?.(eventId);
+    } catch {
+      // A failed rollback must not mask the failure that triggered it.
+    }
+  }
+
   webhookApp.post('/api/payment', async (c) => {
     const signature = c.req.header('stripe-signature');
     const rawBody = await c.req.arrayBuffer();
@@ -767,9 +777,9 @@ function createWebhookApp({ stripe, db, logger = noopLogger }: { stripe: Webhook
 
       if (['customer.subscription.deleted', 'customer.subscription.updated', 'customer.subscription.created'].includes(event.type)) {
         const { customer: stripeID, status } = eventObject;
-        if (!stripeID) return c.body(null, 400);
+        if (!stripeID) { await rollback(event.id); return c.body(null, 400); }
         const email = await resolveCustomerEmail(stripeID);
-        if (!email) return c.body(null, 400);
+        if (!email) { await rollback(event.id); return c.body(null, 400); }
         await applyUserPatch(email, { subscription: { stripeID, expires: getSubscriptionPeriodEnd(eventObject), status } });
       }
 
@@ -815,6 +825,7 @@ function createWebhookApp({ stripe, db, logger = noopLogger }: { stripe: Webhook
 
       return c.body(null, 200);
     } catch (e) {
+      await rollback(event.id);
       return c.body(null, 500);
     }
   });

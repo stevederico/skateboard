@@ -531,6 +531,7 @@ const db: BoundDatabase = {
   updateAuth: (query, update) => databaseManager.updateAuth(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, query, update),
   findWebhookEvent: (eventId) => databaseManager.findWebhookEvent(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, eventId),
   insertWebhookEvent: (eventId, eventType, processedAt) => databaseManager.insertWebhookEvent(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, eventId, eventType, processedAt),
+  deleteWebhookEvent: (eventId) => databaseManager.deleteWebhookEvent(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, eventId),
   executeQuery: (queryObject) => databaseManager.executeQuery(currentDbConfig.dbType, currentDbConfig.db, currentDbConfig.connectionString, queryObject)
 };
 
@@ -878,6 +879,27 @@ async function applyUserPatch(email: string, $set: UserSetFields): Promise<boole
   return true;
 }
 
+/**
+ * Forget a recorded webhook event so Stripe's retry is not skipped.
+ *
+ * The event id is written before processing to stop two concurrent deliveries
+ * both being handled. That ordering means a failure after the write would
+ * otherwise strand the record: the retry matches the idempotency check and the
+ * subscription update is lost for good. Swallows its own error so a failed
+ * rollback never masks the failure that triggered it.
+ *
+ * @async
+ * @param eventId - Stripe event id to forget
+ * @returns Nothing
+ */
+async function rollbackWebhookEvent(eventId: string): Promise<void> {
+  try {
+    await db.deleteWebhookEvent(eventId);
+  } catch (e) {
+    logger.error('Failed to roll back webhook event record', { eventId, error: errorMessage(e) });
+  }
+}
+
 app.post("/api/payment", async (c) => {
   logger.info('Payment webhook received');
 
@@ -920,10 +942,14 @@ app.post("/api/payment", async (c) => {
       const { customer: stripeID, status } = subLike;
       if (!stripeID) {
         logger.error('Webhook missing customer ID', { type: event.type });
+        await rollbackWebhookEvent(event.id);
         return c.body(null, 400);
       }
       const email = await resolveCustomerEmail(stripeID);
-      if (!email) return c.body(null, 400);
+      if (!email) {
+        await rollbackWebhookEvent(event.id);
+        return c.body(null, 400);
+      }
       const expires = getSubscriptionPeriodEnd(subLike);
       if (expires === null) {
         logger.error('Webhook: subscription event has no current_period_end', { type: event.type, eventId: event.id });
@@ -984,6 +1010,7 @@ app.post("/api/payment", async (c) => {
     return c.body(null, 200);
   } catch (e) {
     logger.error('Webhook processing error', { error: errorMessage(e) });
+    await rollbackWebhookEvent(event.id);
     return c.body(null, 500);
   }
 });

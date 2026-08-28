@@ -470,6 +470,20 @@ export class MongoDBProvider implements DatabaseProvider<DbLike> {
   }
 
   /**
+   * Remove a webhook event record
+   *
+   * Lets a delivery that failed mid-processing be retried: without this the
+   * idempotency check would skip Stripe's retry and the update would be lost.
+   *
+   * @param db - MongoDB database instance
+   * @param eventId - Stripe event id to forget
+   * @returns Nothing
+   */
+  async deleteWebhookEvent(db: DbLike, eventId: string): Promise<void> {
+    await db.collection('WebhookEvents').deleteOne({ event_id: eventId });
+  }
+
+  /**
    * Execute custom MongoDB operation with unified response format
    *
    * Supports 11 operations: findone, find, insertone, insertmany, updateone,
