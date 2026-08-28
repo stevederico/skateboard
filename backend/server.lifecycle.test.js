@@ -1015,6 +1015,115 @@ describe('Stripe webhook processing errors', () => {
     assert.equal(res.status, 500);
     db.findWebhookEvent = originalFindWebhookEvent;
   });
+
+  it('deletes the event record when processing fails after it was written', async () => {
+    // The record is written before processing to block concurrent deliveries.
+    // If a failure left it behind, Stripe's retry would match the idempotency
+    // check and the subscription update would be lost for good.
+    const eventId = 'evt_rollback_' + generateUUID();
+    setStripeForTests({
+      webhooks: {
+        constructEventAsync: spy(() => ({
+          id: eventId,
+          type: 'invoice.paid',
+          data: { object: { customer: 'cus_x', subscription: 'sub_x' } },
+        })),
+      },
+      subscriptions: { retrieve: async () => { throw new Error('stripe down'); } },
+    });
+
+    const req = new Request('http://localhost/api/payment', {
+      method: 'POST',
+      headers: { 'stripe-signature': 'sig', 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const res = await app.fetch(req);
+
+    assert.equal(res.status, 500, 'a failed delivery must return 500 so Stripe retries');
+    assert.equal(
+      await db.findWebhookEvent(eventId),
+      null,
+      'the record must be gone, or the retry is skipped and the update is lost',
+    );
+  });
+
+  it('lets a replayed delivery reprocess after a failure', async () => {
+    const eventId = 'evt_replay_' + generateUUID();
+    let attempt = 0;
+    setStripeForTests({
+      webhooks: {
+        constructEventAsync: spy(() => ({
+          id: eventId,
+          type: 'invoice.paid',
+          data: { object: { customer: 'cus_y', subscription: 'sub_y' } },
+        })),
+      },
+      subscriptions: {
+        retrieve: async () => {
+          attempt += 1;
+          if (attempt === 1) throw new Error('transient');
+          return { status: 'active', current_period_end: 1893456000 };
+        },
+      },
+      customers: { retrieve: async () => ({ email: 'replay@test.com' }) },
+    });
+
+    const makeReq = () => new Request('http://localhost/api/payment', {
+      method: 'POST',
+      headers: { 'stripe-signature': 'sig', 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    assert.equal((await app.fetch(makeReq())).status, 500);
+    assert.equal((await app.fetch(makeReq())).status, 200, 'the retry must be processed, not skipped');
+    assert.equal(attempt, 2, 'the retry must reach Stripe again rather than short-circuit');
+  });
+
+  it('deletes the event record when the customer id is missing', async () => {
+    // A 400 tells Stripe to stop retrying, so a stranded record here would be
+    // permanent. Drop it so a corrected replay can still be processed.
+    const eventId = 'evt_nocust_' + generateUUID();
+    setStripeForTests({
+      webhooks: {
+        constructEventAsync: spy(() => ({
+          id: eventId,
+          type: 'customer.subscription.updated',
+          data: { object: { status: 'active' } },
+        })),
+      },
+    });
+    const req = new Request('http://localhost/api/payment', {
+      method: 'POST',
+      headers: { 'stripe-signature': 'sig', 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    assert.equal((await app.fetch(req)).status, 400);
+    assert.equal(await db.findWebhookEvent(eventId), null);
+  });
+
+  it('does not mask the original failure when the rollback itself fails', async () => {
+    const originalDelete = db.deleteWebhookEvent;
+    db.deleteWebhookEvent = async () => { throw new Error('delete failed'); };
+    setStripeForTests({
+      webhooks: {
+        constructEventAsync: spy(() => ({
+          id: 'evt_rollback_fail_' + generateUUID(),
+          type: 'invoice.paid',
+          data: { object: { customer: 'cus_z', subscription: 'sub_z' } },
+        })),
+      },
+      subscriptions: { retrieve: async () => { throw new Error('stripe down'); } },
+    });
+    const req = new Request('http://localhost/api/payment', {
+      method: 'POST',
+      headers: { 'stripe-signature': 'sig', 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    assert.equal((await app.fetch(req)).status, 500, 'a failed rollback must still surface the 500');
+    db.deleteWebhookEvent = originalDelete;
+  });
 });
 
 describe('remaining server branches', () => {
