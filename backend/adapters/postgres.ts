@@ -615,6 +615,25 @@ export class PostgreSQLProvider implements DatabaseProvider<PoolLike> {
   }
 
   /**
+   * Remove a webhook event record
+   *
+   * Lets a delivery that failed mid-processing be retried: without this the
+   * idempotency check would skip Stripe's retry and the update would be lost.
+   *
+   * @param pool - PostgreSQL connection pool
+   * @param eventId - Stripe event id to forget
+   * @returns Nothing
+   */
+  async deleteWebhookEvent(pool: PoolLike, eventId: string): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("DELETE FROM webhook_events WHERE event_id = $1", [eventId]);
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Execute custom SQL query with unified response format
    *
    * Distinguishes reads from writes via the result's command tag: 'SELECT'

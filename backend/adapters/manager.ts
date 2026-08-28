@@ -351,6 +351,25 @@ class DatabaseManager {
   }
 
   /**
+   * Remove a webhook event record
+   *
+   * Lets a delivery that failed mid-processing be retried: without this the
+   * idempotency check would skip Stripe's retry and the update would be lost.
+   *
+   * @async
+   * @param dbType - Database type
+   * @param dbName - Database name
+   * @param connectionString - Connection string or file path
+   * @param eventId - Stripe event ID to forget
+   * @returns Nothing
+   * @throws {Error} If database operation fails
+   */
+  async deleteWebhookEvent(dbType: string, dbName: string, connectionString: string, eventId: string): Promise<void> {
+    const { provider, database } = await this.getDatabase(dbType, dbName, connectionString);
+    await provider.deleteWebhookEvent(database, eventId);
+  }
+
+  /**
    * Execute custom query operation
    *
    * Generic query executor for provider-specific operations.

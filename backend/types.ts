@@ -335,6 +335,8 @@ export interface DatabaseProvider<TDb = unknown> {
   findWebhookEvent(db: TDb, eventId: string): Promise<WebhookEventRecord | null>;
   /** Record a Stripe webhook event as processed. */
   insertWebhookEvent(db: TDb, eventId: string, eventType: string, processedAt: number): Promise<InsertResult>;
+  /** Remove a webhook event record so a failed delivery can be retried. */
+  deleteWebhookEvent(db: TDb, eventId: string): Promise<void>;
   /** Run a provider-specific query/operation with the unified result envelope. */
   execute(db: TDb, queryObject: QueryObject): Promise<ExecuteResult>;
   /** Close every connection this provider holds. */
@@ -367,6 +369,7 @@ export interface BoundDatabase {
   updateAuth(query: AuthQuery, update: AuthUpdate): Promise<UpdateResult>;
   findWebhookEvent(eventId: string): Promise<WebhookEventRecord | null>;
   insertWebhookEvent(eventId: string, eventType: string, processedAt: number): Promise<InsertResult>;
+  deleteWebhookEvent(eventId: string): Promise<void>;
   executeQuery(queryObject: QueryObject): Promise<ExecuteResult>;
 }
 
