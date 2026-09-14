@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.19.0
+
+  Drop vitest coverage package
+
 4.18.1
 
   Fix libcurl setopt ABI

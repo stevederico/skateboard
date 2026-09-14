@@ -177,7 +177,7 @@ Skateboard is intentionally lean — current footprint (counting what ships at r
 | | Frontend runtime | Frontend dev | Backend crates |
 |---|---|---|---|
 | Before (v2.x) | 12 | 4 | 7 |
-| **Now** | **4** | **11** | **0** |
+| **Now** | **4** | **10** | **0** |
 
 The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, leftover bcrypt hashes still verify then rehash. SQLite via system `libsqlite3`. Stripe via system `libcurl`. Do not `cargo add`.
 
