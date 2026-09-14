@@ -1,9 +1,16 @@
 //! Password hashing — PBKDF2, scrypt, and legacy bcrypt verification.
 //!
-//! Byte-compatible with the Node backend (`backend/lib/auth.ts`). New hashes
-//! are always scrypt in the format `scrypt$<base64url salt>$<base64url key>`,
-//! produced with Node's `crypto.scrypt` defaults (N=16384, r=8, p=1, 64-byte
-//! key, 16-byte salt).
+//! New hashes are always scrypt, in the self-describing format
+//! `scrypt$<n>$<r>$<p>$<base64url salt>$<base64url key>`, currently produced
+//! with Node's `crypto.scrypt` defaults (N=16384, r=8, p=1, 64-byte key,
+//! 16-byte salt).
+//!
+//! Recording the parameters is what makes the cost adjustable. The older
+//! parameterless form `scrypt$<salt>$<key>`, written by the Node backend and by
+//! earlier versions of this crate, still verifies — at Node's defaults, which
+//! are hard-coded for that form and must not be changed. Raising the cost
+//! therefore only affects new writes, and existing users are migrated by
+//! [`needs_rehash`] on their next sign-in rather than locked out.
 //!
 //! Legacy bcrypt hashes (`$2a$` / `$2b$` / `$2y$`) predate the scrypt
 //! migration and must still verify or those accounts are locked out. Bcrypt
@@ -27,6 +34,105 @@ pub const SCRYPT_R: u32 = 8;
 
 /// Parallelization parameter p used for new hashes — Node's `crypto.scrypt` default.
 pub const SCRYPT_P: u32 = 1;
+
+/// Largest scrypt working set a *stored* hash may demand, in bytes.
+///
+/// A parameterized hash tells the verifier how much work to do, so a row that
+/// an attacker could write would otherwise let them pick the cost and exhaust
+/// memory on every sign-in attempt. scrypt's working set is `128 * N * r`, so
+/// this cap bounds it at 256 MiB regardless of what a row claims. The
+/// compiled-in defaults need 16 MiB, leaving plenty of headroom to raise cost.
+const SCRYPT_MAX_STORED_MEMORY: u64 = 256 * 1024 * 1024;
+
+/// Largest parallelization factor accepted from a stored hash. `p` multiplies
+/// CPU time without bound, so it is capped separately from memory.
+const SCRYPT_MAX_STORED_P: u32 = 16;
+
+/// The `N`, `r`, `p` triple a stored hash was produced with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ScryptParams {
+    n: u32,
+    r: u32,
+    p: u32,
+}
+
+/// The parameters new hashes are written with.
+const CURRENT_PARAMS: ScryptParams = ScryptParams {
+    n: SCRYPT_N,
+    r: SCRYPT_R,
+    p: SCRYPT_P,
+};
+
+impl ScryptParams {
+    /// Reject a triple whose cost is outside what this build is willing to
+    /// spend, so a hostile or corrupt row cannot dictate the work factor.
+    fn within_limits(&self) -> bool {
+        if self.p == 0 || self.p > SCRYPT_MAX_STORED_P {
+            return false;
+        }
+        if self.r == 0 || self.n < 2 || !self.n.is_power_of_two() {
+            return false;
+        }
+        let working_set = 128u64
+            .checked_mul(u64::from(self.n))
+            .and_then(|v| v.checked_mul(u64::from(self.r)));
+        working_set.is_some_and(|bytes| bytes <= SCRYPT_MAX_STORED_MEMORY)
+    }
+}
+
+/// A parsed scrypt hash: its parameters, salt, and expected key.
+struct ParsedHash {
+    params: ScryptParams,
+    salt: Vec<u8>,
+    key: Vec<u8>,
+}
+
+/// Parse a stored scrypt hash in either supported encoding.
+///
+/// Two layouts exist, told apart by field count so they cannot be confused:
+/// - `scrypt$<salt>$<key>` — written by the Node backend and by this crate
+///   before parameters were recorded. Its parameters are implicitly Node's
+///   defaults, which is why [`CURRENT_PARAMS`] must never be read as the
+///   meaning of this form; the constant is hard-coded here instead.
+/// - `scrypt$<n>$<r>$<p>$<salt>$<key>` — self-describing, written today.
+///
+/// Returns `None` for anything malformed or outside the cost limits, which
+/// callers treat as a failed verification.
+fn parse_scrypt_hash(stored: &str) -> Option<ParsedHash> {
+    let rest = stored.strip_prefix("scrypt$")?;
+    let fields: Vec<&str> = rest.split('$').collect();
+    let (params, salt_b64, key_b64) = match fields.as_slice() {
+        // The legacy form's parameters are fixed for all time: they are what
+        // Node used, not whatever this build currently prefers.
+        [salt, key] => (
+            ScryptParams {
+                n: 16384,
+                r: 8,
+                p: 1,
+            },
+            *salt,
+            *key,
+        ),
+        [n, r, p, salt, key] => (
+            ScryptParams {
+                n: n.parse().ok()?,
+                r: r.parse().ok()?,
+                p: p.parse().ok()?,
+            },
+            *salt,
+            *key,
+        ),
+        _ => return None,
+    };
+    if !params.within_limits() {
+        return None;
+    }
+    Some(ParsedHash {
+        params,
+        salt: base64url_decode(salt_b64)?,
+        key: base64url_decode(key_b64)?,
+    })
+}
 
 // ---------------------------------------------------------------------------
 // PBKDF2
@@ -305,10 +411,16 @@ impl std::error::Error for HashError {}
 
 /// Hash a password for storage.
 ///
-/// Produces exactly the Node format
-/// `scrypt$<base64url(salt)>$<base64url(key)>` with a fresh 16-byte random
-/// salt and a 64-byte key derived at N=16384, r=8, p=1 — Node's
-/// `crypto.scrypt(password, salt, 64)` defaults.
+/// Produces `scrypt$<n>$<r>$<p>$<base64url(salt)>$<base64url(key)>` with a
+/// fresh 16-byte random salt and a 64-byte key, at the parameters in
+/// [`CURRENT_PARAMS`] (currently Node's `crypto.scrypt` defaults: N=16384, r=8,
+/// p=1).
+///
+/// The parameters are recorded in the hash so they can be raised later without
+/// locking anyone out: hashes written at the old cost keep verifying at their
+/// own cost, and [`needs_rehash`] reports them for upgrade on next sign-in.
+/// Hashes in the older parameterless form still verify; only new writes use
+/// this encoding.
 ///
 /// # Arguments
 ///
@@ -325,17 +437,11 @@ impl std::error::Error for HashError {}
 /// [`HashError::Scrypt`] if key derivation is rejected.
 pub fn hash_password(password: &str) -> Result<String, HashError> {
     let salt = random_bytes(SCRYPT_SALT_LEN).map_err(HashError::Random)?;
-    let key = scrypt(
-        password.as_bytes(),
-        &salt,
-        SCRYPT_N,
-        SCRYPT_R,
-        SCRYPT_P,
-        SCRYPT_KEY_LEN,
-    )
-    .map_err(HashError::Scrypt)?;
+    let ScryptParams { n, r, p } = CURRENT_PARAMS;
+    let key = scrypt(password.as_bytes(), &salt, n, r, p, SCRYPT_KEY_LEN)
+        .map_err(HashError::Scrypt)?;
     Ok(format!(
-        "scrypt${}${}",
+        "scrypt${n}${r}${p}${}${}",
         base64url_encode(&salt),
         base64url_encode(&key)
     ))
@@ -359,31 +465,20 @@ pub fn hash_password(password: &str) -> Result<String, HashError> {
 ///
 /// `true` only if the password matches.
 pub fn verify_password(password: &str, stored: &str) -> bool {
-    if let Some(rest) = stored.strip_prefix("scrypt$") {
-        let mut parts = rest.split('$');
-        let (Some(salt_b64), Some(key_b64), None) =
-            (parts.next(), parts.next(), parts.next())
-        else {
+    if stored.starts_with("scrypt$") {
+        let Some(parsed) = parse_scrypt_hash(stored) else {
             return false;
         };
-        let (Some(salt), Some(expected)) =
-            (base64url_decode(salt_b64), base64url_decode(key_b64))
-        else {
-            return false;
-        };
+        // Each hash is verified at the parameters it was created with, which is
+        // what lets the compiled-in cost change without invalidating old rows.
+        let ScryptParams { n, r, p } = parsed.params;
         // Node derives SCRYPT_KEYLEN bytes regardless of the stored length,
         // then requires the lengths to match before comparing.
-        let Ok(candidate) = scrypt(
-            password.as_bytes(),
-            &salt,
-            SCRYPT_N,
-            SCRYPT_R,
-            SCRYPT_P,
-            SCRYPT_KEY_LEN,
-        ) else {
+        let Ok(candidate) = scrypt(password.as_bytes(), &parsed.salt, n, r, p, SCRYPT_KEY_LEN)
+        else {
             return false;
         };
-        return ct_eq(&expected, &candidate);
+        return ct_eq(&parsed.key, &candidate);
     }
     if stored.starts_with("$2") {
         return bcrypt::verify(password, stored);
@@ -391,8 +486,12 @@ pub fn verify_password(password: &str, stored: &str) -> bool {
     false
 }
 
-/// Whether a stored hash should be upgraded to scrypt on the next successful
-/// sign-in.
+/// Whether a stored hash should be rewritten on the next successful sign-in.
+///
+/// True for legacy bcrypt (and anything unrecognized), and also for a scrypt
+/// hash whose recorded parameters differ from [`CURRENT_PARAMS`] — which is how
+/// a cost increase rolls out: each user is migrated the next time they sign in,
+/// while their existing hash keeps working until then.
 ///
 /// # Arguments
 ///
@@ -400,10 +499,10 @@ pub fn verify_password(password: &str, stored: &str) -> bool {
 ///
 /// # Returns
 ///
-/// `true` for anything that is not already a scrypt hash — matching Node's
-/// `needsRehash`, which treats every non-`scrypt$` value as legacy.
+/// `true` if the caller should replace the stored hash with a fresh
+/// [`hash_password`] result.
 pub fn needs_rehash(stored: &str) -> bool {
-    !stored.starts_with("scrypt$")
+    parse_scrypt_hash(stored).is_none_or(|parsed| parsed.params != CURRENT_PARAMS)
 }
 
 // ---------------------------------------------------------------------------
@@ -1027,18 +1126,103 @@ mod tests {
 
     // --- hash_password / verify_password ---
 
+    /// A real hash for `"hunter2"` in the parameterless form, produced by the
+    /// Node backend this crate replaced:
+    ///   `node -e 'import("./lib/auth.ts").then(m=>m.hashPassword("hunter2").then(console.log))'`
+    ///
+    /// Rows like this exist in deployed databases, so it is a compatibility
+    /// fixture: it must keep verifying forever.
+    const NODE_HASH: &str = "scrypt$XnQgSiWEOZl_T9WK3hisbA$IQQOk7Kk1Q-OxcBjTy9W8b3bffUc7uCq_JzBXMLMocZB8_HDFmmZZucFb1e_g7zAdiWSDsHWL_Q831nuhK_OSw";
+
+    /// Encode a hash at arbitrary parameters, standing in for one written by a
+    /// build configured differently from this one.
+    fn hash_at(password: &str, params: ScryptParams) -> String {
+        let salt = random_bytes(SCRYPT_SALT_LEN).unwrap();
+        let key = scrypt(
+            password.as_bytes(),
+            &salt,
+            params.n,
+            params.r,
+            params.p,
+            SCRYPT_KEY_LEN,
+        )
+        .unwrap();
+        format!(
+            "scrypt${}${}${}${}${}",
+            params.n,
+            params.r,
+            params.p,
+            base64url_encode(&salt),
+            base64url_encode(&key)
+        )
+    }
+
     #[test]
-    fn hash_password_uses_node_format() {
+    fn hash_password_records_its_parameters() {
         let h = hash_password("hunter2").unwrap();
         let parts: Vec<&str> = h.split('$').collect();
-        assert_eq!(parts.len(), 3);
+        assert_eq!(parts.len(), 6);
         assert_eq!(parts[0], "scrypt");
-        assert_eq!(
-            base64url_decode(parts[1]).unwrap().len(),
-            SCRYPT_SALT_LEN
-        );
-        assert_eq!(base64url_decode(parts[2]).unwrap().len(), SCRYPT_KEY_LEN);
+        assert_eq!(parts[1], SCRYPT_N.to_string());
+        assert_eq!(parts[2], SCRYPT_R.to_string());
+        assert_eq!(parts[3], SCRYPT_P.to_string());
+        assert_eq!(base64url_decode(parts[4]).unwrap().len(), SCRYPT_SALT_LEN);
+        assert_eq!(base64url_decode(parts[5]).unwrap().len(), SCRYPT_KEY_LEN);
         assert!(!h.contains('='), "base64url must be unpadded");
+    }
+
+    #[test]
+    fn verify_password_accepts_a_hash_made_at_other_parameters() {
+        // The whole point of recording parameters: a hash from a build with a
+        // different cost must still verify, at its own cost.
+        let weaker = hash_at("hunter2", ScryptParams { n: 1024, r: 8, p: 1 });
+        assert!(verify_password("hunter2", &weaker));
+        assert!(!verify_password("wrong", &weaker));
+    }
+
+    #[test]
+    fn needs_rehash_flags_a_hash_made_at_other_parameters() {
+        let weaker = hash_at("hunter2", ScryptParams { n: 1024, r: 8, p: 1 });
+        assert!(
+            needs_rehash(&weaker),
+            "a hash below the current cost must be upgraded on next sign-in"
+        );
+    }
+
+    #[test]
+    fn verify_password_refuses_parameters_beyond_the_cost_limit() {
+        // A row demanding a huge working set must be rejected outright rather
+        // than served by allocating gigabytes on an unauthenticated attempt.
+        let salt = base64url_encode(b"0123456789abcdef");
+        let key = base64url_encode(&[0u8; SCRYPT_KEY_LEN]);
+        for (n, r, p) in [
+            (1 << 30, 8, 1),  // ~1 TiB working set
+            (16384, 100_000, 1),
+            (16384, 8, SCRYPT_MAX_STORED_P + 1),
+            (16383, 8, 1), // not a power of two
+            (16384, 0, 1),
+            (16384, 8, 0),
+        ] {
+            let hostile = format!("scrypt${n}${r}${p}${salt}${key}");
+            assert!(
+                !verify_password("hunter2", &hostile),
+                "must refuse N={n} r={r} p={p}"
+            );
+            assert!(needs_rehash(&hostile), "must flag N={n} r={r} p={p}");
+        }
+    }
+
+    #[test]
+    fn verify_password_rejects_a_malformed_field_count() {
+        let salt = base64url_encode(b"0123456789abcdef");
+        let key = base64url_encode(&[0u8; SCRYPT_KEY_LEN]);
+        for bad in [
+            format!("scrypt${salt}"),
+            format!("scrypt$8$1${salt}${key}"),
+            format!("scrypt$16384$8$1$1${salt}${key}"),
+        ] {
+            assert!(!verify_password("hunter2", &bad), "should reject {bad:?}");
+        }
     }
 
     #[test]
@@ -1059,9 +1243,7 @@ mod tests {
 
     #[test]
     fn verify_password_matches_a_node_generated_hash() {
-        // Produced by the Node backend:
-        //   node -e 'import("./lib/auth.ts").then(m=>m.hashPassword("hunter2").then(console.log))'
-        let stored = "scrypt$XnQgSiWEOZl_T9WK3hisbA$IQQOk7Kk1Q-OxcBjTy9W8b3bffUc7uCq_JzBXMLMocZB8_HDFmmZZucFb1e_g7zAdiWSDsHWL_Q831nuhK_OSw";
+        let stored = NODE_HASH;
         assert!(verify_password("hunter2", stored));
         assert!(!verify_password("hunter3", stored));
     }
@@ -1110,7 +1292,14 @@ mod tests {
         // A truncated salt still derives a key; it simply will not match.
         let h = hash_password("hunter2").unwrap();
         let parts: Vec<&str> = h.split('$').collect();
-        let short = format!("scrypt${}${}", &parts[1][..8], parts[2]);
+        let short = format!(
+            "scrypt${}${}${}${}${}",
+            parts[1],
+            parts[2],
+            parts[3],
+            &parts[4][..8],
+            parts[5]
+        );
         assert!(!verify_password("hunter2", &short));
     }
 
@@ -1127,7 +1316,30 @@ mod tests {
     #[test]
     fn needs_rehash_is_false_for_scrypt() {
         assert!(!needs_rehash(&hash_password("hunter2").unwrap()));
-        assert!(!needs_rehash("scrypt$a$b"));
+    }
+
+    #[test]
+    fn needs_rehash_leaves_node_written_hashes_alone() {
+        // The parameterless form carries Node's defaults, which are still the
+        // current parameters — so upgrading this backend must not force every
+        // existing user through a rehash.
+        assert!(!needs_rehash(NODE_HASH));
+        assert_eq!(
+            CURRENT_PARAMS,
+            ScryptParams {
+                n: 16384,
+                r: 8,
+                p: 1
+            },
+            "if the defaults change, Node-written hashes become rehash candidates \
+             and this test should assert that instead"
+        );
+    }
+
+    #[test]
+    fn needs_rehash_is_true_for_a_malformed_scrypt_hash() {
+        assert!(needs_rehash("scrypt$a$b"));
+        assert!(needs_rehash("scrypt$"));
     }
 
     // --- legacy bcrypt ---

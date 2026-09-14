@@ -15,6 +15,19 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.18.1
+
+  Fix libcurl setopt ABI
+  Enforce TLS verification
+  Fix billing portal IDOR
+  CSRF on usage/signout
+  Refuse CSRF store miss
+  Version scrypt hash format
+  Add Pool::transaction
+  Atomic signup writes
+  Atomic usage limit
+  Record webhook after applying
+
 4.18.0
 
   Update README for Rust

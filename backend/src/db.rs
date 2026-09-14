@@ -648,6 +648,39 @@ impl Pool {
         }
     }
 
+    /// Run `f` inside a single `BEGIN IMMEDIATE` transaction.
+    ///
+    /// Every statement `f` issues must go through the `&Db` it is handed.
+    /// Calling a [`Pool`] method inside `f` would check out a *second*
+    /// connection, whose writes are not part of this transaction and which can
+    /// deadlock against it on the write lock — so use the `*_tx` helpers.
+    ///
+    /// `IMMEDIATE` takes the write lock up front instead of upgrading partway
+    /// through, which is what makes a read-then-write pair safe: a deferred
+    /// transaction can have its read invalidated by another writer and fail at
+    /// upgrade time with `SQLITE_BUSY` instead of waiting.
+    ///
+    /// The transaction is rolled back if `f` returns an error, if the commit
+    /// fails, or if `f` panics — a connection is never returned to the pool
+    /// with a transaction still open.
+    ///
+    /// # Errors
+    /// Returns [`DbError`] if the pool is closed, the transaction cannot be
+    /// started or committed, or whatever `f` returns.
+    pub fn transaction<T>(&self, f: impl FnOnce(&Db) -> Result<T, DbError>) -> Result<T, DbError> {
+        self.with(|db| {
+            db.exec("BEGIN IMMEDIATE")?;
+            let mut guard = TxGuard {
+                db,
+                committed: false,
+            };
+            let value = f(db)?;
+            db.exec("COMMIT")?;
+            guard.committed = true;
+            Ok(value)
+        })
+    }
+
     /// Close every idle connection and reject further checkouts.
     ///
     /// Connections currently checked out are closed when their caller returns
@@ -696,6 +729,31 @@ impl Pool {
 impl Drop for Pool {
     fn drop(&mut self) {
         self.close_all();
+    }
+}
+
+/// Rolls back an open transaction unless it was committed.
+///
+/// Exists for the panic path: an early `return` can be handled by ordinary
+/// control flow, but an unwind through [`Pool::transaction`] would otherwise
+/// hand a connection back to the pool mid-transaction, and the next caller to
+/// borrow it would silently join that transaction.
+struct TxGuard<'a> {
+    db: &'a Db,
+    committed: bool,
+}
+
+impl Drop for TxGuard<'_> {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        // Nothing useful can be done with a rollback failure here: the caller
+        // is already unwinding or returning an error. `Db::exec` logs nothing,
+        // so surface it rather than dropping it silently.
+        if let Err(e) = self.db.exec("ROLLBACK") {
+            eprintln!("warning: transaction rollback failed: {e}");
+        }
     }
 }
 
@@ -865,7 +923,8 @@ pub struct User {
 pub struct AuthRecord {
     /// Normalized lowercase email (primary key).
     pub email: String,
-    /// Password hash: `scrypt$<salt>$<key>` or a legacy bcrypt string.
+    /// Password hash: `scrypt$<n>$<r>$<p>$<salt>$<key>`, the older
+    /// parameterless `scrypt$<salt>$<key>`, or a legacy bcrypt string.
     pub password: String,
     /// Owning user's id, the `userID` column.
     pub user_id: String,
@@ -950,6 +1009,45 @@ fn user_from_row(row: &Row) -> Option<User> {
 
 // ==== STORE API ====
 
+/// Insert a new user on an existing connection.
+///
+/// Only `_id`, `email`, `name`, `created_at` are written; the subscription and
+/// usage columns take their schema defaults, so the `subscription` / `usage`
+/// fields of `u` are ignored.
+///
+/// # Errors
+/// Returns [`DbError`] whose `message` contains `"UNIQUE constraint failed"`
+/// when the email is already registered.
+fn insert_user_tx(db: &Db, u: &User) -> Result<(), DbError> {
+    db.run(
+        "INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)",
+        &[
+            Value::Text(u.id.clone()),
+            Value::Text(u.email.clone()),
+            Value::Text(u.name.clone()),
+            Value::Int(u.created_at),
+        ],
+    )?;
+    Ok(())
+}
+
+/// Insert a credential record on an existing connection.
+///
+/// # Errors
+/// Returns [`DbError`] whose `message` contains `"UNIQUE constraint failed"`
+/// when the email already has credentials.
+fn insert_auth_tx(db: &Db, a: &AuthRecord) -> Result<(), DbError> {
+    db.run(
+        "INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)",
+        &[
+            Value::Text(a.email.clone()),
+            Value::Text(a.password.clone()),
+            Value::Text(a.user_id.clone()),
+        ],
+    )?;
+    Ok(())
+}
+
 impl Pool {
     /// Find a user by id or email, nesting the flat columns into
     /// [`Subscription`] / [`Usage`].
@@ -982,18 +1080,7 @@ impl Pool {
     /// Returns [`DbError`] whose `message` contains
     /// `"UNIQUE constraint failed"` when the email is already registered.
     pub fn insert_user(&self, u: &User) -> Result<(), DbError> {
-        self.with(|db| {
-            db.run(
-                "INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)",
-                &[
-                    Value::Text(u.id.clone()),
-                    Value::Text(u.email.clone()),
-                    Value::Text(u.name.clone()),
-                    Value::Int(u.created_at),
-                ],
-            )?;
-            Ok(())
-        })
+        self.with(|db| insert_user_tx(db, u))
     }
 
     /// Set a user's display name. Returns the number of rows modified.
@@ -1077,6 +1164,81 @@ impl Pool {
         })
     }
 
+    /// Consume one unit of quota, but only if the user is below `limit`.
+    ///
+    /// The limit is enforced by the `WHERE` clause, so the check and the
+    /// increment are a single atomic statement. Incrementing first and
+    /// compensating afterwards cannot hold a limit under concurrency: two
+    /// requests can both read a count below the limit and both increment, and
+    /// the compensating decrements then race each other too.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - User id.
+    /// * `limit` - Maximum number of units allowed in the current window.
+    ///
+    /// # Returns
+    ///
+    /// `Some(new_count)` if a unit was consumed, or `None` if the user is
+    /// already at or above `limit` — which is also what a missing user returns,
+    /// since neither case may proceed.
+    ///
+    /// # Errors
+    /// Returns [`DbError`] on a driver failure.
+    pub fn consume_usage(&self, id: &str, limit: i64) -> Result<Option<i64>, DbError> {
+        self.transaction(|db| {
+            let changes = db.run(
+                "UPDATE Users SET usage_count = COALESCE(usage_count, 0) + 1
+                 WHERE _id = ? AND COALESCE(usage_count, 0) < ?",
+                &[Value::Text(id.to_string()), Value::Int(limit)],
+            )?;
+            if changes.changes <= 0 {
+                return Ok(None);
+            }
+            let rows = db.query(
+                "SELECT usage_count FROM Users WHERE _id = ?",
+                &[Value::Text(id.to_string())],
+            )?;
+            Ok(rows.first().and_then(|r| r.int("usage_count")))
+        })
+    }
+
+    /// Start a fresh usage window and consume the first unit atomically.
+    ///
+    /// Resetting and then incrementing as two calls lets a concurrent request
+    /// land in between and have its increment erased by the reset.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - User id.
+    /// * `reset_at` - When the new window expires, in seconds.
+    /// * `consume` - Whether to count this request against the new window.
+    ///
+    /// # Returns
+    /// The usage count after the reset: 1 when `consume`, otherwise 0.
+    ///
+    /// # Errors
+    /// Returns [`DbError`] on a driver failure.
+    pub fn reset_usage_window(
+        &self,
+        id: &str,
+        reset_at: i64,
+        consume: bool,
+    ) -> Result<i64, DbError> {
+        let count = i64::from(consume);
+        self.transaction(|db| {
+            db.run(
+                "UPDATE Users SET usage_count = ?, usage_reset_at = ? WHERE _id = ?",
+                &[
+                    Value::Int(count),
+                    Value::Int(reset_at),
+                    Value::Text(id.to_string()),
+                ],
+            )?;
+            Ok(count)
+        })
+    }
+
     /// Delete a user by id or email. Returns the number of rows deleted.
     ///
     /// # Errors
@@ -1118,16 +1280,25 @@ impl Pool {
     /// Returns [`DbError`] whose `message` contains
     /// `"UNIQUE constraint failed"` when the email already has credentials.
     pub fn insert_auth(&self, a: &AuthRecord) -> Result<(), DbError> {
-        self.with(|db| {
-            db.run(
-                "INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)",
-                &[
-                    Value::Text(a.email.clone()),
-                    Value::Text(a.password.clone()),
-                    Value::Text(a.user_id.clone()),
-                ],
-            )?;
-            Ok(())
+        self.with(|db| insert_auth_tx(db, a))
+    }
+
+    /// Create a user and their credential record as one unit.
+    ///
+    /// Signup writes two tables, and a half-written signup is unrecoverable
+    /// from the outside: a `Users` row with no `Auths` row can never be signed
+    /// in to, yet its email occupies the unique index, so the address cannot be
+    /// registered again. Doing both inserts in one transaction removes that
+    /// state, and with it the compensating delete the caller used to need.
+    ///
+    /// # Errors
+    /// Returns [`DbError`] whose `message` contains
+    /// `"UNIQUE constraint failed"` when the email is already registered.
+    /// Nothing is written in that case.
+    pub fn create_account(&self, u: &User, a: &AuthRecord) -> Result<(), DbError> {
+        self.transaction(|db| {
+            insert_user_tx(db, u)?;
+            insert_auth_tx(db, a)
         })
     }
 
@@ -1248,6 +1419,164 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
+    }
+
+    // --- transactions ---
+
+    #[test]
+    fn transaction_commits_all_or_nothing() {
+        let tmp = TempDb::new("tx-commit");
+        let pool = Pool::open(&tmp.path(), 2).unwrap();
+        pool.transaction(|db| {
+            insert_user_tx(db, &sample_user("u1", "a@example.com"))?;
+            insert_user_tx(db, &sample_user("u2", "b@example.com"))
+        })
+        .unwrap();
+        assert!(pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_some());
+        assert!(pool.find_user(&UserQuery::Id("u2".into())).unwrap().is_some());
+    }
+
+    #[test]
+    fn transaction_rolls_back_every_write_on_error() {
+        let tmp = TempDb::new("tx-rollback");
+        let pool = Pool::open(&tmp.path(), 2).unwrap();
+        let result = pool.transaction::<()>(|db| {
+            insert_user_tx(db, &sample_user("u1", "a@example.com"))?;
+            Err(DbError::local("deliberate failure"))
+        });
+        assert!(result.is_err());
+        assert!(
+            pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_none(),
+            "the first insert must not survive a later failure"
+        );
+    }
+
+    #[test]
+    fn transaction_leaves_no_open_transaction_after_a_panic() {
+        let tmp = TempDb::new("tx-panic");
+        // A single connection, so the next operation is guaranteed to reuse the
+        // one the panic unwound through.
+        let pool = Pool::open(&tmp.path(), 1).unwrap();
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            pool.transaction::<()>(|db| {
+                insert_user_tx(db, &sample_user("u1", "a@example.com"))?;
+                panic!("deliberate panic inside a transaction");
+            })
+        }));
+        assert!(panicked.is_err());
+        assert!(
+            pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_none(),
+            "the panicking transaction must have been rolled back"
+        );
+        // Proves the connection is usable and not still inside a transaction:
+        // a stray open transaction would make this BEGIN fail.
+        pool.transaction(|db| insert_user_tx(db, &sample_user("u2", "b@example.com")))
+            .expect("connection must be reusable after a panic");
+        assert!(pool.find_user(&UserQuery::Id("u2".into())).unwrap().is_some());
+    }
+
+    #[test]
+    fn create_account_writes_nothing_when_the_email_is_taken() {
+        let tmp = TempDb::new("tx-account");
+        let pool = Pool::open(&tmp.path(), 2).unwrap();
+        let auth = AuthRecord {
+            email: "dup@example.com".into(),
+            password: "scrypt$16384$8$1$salt$key".into(),
+            user_id: "u1".into(),
+        };
+        pool.insert_auth(&auth).unwrap();
+
+        // The Auths insert now collides, so the Users insert must be undone.
+        let err = pool
+            .create_account(&sample_user("u1", "dup@example.com"), &auth)
+            .expect_err("duplicate credentials must fail");
+        assert!(err.message.contains("UNIQUE constraint failed"), "{err}");
+        assert!(
+            pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_none(),
+            "a failed signup must not leave a user row holding the email"
+        );
+    }
+
+    // --- usage accounting ---
+
+    #[test]
+    fn consume_usage_stops_at_the_limit() {
+        let tmp = TempDb::new("usage-limit");
+        let pool = Pool::open(&tmp.path(), 2).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+
+        assert_eq!(pool.consume_usage("u1", 2).unwrap(), Some(1));
+        assert_eq!(pool.consume_usage("u1", 2).unwrap(), Some(2));
+        assert_eq!(
+            pool.consume_usage("u1", 2).unwrap(),
+            None,
+            "the third call must be refused rather than counted and undone"
+        );
+        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        assert_eq!(
+            user.usage.map(|u| u.count),
+            Some(2),
+            "a refused call must not leave the counter above the limit"
+        );
+    }
+
+    #[test]
+    fn consume_usage_reports_a_missing_user_as_refused() {
+        let tmp = TempDb::new("usage-missing");
+        let pool = Pool::open(&tmp.path(), 2).unwrap();
+        assert_eq!(pool.consume_usage("ghost", 5).unwrap(), None);
+    }
+
+    #[test]
+    fn concurrent_consume_usage_never_exceeds_the_limit() {
+        let tmp = TempDb::new("usage-race");
+        let pool = Arc::new(Pool::open(&tmp.path(), 4).unwrap());
+        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+
+        const LIMIT: i64 = 10;
+        const THREADS: usize = 4;
+        const EACH: usize = 10;
+        let granted = Arc::new(AtomicU64::new(0));
+        let mut handles = Vec::new();
+        for _ in 0..THREADS {
+            let pool = Arc::clone(&pool);
+            let granted = Arc::clone(&granted);
+            handles.push(std::thread::spawn(move || {
+                for _ in 0..EACH {
+                    if pool.consume_usage("u1", LIMIT).unwrap().is_some() {
+                        granted.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        assert_eq!(
+            granted.load(Ordering::Relaxed),
+            LIMIT as u64,
+            "exactly the limit must be granted across concurrent callers"
+        );
+        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        assert_eq!(user.usage.map(|u| u.count), Some(LIMIT));
+    }
+
+    #[test]
+    fn reset_usage_window_can_consume_the_first_unit() {
+        let tmp = TempDb::new("usage-reset");
+        let pool = Pool::open(&tmp.path(), 2).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+        pool.consume_usage("u1", 100).unwrap();
+
+        assert_eq!(pool.reset_usage_window("u1", 5000, true).unwrap(), 1);
+        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        let usage = user.usage.unwrap();
+        assert_eq!(usage.count, 1);
+        assert_eq!(usage.reset_at, Some(5000));
+
+        assert_eq!(pool.reset_usage_window("u1", 6000, false).unwrap(), 0);
+        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        assert_eq!(user.usage.unwrap().count, 0);
     }
 
     fn sample_user(id: &str, email: &str) -> User {
