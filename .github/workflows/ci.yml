@@ -10,6 +10,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - uses: dtolnay/rust-toolchain@stable
+      - name: System libraries for zero-crate backend
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libcurl4-openssl-dev pkg-config
+      - run: npm ci
       - run: npm run build
       - run: npm test

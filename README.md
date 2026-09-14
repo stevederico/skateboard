@@ -9,7 +9,7 @@
   </p>
   <h1 align="center" style="border-bottom: none; margin-bottom: 0;">Skateboard</h1>
   <h3 align="center" style="margin-top: 0; font-weight: normal;">
-    a react + typescript starter with auth, stripe, shadcn, and sqlite
+    a react + rust starter with auth, stripe, shadcn, and sqlite
   </h3>
 
   <p align="center">
@@ -46,7 +46,7 @@ Everything you need to ship a production-ready app:
 - **Protected routes** with automatic redirects
 - **User context** management across your app
 - **Session persistence** with secure cookies
-- **scrypt password hashing** via `node:crypto` (zero external deps)
+- **scrypt password hashing** in the Rust backend (legacy bcrypt still verifies)
 - **Usage tracking** with configurable limits for free users
 
 ### 💳 **Stripe Integration**
@@ -102,25 +102,16 @@ Update `src/constants.json` to customize your app:
 }
 ```
 
-For Postgres or Mongo, point `connectionString` at the relevant env var:
-
-```bash
-# backend/.env
-MONGODB_URL=mongodb+srv://user:pass@example-cluster.example.net/
-POSTGRES_URL=postgresql://user:pass@example-hostname:5432/myapp
-```
-
 **Auth Variables** - add to `backend/.env` (use a unique random string):
 
 ```bash
 JWT_SECRET=your-secret-key
+STRIPE_KEY=sk_test_...
+STRIPE_ENDPOINT_SECRET=whsec_...
 FREE_USAGE_LIMIT=20  # Optional: monthly usage limit for free users (default: 20)
 ```
 
-**Supported Database Types:**
-- **SQLite** (default): `"dbType": "sqlite"`
-- **PostgreSQL**: `"dbType": "postgresql"` with `"connectionString": "${POSTGRES_URL}"`
-- **MongoDB**: `"dbType": "mongodb"` with `"connectionString": "${MONGODB_URL}"` and `"db": "SkateboardApp"`
+**Database:** SQLite only (`"dbType": "sqlite"`). Postgres and Mongo are not supported.
 
 <br />
 
@@ -182,9 +173,7 @@ Skateboard is intentionally lean — current footprint (counting what ships at r
 | Before (v2.x) | 12 | 4 | 7 |
 | **Now** | **4** | **13** | **3** |
 
-Backend `jsonwebtoken` and `bcryptjs` were both dropped — JWT signing/verification now uses `node:crypto` HMAC, and password hashing uses `node:crypto` scrypt. Legacy bcrypt hashes from older versions still verify (vendored at `backend/vendor/legacy-bcrypt.js`) and are silently re-hashed to scrypt on next login.
-
-Backend `pg` and `mongodb` are not hard deps — `create-skateboard-app` injects only the driver you pick at scaffold time, and the adapter manager lazy-loads them so SQLite-only installs never resolve the others.
+The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, and leftover bcrypt hashes still verify then rehash. SQLite only.
 
 The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui), which itself runs on a single hard dep (`@base-ui/react`) plus optional peer deps for heavy components users opt into.
 
@@ -203,12 +192,11 @@ Built with the latest and greatest:
 | **Vite** | v8 | Build Tool & Dev Server (Oxc/Rolldown) |
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.15+ | Routing |
-| **Hono** | v4.7+ | Backend Server |
-| **TypeScript** | v6 | Types (strict, no build step) |
-| **Node.js** | v24+ | Runtime (native type-stripping) |
-| **Multi-Database** | Latest | SQLite, PostgreSQL, MongoDB |
-| **Stripe** | v18+ | Payments |
-| **node:crypto** | built-in | JWT + scrypt password hashing |
+| **Rust** | 1.95 | Zero-crate backend |
+| **TypeScript** | v7 | Frontend types (strict, no build step) |
+| **Node.js** | v24+ | Frontend toolchain |
+| **SQLite** | system lib | Database |
+| **Stripe** | REST + libcurl | Payments |
 
 <br />
 
@@ -255,9 +243,9 @@ node scripts/update-skateboard.js          # interactive — diff per file
 node scripts/update-skateboard.js --yes    # apply all without prompts
 ```
 
-Updates only files in the safe allowlist (`backend/server.ts`, `backend/adapters/*`, `vite.config.ts`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
+Updates only files in the safe allowlist (`backend/src/*`, `vite.config.ts`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
 
-Upgrading a pre-TypeScript app? The updater migrates renamed files (`backend/server.js` → `backend/server.ts`) with a 3-way merge that preserves your edits, then walks you through the typecheck. See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide and an agent prompt that automates the whole upgrade.
+See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. 4.17.0 replaces the Node/Hono backend with zero-crate Rust — the updater deletes the old JS files.
 
 <br />
 
@@ -290,7 +278,7 @@ Built on the shoulders of giants:
 - [Vite](https://vitejs.dev) - Lightning fast build tool
 - [Tailwind CSS](https://tailwindcss.com) - Utility-first CSS
 - [Shadcn/ui](https://ui.shadcn.com) - Beautiful components
-- [Hono](https://hono.dev) - Lightweight web framework
+- [Rust](https://www.rust-lang.org) - Zero-crate backend
 - [Stripe](https://stripe.com) - Payment infrastructure
 
 <br />

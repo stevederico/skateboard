@@ -1,22 +1,28 @@
 #!/bin/sh
-# Pre-commit hook: type-check before committing.
+# Pre-commit hook: type-check and cargo-test before committing.
 #
-# Known limitation: tsc reads the working tree, not the git index. If you
+# Known limitation: tsc/cargo read the working tree, not the git index. If you
 # stage a partial change (git add -p) the check runs against unstaged edits
 # too. Acceptable trade-off; do not attempt to check out the index.
 
-# Skip entirely when no staged file is type-check relevant.
-if ! git diff --cached --name-only | grep -E '\.(ts|tsx)$|tsconfig|package\.json' >/dev/null 2>&1; then
-  exit 0
+STAGED=$(git diff --cached --name-only)
+
+if printf '%s\n' "$STAGED" | grep -E '\.(ts|tsx)$|tsconfig|package\.json' >/dev/null 2>&1; then
+  if ! npx --no-install tsc --version >/dev/null 2>&1; then
+    printf '%s\n' "pre-commit: tsc unavailable (run npm install) — skipping typecheck."
+  else
+    npm run typecheck || {
+      printf '\n%s\n' "pre-commit: type check failed — commit aborted. Fix errors or run 'npm run typecheck' to see them."
+      exit 1
+    }
+  fi
 fi
 
-# If tsc is unavailable (node_modules missing), warn but never block commits.
-if ! npx --no-install tsc --version >/dev/null 2>&1; then
-  printf '%s\n' "pre-commit: tsc unavailable (run npm install) — skipping typecheck."
-  exit 0
+if printf '%s\n' "$STAGED" | grep -E '\.rs$|backend/Cargo.toml' >/dev/null 2>&1; then
+  cargo test --manifest-path backend/Cargo.toml --locked || {
+    printf '\n%s\n' "pre-commit: cargo test failed — commit aborted."
+    exit 1
+  }
 fi
 
-npm run typecheck || {
-  printf '\n%s\n' "pre-commit: type check failed — commit aborted. Fix errors or run 'npm run typecheck' to see them."
-  exit 1
-}
+exit 0

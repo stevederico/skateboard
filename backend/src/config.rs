@@ -354,10 +354,10 @@ pub fn backend_dir() -> PathBuf {
     if cwd.join("config.json").is_file() {
         return cwd;
     }
-    // `cargo run` from backend-rs/: config lives in the sibling Node backend dir.
-    let sibling = cwd.join("../backend");
-    if sibling.join("config.json").is_file() {
-        return sibling;
+    // `cargo run --manifest-path backend/Cargo.toml` from the repo root.
+    let nested = cwd.join("backend");
+    if nested.join("config.json").is_file() {
+        return nested;
     }
     cwd
 }
