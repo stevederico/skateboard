@@ -258,7 +258,8 @@ We love contributions!
 git clone https://github.com/YOUR_USERNAME/skateboard
 cd skateboard
 npm install
-npm run start
+npm run start                 # frontend :5173
+cd backend && cargo run       # backend :8000
 ```
 
 <br />

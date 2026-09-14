@@ -7,9 +7,9 @@ This file is the source of truth; `CLAUDE.md` is a symlink to it.
 
 **Primary Development:**
 ```bash
-npm run start          # Start both frontend and backend concurrently
-npm run front          # Frontend only (Vite dev server on :5173)
-npm run server         # Backend only (zero-crate Rust on :8000)
+npm run start          # Frontend only (Vite on :5173)
+npm run front          # Same as start
+cd backend && cargo run   # Backend on :8000
 ```
 
 **Build Commands:**
@@ -17,13 +17,13 @@ npm run server         # Backend only (zero-crate Rust on :8000)
 npm run build          # Frontend typecheck + Vite production build
 npm run prod           # Same as build
 npm install-all        # Install frontend dependencies
+cd backend && cargo build --release
 ```
 
 **Testing:**
 ```bash
-npm run test           # typecheck + cargo test + frontend + build tests
-npm run test:backend   # cargo test --manifest-path backend/Cargo.toml --locked
-npm run test:watch     # cargo test (backend)
+npm run test           # Frontend typecheck + vitest + build tests
+cd backend && cargo test --locked
 ```
 
 ## Code Standards
@@ -297,8 +297,8 @@ When a project uses `constants.json`, include a `design` block:
 
 - **Frontend / scripts:** Node's built-in test runner (`node --test`) — never Jest, Mocha, or Jasmine
 - **Backend:** `cargo test` (`#[cfg(test)]` next to the code). Zero crate test frameworks.
-- Root `npm run test` typechecks the frontend, then `cargo test`, then frontend + build tests
-- Use `npm run test` for CI; `npm run test:watch` for backend cargo tests
+- Root `npm run test` is frontend only. Backend: `cd backend && cargo test --locked`
+- CI runs both.
 
 ### What to Test
 

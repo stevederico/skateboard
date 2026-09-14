@@ -52,7 +52,8 @@ npx create-skateboard-app@latest my-app --yes
 cd my-app
 # install: bun install works; package scripts still use npm (keep scripts npm-compatible)
 bun install   # or: npm run install-all
-bun run start   # or: npm run start
+bun run start   # or: npm run start   (Vite :5173)
+cd backend && cargo run               # Rust :8000
 ```
 
 - Frontend: http://localhost:5173  
@@ -185,7 +186,7 @@ const { state, dispatch } = getState();
 ### Runtime
 
 - Empty `[dependencies]`. System `libsqlite3` + `libcurl`. Do not `cargo add`.
-- `npm run server` → `cargo run --manifest-path backend/Cargo.toml`
+- `cd backend && cargo run` / `cargo test --locked`. Do not wrap cargo in npm.
 
 ### Auth (current)
 
@@ -316,7 +317,8 @@ npm install @stevederico/skateboard-ui@4.14.0 --save-exact
 
 # 6) Validate
 npm run typecheck
-npm test   # or backend + frontend scripts the app defines
+npm test
+cd backend && cargo test --locked
 npm run verify:ui   # if present
 
 # 7) Only then treat skateboardVersion as honest (updater stamps it when clean)
