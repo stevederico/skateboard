@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.17.0
+
+  Add zero-crate Rust backend
+
 4.16.0
 
   Roll back webhook record on failure
