@@ -4,7 +4,7 @@ author: stevederico
 description: >
   Build, modify, and upgrade apps with Skateboard boilerplate + @stevederico/skateboard-ui.
   Use when scaffolding, editing a skateboard app, choosing components, constants.json,
-  Hono backend auth/Stripe/SQLite, upgrading boilerplate / skateboardVersion,
+  Rust backend auth/Stripe/SQLite, upgrading boilerplate / skateboardVersion,
   running update-skateboard.js, fixing template drift, or the user says skateboard /
   skateboard-ui.
 metadata:
@@ -51,13 +51,14 @@ Update skateboard-ui once → all apps inherit (when they install the new versio
 npx create-skateboard-app@latest my-app --yes
 cd my-app
 # install: bun install works; package scripts still use npm (keep scripts npm-compatible)
-bun install && bun run --filter backend install   # or: npm run install-all
-bun run start   # or: npm run start
+bun install   # or: npm run install-all
+bun run start   # or: npm run start   (Vite :5173)
+cd backend && cargo run               # Rust :8000
 ```
 
 - Frontend: http://localhost:5173  
 - Backend: http://localhost:8000  
-- Stack: **React 19** · **react-router v7** · **Vite 8** · **Tailwind v4** · **Hono** · **SQLite** (default)
+- Stack: **React 19** · **react-router v7** · **Vite 8** · **Tailwind v4** · **zero-crate Rust** · **SQLite**
 
 ## Project Structure (current boilerplate)
 
@@ -69,12 +70,10 @@ my-app/
 │   ├── main.tsx             # Routes + createSkateboardApp
 │   └── constants.json       # App config
 ├── backend/
-│   ├── server.ts            # Hono (TS; Node runs .ts)
-│   ├── adapters/            # sqlite | postgres | mongodb
-│   ├── lib/                 # auth, env, logger, validation, store
+│   ├── src/                 # zero-crate Rust server
+│   ├── Cargo.toml           # empty [dependencies]
 │   ├── config.json
-│   ├── databases/           # local SQLite files (not for Docker secrets)
-│   └── package.json         # hono, @hono/node-server, stripe (+ optional pg/mongo)
+│   └── databases/           # local SQLite files (not for Docker secrets)
 ├── package.json             # skateboardVersion + pin skateboard-ui exact
 └── vite.config.ts
 ```
@@ -182,18 +181,18 @@ const { state, dispatch } = getState();
 **Import shadcn:** `@stevederico/skateboard-ui/shadcn/ui/<component>`  
 **Shell pieces:** `…/Header`, `…/Layout`, `…/App`, etc. (see package `exports`)
 
-## Backend — Hono + TypeScript
+## Backend — zero-crate Rust
 
-### Runtime deps (lean)
+### Runtime
 
-- `hono`, `@hono/node-server`, `stripe`
-- Optional: `pg`, `mongodb` (dev/optional adapters — not mongoose)
+- Empty `[dependencies]`. System `libsqlite3` + `libcurl`. Do not `cargo add`.
+- `cd backend && cargo run` / `cargo test --locked`. Do not wrap cargo in npm.
 
 ### Auth (current)
 
-- **JWT HS256** via **`node:crypto`** (no `jsonwebtoken` package)
-- **Passwords: scrypt** (`node:crypto`); legacy **bcrypt** hashes still verify (vendored) then migrate
-- HttpOnly cookies, CSRF, rate limits, security headers
+- **JWT HS256** (byte-compatible with the old Node tokens)
+- **Passwords: scrypt**; legacy **bcrypt** hashes still verify then rehash
+- HttpOnly cookies, CSRF, security headers
 
 ### Env
 
@@ -206,7 +205,7 @@ FRONTEND_URL=               # Stripe redirects
 ```
 
 - **`backend/.env` must be a regular file** — never a symlink (4.12 refuse + Docker guards)
-- No `dotenv` package — custom env loader in `backend/lib/env.ts`
+- No `dotenv` crate — `backend/src/config.rs` parses `.env` by hand
 
 ### Database
 
@@ -221,7 +220,7 @@ FRONTEND_URL=               # Stripe redirects
 }
 ```
 
-`dbType`: `sqlite` | `postgresql` | `mongodb` via `backend/adapters/`.
+`dbType` must be `sqlite`. Postgres and Mongo are not supported.
 
 ## Component selection (use / not)
 
@@ -268,7 +267,7 @@ import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 
 ## Upgrading an existing app (boilerplate + UI)
 
-Boilerplate (**vendored** backend + glue) and **skateboard-ui** (npm) are **two channels**. Bumping the UI package does **not** update `backend/server.ts` or adapters.
+Boilerplate (**vendored** backend + glue) and **skateboard-ui** (npm) are **two channels**. Bumping the UI package does **not** update `backend/src/*.rs`.
 
 ### Why apps drift
 
@@ -276,21 +275,17 @@ Boilerplate (**vendored** backend + glue) and **skateboard-ui** (npm) are **two 
 |---|---|---|
 | **Frontend shell** | `@stevederico/skateboard-ui` npm pin | Low — version bump pulls fixes |
 | **App glue** | `src/main.tsx`, `styles.css`, optional `CommandMenu` / landing sheets | Mild — may lag new patterns |
-| **Backend** | Copied at scaffold (`server.ts`, `adapters/`, `lib/`) | **High** — no auto channel unless you run the updater |
+| **Backend** | Copied at scaffold (`backend/src/*.rs`) | **High** — no auto channel unless you run the updater |
 
-`skateboardVersion` can be bumped while backend still ships dead deps (`jsonwebtoken`, `bcrypt`/`bcryptjs`). **Trust the tree, not the label.**
+`skateboardVersion` can be bumped while backend still ships Hono. **Trust the tree, not the label.** Canonical is empty `[dependencies]` in `backend/Cargo.toml`.
 
 ### Audit (is this app behind?)
 
 ```bash
-# Still on removed auth deps? → backend drifted regardless of skateboardVersion
-grep -lE 'jsonwebtoken|bcryptjs?' backend/package.json
-
-# Canonical modern backend runtime deps are only:
-#   hono, @hono/node-server, stripe  (+ optional pg / mongodb)
+# Still on the Node backend? → drifted regardless of skateboardVersion
+test -f backend/package.json && echo drifted
+grep -E '^\[dependencies\]' -A2 backend/Cargo.toml   # must stay empty
 ```
-
-Canonical auth: **scrypt** + **HS256 JWT via `node:crypto`**, legacy bcrypt verify-only via `backend/vendor/legacy-bcrypt.js`, rehash on signin via adapter `updateAuth`.
 
 ### Recipe A — full upgrade (preferred)
 
@@ -305,9 +300,8 @@ node scripts/update-skateboard.js --yes
 # optional: node scripts/update-skateboard.js --baseline 3.7.0
 #   (when the version label was stamped without files actually migrating)
 
-# 3) Resolve conflicts — never blind-overwrite the configured DB adapter
-#    Unused adapters (e.g. mongodb on a sqlite app): taking canonical is usually OK.
-#    Configured adapter (backend/config.json dbType): DIFF first — apps often add tables.
+# 3) Resolve conflicts — custom Hono routes must be ported into backend/src/routes.rs.
+#    Schema lives in backend/src/db.rs (ensure_schema). DIFF before taking canonical.
 
 # 4) Bump UI to the version pin in canonical package.json (exact)
 npm install @stevederico/skateboard-ui@4.14.0 --save-exact
@@ -317,13 +311,14 @@ npm install @stevederico/skateboard-ui@4.14.0 --save-exact
 # Never bare --min-release-age=0 / --minimum-release-age 0 on a full tree install.
 
 # 5) Lockfile: commit package-lock.json (source of truth). If you use Bun for install:
-#    bun install && cd backend && bun install
+#    bun install
 #    npm install --package-lock-only --ignore-scripts
 #    do not commit bun.lock if the project gitignores it
 
 # 6) Validate
 npm run typecheck
-npm test   # or backend + frontend scripts the app defines
+npm test
+cd backend && cargo test --locked
 npm run verify:ui   # if present
 
 # 7) Only then treat skateboardVersion as honest (updater stamps it when clean)
@@ -348,15 +343,9 @@ git grep -lnE '^(<<<<<<<|=======|>>>>>>>)' || true
 - **Unused adapters:** often take canonical
 - **Configured adapter + custom `CREATE TABLE` / domain functions:** keep app logic; merge carefully — blind `cp` has wiped app data layers before
 
-### Recipe B — surgical auth de-drift (no updater)
+### Recipe B — still on Hono
 
-When the app is too customized or the updater is unavailable:
-
-1. Copy `backend/vendor/legacy-bcrypt.js` (+ `.d.ts` if present) from canonical.
-2. Swap auth only: `bcrypt.*` → scrypt `hashPassword` / `verifyPassword` (+ `needsRehash`); `jwt.sign`/`verify` → `jwtSign` / `jwtVerify` (same payload/expiry/`JWT_SECRET` so existing cookies still work); ensure CSRF.
-3. Add `updateAuth` to the **configured** adapter (`backend/config.json` → `dbType`) + manager wiring; hook signin rehash. Wrong adapter = silent no-op.
-4. Remove `jsonwebtoken` and `bcrypt`/`bcryptjs` from `backend/package.json`.
-5. Validate build **and** real login (legacy hash + new scrypt + rehash persist). Build-pass ≠ auth-verified.
+Run the updater. Do not keep a parallel Node backend. Port custom routes into `backend/src/routes.rs`.
 
 ### Frontend-only UI bump
 
@@ -381,7 +370,7 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 
 ### After upgrade checklist
 
-- [ ] No `jsonwebtoken` / `bcrypt` in `backend/package.json`
+- [ ] No `backend/package.json` / no Hono; `backend/Cargo.toml` `[dependencies]` empty
 - [ ] No conflict markers anywhere
 - [ ] `skateboard-ui` exact pin matches intended version; `verify:ui` OK
 - [ ] `typecheck` + tests green
@@ -392,7 +381,7 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 
 1. Pin `@stevederico/skateboard-ui` **exact**; run `verify:ui` when present
 2. Prefer **ui components + tokens** over one-off CSS
-3. Backend: **scrypt + crypto JWT**, no mongoose/axios/dotenv
+3. Backend: **zero-crate Rust**, scrypt + HS256 JWT, no mongoose/axios/dotenv, no crates
 4. Never commit secrets; never ship `.env` via symlink/Docker context
-5. Teach **TS** paths (`main.tsx`, `server.ts`)
+5. Teach **TS** frontend paths (`main.tsx`) and **Rust** backend (`backend/src/`)
 6. **Upgrades:** two channels — UI npm + `update-skateboard.js` for vendored backend; never bump the version label alone

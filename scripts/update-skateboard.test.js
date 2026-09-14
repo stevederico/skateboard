@@ -9,7 +9,7 @@ import { ALLOWLIST, SYMLINKS, RENAMES, ensureSymlink } from './update-skateboard
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 function walkRepo(dir, out = []) {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'databases' || name === 'dist') continue;
+    if (name === 'node_modules' || name === 'databases' || name === 'dist' || name === 'target') continue;
     const full = join(dir, name);
     // lstat (not stat): never follow symlinks. A symlinked backend/.env pointing at an
     // a broken .env symlink would make statSync throw ENOENT and crash the whole suite. A
@@ -40,12 +40,10 @@ describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
     assert.deepEqual(missing, [], `ALLOWLIST references missing files: ${missing.join(', ')}`);
   });
 
-  it('every backend boilerplate code file (.ts / .js) is allowlisted', () => {
-    // backend/ code is template-owned; vendor/ is covered by explicit entries, databases/
-    // is runtime data. Covers .ts AND .js (incl. .test.js). NOT .json: backend/config.json
-    // is app-owned (each app's db config) and correctly stays off the allowlist.
+  it('every backend boilerplate file is allowlisted', () => {
+    // backend/ code is template-owned. Runtime/app-owned: databases/, config.json, .env*.
     const missing = walkRepo(join(REPO, 'backend'))
-      .filter(f => (f.endsWith('.ts') || f.endsWith('.js')) && !f.includes('/vendor/'))
+      .filter(f => !f.includes('/databases/') && !f.endsWith('config.json') && !f.includes('.env') && !f.endsWith('.DS_Store'))
       .filter(f => !ALLOWLIST.includes(f));
     assert.deepEqual(missing, [], `backend boilerplate missing from ALLOWLIST: ${missing.join(', ')}`);
   });

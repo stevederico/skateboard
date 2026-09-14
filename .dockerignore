@@ -30,6 +30,7 @@ backend/.env.*
 dist/
 build/
 backend/coverage/
+backend/target/
 
 # Local data — never bake into railway up images
 backend/databases/

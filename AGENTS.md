@@ -7,22 +7,23 @@ This file is the source of truth; `CLAUDE.md` is a symlink to it.
 
 **Primary Development:**
 ```bash
-npm run start          # Start both frontend and backend concurrently
-npm run front          # Frontend only (Vite dev server on :5173)
-npm run server         # Backend only (Hono server on :8000)
+npm run start          # Frontend only (Vite on :5173)
+npm run front          # Same as start
+cd backend && cargo run   # Backend on :8000
 ```
 
 **Build Commands:**
 ```bash
-npm run build          # Development build
-npm run prod           # Production build
-npm install-all        # Install all dependencies (root + workspace)
+npm run build          # Frontend typecheck + Vite production build
+npm run prod           # Same as build
+npm install-all        # Install frontend dependencies
+cd backend && cargo build --release
 ```
 
 **Testing:**
 ```bash
-npm run test           # Run all tests (node --test, backend workspace)
-npm run test:watch     # Watch mode for development
+npm run test           # Frontend typecheck + vitest + build tests
+cd backend && cargo test --locked
 ```
 
 ## Code Standards
@@ -97,7 +98,7 @@ When making ANY code changes, you MUST update:
 ### TypeScript Style
 
 - TypeScript everywhere — `.ts` / `.tsx` files, `strict` mode always on
-- No build-step typechecking: `npm run typecheck` runs `tsc --noEmit` for both root and backend; it gates `build`, `prod`, and `test`
+- No build-step typechecking: `npm run typecheck` runs `tsc --noEmit` for the frontend; it gates `build`, `prod`, and `test`. Backend is `cargo test`.
 - `@types` packages are dev-only dependencies (`@types/node`, `@types/react`, `@types/react-dom`)
 - Prefer `const` over `let` — use `let` only when reassigning
 - Prefer `async`/`await` over `.then()` chains
@@ -294,9 +295,10 @@ When a project uses `constants.json`, include a `design` block:
 
 ### Test Runner
 
-- **Node's built-in test runner** (`node --test`) is the standard — never use Jest, Mocha, or Jasmine; no test framework dependency
-- Backend tests run via the workspace: root `npm run test` typechecks, then delegates to `backend` (`node --test server.test.ts`)
-- Use `npm run test` for CI; `npm run test:watch` for development
+- **Frontend / scripts:** Node's built-in test runner (`node --test`) — never Jest, Mocha, or Jasmine
+- **Backend:** `cargo test` (`#[cfg(test)]` next to the code). Zero crate test frameworks.
+- Root `npm run test` is frontend only. Backend: `cd backend && cargo test --locked`
+- CI runs both.
 
 ### What to Test
 
@@ -390,7 +392,7 @@ Skateboard uses an **Application Shell Architecture** where skateboard-ui provid
 
 ### Monorepo Structure
 - **Root**: React frontend with Vite 7.1+ build system using skateboard-ui
-- **Backend Workspace**: Hono server with multi-database support
+- **Backend**: zero-crate Rust (`backend/`), SQLite via system libsqlite3
 
 ### Project Structure
 ```
@@ -402,10 +404,9 @@ skateboard/
 │   ├── main.tsx         # Route definitions (16 lines)
 │   └── constants.json   # All your app config
 ├── backend/
-│   ├── server.ts        # Hono server
-│   ├── adapters/        # Database adapters (SQLite, PostgreSQL, MongoDB)
+│   ├── src/             # Zero-crate Rust server
+│   ├── Cargo.toml       # Empty [dependencies]
 │   ├── databases/       # SQLite database files
-│   ├── tsconfig.json    # Backend TypeScript config
 │   └── config.json      # Backend config with database settings
 ├── package.json         # Dependencies (includes skateboard-ui)
 ├── tsconfig.json        # Frontend TypeScript config (strict)
@@ -425,25 +426,15 @@ skateboard/
 - Tailwind CSS v4+ with @tailwindcss/vite plugin
 
 ### Backend Stack
-- Runtime: Node.js with Hono
-- Database: SQLite preferred, MongoDB if SQLite not available
-- Always use the `mongodb` npm package (never mongoose)
-- HTTP client: native `fetch` only
-
-### Multi-Database Architecture
-
-The application uses a database factory pattern supporting three database types:
-
-**Database Adapters** (`backend/adapters/`):
-- `sqlite.ts` - Default SQLite provider using Node.js built-in DatabaseSync
-- `postgres.ts` - PostgreSQL provider with connection pooling
-- `mongodb.ts` - MongoDB provider with native driver
-- `manager.ts` - Unified interface and provider selection
+- Runtime: zero-crate Rust (`std::net::TcpListener` + OS threads). Empty `[dependencies]`.
+- SQLite via system `libsqlite3` FFI. Postgres and Mongo are not supported.
+- Stripe HTTPS via system `libcurl` FFI. Never hand-roll TLS. Never add a crate.
+- A crate needs an explicit yes. Do not `cargo add`.
 
 **Configuration** (`backend/config.json`):
 ```json
 {
-  "client": "http://localhost:5173",
+  "staticDir": "../dist",
   "database": {
     "db": "MyApp",
     "dbType": "sqlite",
@@ -453,11 +444,10 @@ The application uses a database factory pattern supporting three database types:
 ```
 
 ### Authentication & Security
-- JWT tokens in HttpOnly cookies
+- JWT tokens in HttpOnly cookies (HS256, byte-compatible with the old Node tokens)
 - CSRF token protection for state-changing operations
-- Scrypt password hashing via `node:crypto` (legacy bcrypt hashes verified and lazily rehashed on signin)
+- Scrypt password hashing (legacy bcrypt hashes verified and lazily rehashed on signin)
 - JWT with 30-day expiration
-- Rate limiting on auth, payments, and global endpoints
 - Security headers (CSP, HSTS, X-Frame-Options, etc.)
 
 ### Build System Integration
@@ -625,7 +615,7 @@ When working with these libraries, consult the provided documentation before mak
 |---|---|
 | shadcn/ui | https://ui.shadcn.com/llms.txt |
 | Vite | https://vite.dev/llms.txt |
-| Hono | https://hono.dev/llms.txt |
+| Rust std | https://doc.rust-lang.org/std/ |
 | Tailwind CSS v4 | https://raw.githubusercontent.com/tailwindlabs/tailwindcss.com/refs/heads/md-endpoints/llms.txt |
 
 ## Documentation
@@ -633,7 +623,7 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@4.16.0
+- skateboard@4.17.0
 - skateboard-ui@4.14.0
 
 ## Updating from Skateboard Boilerplate
@@ -655,16 +645,14 @@ dependency string (or running `npm install <pkg>@x` then reverting node_modules)
 *declared* version ahead of the *installed* one — the lockfile and `node_modules` still hold
 the old code, so builds/tests pass against stale deps and the bump is a lie. After ANY change to
 a version in `package.json`:
-1. Run `npm install` (and `npm install --workspace=backend` if backend deps changed) so the
-   lockfile + `node_modules` actually match.
+1. Run `npm install` so the lockfile + `node_modules` actually match.
 2. Verify declared == installed before committing:
    `npm run verify:ui` (for skateboard-ui), or
    `npm ls <pkg>` / compare `package.json` vs `node_modules/<pkg>/package.json`.
 3. Commit `package.json` **and** `package-lock.json` together — never one without the other.
 
 ### Safe to Update (review and apply)
-- `backend/server.ts` - Server logic, security updates
-- `backend/adapters/*` - Database adapters
+- `backend/src/*` - Rust server
 - `vite.config.ts` - Build configuration
 - `src/assets/styles.css` - Theme variables (merge carefully)
 
