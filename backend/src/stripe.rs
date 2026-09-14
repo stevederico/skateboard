@@ -752,7 +752,6 @@ const CURLOPT_CONNECTTIMEOUT_MS: c_int = 156;
 const CURLINFO_RESPONSE_CODE: c_int = 2_097_154;
 
 #[link(name = "curl")]
-#[allow(clashing_extern_declarations)]
 extern "C" {
     fn curl_global_init(flags: c_long) -> c_int;
     fn curl_easy_init() -> *mut CURL;
@@ -762,20 +761,17 @@ extern "C" {
     fn curl_slist_append(list: *mut CurlSlist, string: *const c_char) -> *mut CurlSlist;
     fn curl_slist_free_all(list: *mut CurlSlist);
 
-    // `curl_easy_setopt` / `curl_easy_getinfo` are variadic. Calling a variadic
-    // C function through a single Rust signature is not portable — on aarch64
-    // variadic arguments use a different register/stack class than fixed ones.
-    // Declaring one non-variadic alias per argument class is the standard fix.
-    #[link_name = "curl_easy_setopt"]
-    fn curl_easy_setopt_ptr(handle: *mut CURL, option: c_int, value: *const c_void) -> c_int;
-    #[link_name = "curl_easy_setopt"]
-    fn curl_easy_setopt_long(handle: *mut CURL, option: c_int, value: c_long) -> c_int;
-    #[link_name = "curl_easy_setopt"]
-    fn curl_easy_setopt_cb(handle: *mut CURL, option: c_int, value: CurlCb) -> c_int;
-    #[link_name = "curl_easy_setopt"]
-    fn curl_easy_setopt_slist(handle: *mut CURL, option: c_int, value: *mut CurlSlist) -> c_int;
-    #[link_name = "curl_easy_getinfo"]
-    fn curl_easy_getinfo_long(handle: *mut CURL, info: c_int, value: *mut c_long) -> c_int;
+    // Both of these are variadic in C and must be declared variadic here.
+    // Substituting a non-variadic signature per argument class does not work:
+    // the Apple arm64 ABI passes every variadic argument on the stack, so a
+    // non-variadic call leaves the value in a register and the callee reads an
+    // uninitialized stack slot. The option number is a fixed parameter, so it
+    // still arrives and `setopt` still reports CURLE_OK — the value is simply
+    // lost. Callers must therefore pass each argument at its documented width
+    // (`c_long` for long options, a pointer for the rest), because C varargs
+    // apply no conversion beyond the default promotions.
+    fn curl_easy_setopt(handle: *mut CURL, option: c_int, ...) -> c_int;
+    fn curl_easy_getinfo(handle: *mut CURL, info: c_int, ...) -> c_int;
 }
 
 /// `curl_global_init` must run exactly once before any easy handle is created.
@@ -935,40 +931,41 @@ fn request(
     let mut head_sink: Vec<(String, String)> = Vec::new();
 
     // SAFETY: every call below targets a live handle from curl_easy_init with an
-    // option constant matched to its documented argument class (pointer, long,
-    // callback, or slist), via the non-variadic aliases declared above. All
-    // pointer arguments — `c_url`, `user_agent`, `list`, `sink`, `head_sink`,
-    // and `body` — are owned by this stack frame and outlive curl_easy_perform.
+    // option constant matched to its documented argument class, passed at the
+    // width libcurl's `va_arg` reads (`c_long` for long options, a pointer
+    // otherwise). All pointer arguments — `c_url`, `user_agent`, `list`, `sink`,
+    // `head_sink`, and `body` — are owned by this stack frame and outlive
+    // curl_easy_perform.
     let setup = unsafe {
         let h = handle.0;
-        let mut rc = curl_easy_setopt_ptr(h, CURLOPT_URL, c_url.as_ptr() as *const c_void);
-        rc |= curl_easy_setopt_ptr(h, CURLOPT_USERAGENT, user_agent.as_ptr() as *const c_void);
-        rc |= curl_easy_setopt_cb(h, CURLOPT_WRITEFUNCTION, write_cb);
-        rc |= curl_easy_setopt_ptr(h, CURLOPT_WRITEDATA, (&mut sink as *mut Vec<u8>).cast());
-        rc |= curl_easy_setopt_cb(h, CURLOPT_HEADERFUNCTION, header_cb);
-        rc |= curl_easy_setopt_ptr(
+        let mut rc = curl_easy_setopt(h, CURLOPT_URL, c_url.as_ptr().cast::<c_void>());
+        rc |= curl_easy_setopt(h, CURLOPT_USERAGENT, user_agent.as_ptr().cast::<c_void>());
+        rc |= curl_easy_setopt(h, CURLOPT_WRITEFUNCTION, write_cb as CurlCb);
+        rc |= curl_easy_setopt(h, CURLOPT_WRITEDATA, (&mut sink as *mut Vec<u8>).cast::<c_void>());
+        rc |= curl_easy_setopt(h, CURLOPT_HEADERFUNCTION, header_cb as CurlCb);
+        rc |= curl_easy_setopt(
             h,
             CURLOPT_HEADERDATA,
-            (&mut head_sink as *mut Vec<(String, String)>).cast(),
+            (&mut head_sink as *mut Vec<(String, String)>).cast::<c_void>(),
         );
-        rc |= curl_easy_setopt_long(h, CURLOPT_TIMEOUT_MS, TIMEOUT_MS);
-        rc |= curl_easy_setopt_long(h, CURLOPT_CONNECTTIMEOUT_MS, CONNECT_TIMEOUT_MS);
-        rc |= curl_easy_setopt_long(h, CURLOPT_FOLLOWLOCATION, 0);
+        rc |= curl_easy_setopt(h, CURLOPT_TIMEOUT_MS, TIMEOUT_MS);
+        rc |= curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT_MS, CONNECT_TIMEOUT_MS);
+        rc |= curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 0 as c_long);
         // NOSIGNAL is required for thread safety: without it libcurl uses
         // SIGALRM/alarm() for DNS timeouts, which is process-global.
-        rc |= curl_easy_setopt_long(h, CURLOPT_NOSIGNAL, 1);
+        rc |= curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1 as c_long);
         // Certificate verification: never relaxed, no knob to relax it.
-        rc |= curl_easy_setopt_long(h, CURLOPT_SSL_VERIFYPEER, 1);
-        rc |= curl_easy_setopt_long(h, CURLOPT_SSL_VERIFYHOST, 2);
+        rc |= curl_easy_setopt(h, CURLOPT_SSL_VERIFYPEER, 1 as c_long);
+        rc |= curl_easy_setopt(h, CURLOPT_SSL_VERIFYHOST, 2 as c_long);
         if !list.0.is_null() {
-            rc |= curl_easy_setopt_slist(h, CURLOPT_HTTPHEADER, list.0);
+            rc |= curl_easy_setopt(h, CURLOPT_HTTPHEADER, list.0);
         }
         if method == Method::Post {
             let payload = body.unwrap_or(&[]);
-            rc |= curl_easy_setopt_long(h, CURLOPT_POST, 1);
+            rc |= curl_easy_setopt(h, CURLOPT_POST, 1 as c_long);
             // Size first, then the buffer: libcurl then never scans for a NUL.
-            rc |= curl_easy_setopt_long(h, CURLOPT_POSTFIELDSIZE, payload.len() as c_long);
-            rc |= curl_easy_setopt_ptr(h, CURLOPT_POSTFIELDS, payload.as_ptr().cast());
+            rc |= curl_easy_setopt(h, CURLOPT_POSTFIELDSIZE, payload.len() as c_long);
+            rc |= curl_easy_setopt(h, CURLOPT_POSTFIELDS, payload.as_ptr().cast::<c_void>());
         }
         rc
     };
@@ -986,7 +983,7 @@ fn request(
     let mut status: c_long = 0;
     // SAFETY: CURLINFO_RESPONSE_CODE is a CURLINFO_LONG info, so the out
     // parameter must be a `*mut long` — which is exactly what is passed.
-    let rc = unsafe { curl_easy_getinfo_long(handle.0, CURLINFO_RESPONSE_CODE, &mut status) };
+    let rc = unsafe { curl_easy_getinfo(handle.0, CURLINFO_RESPONSE_CODE, &mut status as *mut c_long) };
     if rc != CURLE_OK {
         return Err(StripeError::Transport("could not read response status".into()));
     }
@@ -1375,6 +1372,32 @@ mod tests {
         assert_eq!(
             e.to_string(),
             "stripe HTTP 401 (api_key_expired): Expired API Key provided"
+        );
+    }
+
+    // ---- libcurl argument passing ----
+
+    /// `curl_easy_setopt` is variadic, so a wrong declaration silently drops
+    /// every value while still returning `CURLE_OK` — which would leave
+    /// certificate verification and the timeouts unset. Connecting to a closed
+    /// local port separates the two outcomes without a network or a key: if the
+    /// URL arrived, libcurl fails to connect; if it was dropped, libcurl reports
+    /// a malformed URL instead.
+    #[test]
+    fn setopt_values_reach_libcurl() {
+        // Port 1 is privileged and never listening, so this cannot hang.
+        let result = request(Method::Get, "http://127.0.0.1:1/", &[], None);
+        let Err(StripeError::Transport(message)) = result else {
+            panic!("expected a transport error connecting to a closed port");
+        };
+        let lowered = message.to_lowercase();
+        assert!(
+            !lowered.contains("url"),
+            "libcurl never received the URL, so setopt arguments are being dropped: {message}"
+        );
+        assert!(
+            lowered.contains("connect"),
+            "expected a connection failure, got: {message}"
         );
     }
 

@@ -155,14 +155,23 @@ fn require_auth(state: &AppState, req: &Request) -> Result<String, Response> {
     }
 }
 
-/// CSRF check. `Ok(Some(cookie))` when a store miss auto-regenerated a token.
-fn require_csrf(
-    state: &AppState,
-    req: &Request,
-    user_id: &str,
-) -> Result<Option<Cookie>, Response> {
+/// CSRF check for a state-changing request.
+///
+/// A token that is missing, mismatched, unknown to the store, or expired is
+/// refused with 403. The refusal carries a freshly minted token as a cookie
+/// whenever the caller's identity is known, so a client whose token was lost —
+/// the in-memory store does not survive a restart — can retry once and succeed.
+///
+/// Deliberately *not* done here: accepting the request and regenerating the
+/// token on a store miss. That turns every post-restart request into a free
+/// pass, because the stored token is what the header is checked against.
+///
+/// # Errors
+/// A 403 [`Response`], ready to return, with a replacement cookie when one
+/// could be issued.
+fn require_csrf(state: &AppState, req: &Request, user_id: &str) -> Result<(), Response> {
     if req.method == "GET" || req.path == "/api/signup" || req.path == "/api/signin" {
-        return Ok(None);
+        return Ok(());
     }
     let csrf_header = req.header("x-csrf-token");
     if csrf_header.is_none() || user_id.is_empty() {
@@ -177,55 +186,59 @@ fn require_csrf(
         return Err(err_json(403, "Invalid CSRF token"));
     }
     let csrf_header = csrf_header.unwrap_or("");
-    match state.csrf.get(user_id) {
-        None => {
-            let new_token = generate_csrf_token()?;
-            state.csrf.set(user_id, new_token.clone(), config::now_ms());
-            state
-                .log
-                .info("CSRF token auto-regenerated after store miss", &[("userID", json::s(user_id))]);
-            Ok(Some(csrf_cookie(state, &new_token)))
-        }
-        Some(stored) => {
-            if csrf_header.len() != stored.token.len()
-                || !ct_eq(csrf_header.as_bytes(), stored.token.as_bytes())
-            {
-                state.log.info(
-                    "CSRF validation failed - token mismatch",
-                    &[
-                        ("userID", json::s(user_id)),
-                        ("path", json::s(req.path.clone())),
-                    ],
-                );
-                return Err(err_json(403, "Invalid CSRF token"));
-            }
-            if config::now_ms() - stored.timestamp > CSRF_TOKEN_EXPIRY_MS {
-                state.csrf.remove(user_id);
-                state.log.info(
-                    "CSRF validation failed - token expired",
-                    &[
-                        ("userID", json::s(user_id)),
-                        (
-                            "age",
-                            json::s(format!(
-                                "{}s",
-                                (config::now_ms() - stored.timestamp) / 1000
-                            )),
-                        ),
-                    ],
-                );
-                return Err(err_json(403, "CSRF token expired"));
-            }
-            state.log.debug("CSRF validation passed", &[("userID", json::s(user_id))]);
-            Ok(None)
-        }
+    let Some(stored) = state.csrf.get(user_id) else {
+        state.log.info(
+            "CSRF validation failed - no token on record for this user",
+            &[
+                ("userID", json::s(user_id)),
+                ("path", json::s(req.path.clone())),
+            ],
+        );
+        return Err(csrf_retry(state, user_id, "CSRF token expired"));
+    };
+    if csrf_header.len() != stored.token.len()
+        || !ct_eq(csrf_header.as_bytes(), stored.token.as_bytes())
+    {
+        state.log.info(
+            "CSRF validation failed - token mismatch",
+            &[
+                ("userID", json::s(user_id)),
+                ("path", json::s(req.path.clone())),
+            ],
+        );
+        return Err(err_json(403, "Invalid CSRF token"));
     }
+    if config::now_ms() - stored.timestamp > CSRF_TOKEN_EXPIRY_MS {
+        state.log.info(
+            "CSRF validation failed - token expired",
+            &[
+                ("userID", json::s(user_id)),
+                (
+                    "age",
+                    json::s(format!("{}s", (config::now_ms() - stored.timestamp) / 1000)),
+                ),
+            ],
+        );
+        return Err(csrf_retry(state, user_id, "CSRF token expired"));
+    }
+    state.log.debug("CSRF validation passed", &[("userID", json::s(user_id))]);
+    Ok(())
 }
 
-fn with_cookie(res: Response, extra: Option<Cookie>) -> Response {
-    match extra {
-        Some(c) => res.cookie(&c),
-        None => res,
+/// Build a 403 that also hands the caller a usable token for one retry.
+///
+/// Falls back to a plain 403 when a token cannot be minted, so a failure of the
+/// random source can never turn into an accepted request.
+fn csrf_retry(state: &AppState, user_id: &str, message: &str) -> Response {
+    match generate_csrf_token() {
+        Ok(token) => {
+            state.csrf.set(user_id, token.clone(), config::now_ms());
+            err_json(403, message).cookie(&csrf_cookie(state, &token))
+        }
+        Err(_) => {
+            state.csrf.remove(user_id);
+            err_json(403, message)
+        }
     }
 }
 
@@ -355,42 +368,20 @@ fn signup(state: &AppState, req: &Request) -> Response {
         subscription: None,
         usage: None,
     };
-    if let Err(e) = state.pool.insert_user(&user) {
-        if is_duplicate(&e) {
-            state.log.warn("Signup failed - duplicate account", &[]);
-            return err_json(400, "Unable to create account with provided credentials");
-        }
-        return db_err(state, "Signup error", &e);
-    }
     let auth_rec = AuthRecord {
         email: email.clone(),
         password: hash,
         user_id: insert_id.clone(),
     };
-    if let Err(auth_err) = state.pool.insert_auth(&auth_rec) {
-        state.log.error(
-            "Auth insert failed, rolling back user creation",
-            &[("error", json::s(auth_err.to_string()))],
-        );
-        match state.pool.delete_user(&UserQuery::Id(insert_id.clone())) {
-            Ok(1) => {}
-            Ok(_) => state.log.error(
-                "Rollback failed - orphaned user record",
-                &[("userID", json::s(insert_id.clone()))],
-            ),
-            Err(rollback_err) => state.log.error(
-                "Rollback failed - orphaned user record",
-                &[
-                    ("userID", json::s(insert_id.clone())),
-                    ("error", json::s(rollback_err.to_string())),
-                ],
-            ),
-        }
-        if is_duplicate(&auth_err) {
+    // One transaction, so a failure cannot leave a user row with no credentials
+    // — an account nobody can sign in to, holding an email address that can
+    // never be registered again.
+    if let Err(e) = state.pool.create_account(&user, &auth_rec) {
+        if is_duplicate(&e) {
             state.log.warn("Signup failed - duplicate account", &[]);
             return err_json(400, "Unable to create account with provided credentials");
         }
-        return db_err(state, "Signup error", &auth_err);
+        return db_err(state, "Signup error", &e);
     }
     let token = match generate_token(state, &insert_id) {
         Ok(t) => t,
@@ -512,6 +503,12 @@ fn signout(state: &AppState, req: &Request) -> Response {
         Ok(id) => id,
         Err(r) => return r,
     };
+    // Sign-out changes server state, so it is CSRF-protected like any other
+    // mutation. A refusal still hands back a usable token, so a client holding a
+    // stale one can retry immediately rather than being stuck signed in.
+    if let Err(res) = require_csrf(state, req, &user_id) {
+        return res;
+    }
     state.csrf.remove(&user_id);
     state.log.info("Signout success", &[]);
     json_res(200, &json::obj([("message", json::s("Signed out successfully"))]))
@@ -537,58 +534,57 @@ fn me_put(state: &AppState, req: &Request) -> Response {
         Ok(id) => id,
         Err(r) => return r,
     };
-    let extra = match require_csrf(state, req, &user_id) {
-        Ok(c) => c,
-        Err(r) => return r,
-    };
+    if let Err(res) = require_csrf(state, req, &user_id) {
+        return res;
+    }
     let body = match json::parse(&req.body) {
         Ok(v) => v,
         Err(e) => {
             state
                 .log
                 .error("Update user error", &[("error", json::s(e.to_string()))]);
-            return with_cookie(err_json(500, "Failed to update user"), extra);
+            return err_json(500, "Failed to update user");
         }
     };
     if let Some(name) = body.get("name") {
         let Some(name) = name.as_str() else {
-            return with_cookie(err_json(400, "Name must be 1-100 characters"), extra);
+            return err_json(400, "Name must be 1-100 characters");
         };
         if !validation::validate_name(name) {
-            return with_cookie(err_json(400, "Name must be 1-100 characters"), extra);
+            return err_json(400, "Name must be 1-100 characters");
         }
     }
     match state.pool.find_user(&UserQuery::Id(user_id.clone())) {
         Ok(Some(_)) => {}
-        Ok(None) => return with_cookie(err_json(404, "User not found"), extra),
+        Ok(None) => return err_json(404, "User not found"),
         Err(e) => {
             state
                 .log
                 .error("Update user error", &[("error", json::s(e.to_string()))]);
-            return with_cookie(err_json(500, "Failed to update user"), extra);
+            return err_json(500, "Failed to update user");
         }
     }
     let Some(name) = body.get_str("name") else {
-        return with_cookie(err_json(400, "No valid fields to update"), extra);
+        return err_json(400, "No valid fields to update");
     };
     let sanitized = validation::escape_html(name.trim());
     match state.pool.update_user_set_name(&user_id, &sanitized) {
-        Ok(0) => with_cookie(err_json(400, "No changes made"), extra),
+        Ok(0) => err_json(400, "No changes made"),
         Ok(_) => match state.pool.find_user(&UserQuery::Id(user_id)) {
-            Ok(Some(u)) => with_cookie(json_res(200, &user_json(&u)), extra),
-            Ok(None) => with_cookie(err_json(404, "User not found"), extra),
+            Ok(Some(u)) => json_res(200, &user_json(&u)),
+            Ok(None) => err_json(404, "User not found"),
             Err(e) => {
                 state
                     .log
                     .error("Update user error", &[("error", json::s(e.to_string()))]);
-                with_cookie(err_json(500, "Failed to update user"), extra)
+                err_json(500, "Failed to update user")
             }
         },
         Err(e) => {
             state
                 .log
                 .error("Update user error", &[("error", json::s(e.to_string()))]);
-            with_cookie(err_json(500, "Failed to update user"), extra)
+            err_json(500, "Failed to update user")
         }
     }
 }
@@ -611,11 +607,33 @@ fn sub_expires_iso(sub: &Subscription) -> Json {
     }
 }
 
+/// Length of a free-tier usage window, in seconds (30 days).
+const USAGE_WINDOW_SECS: i64 = 30 * 24 * 60 * 60;
+
+/// The 429 body returned when a free-tier caller has no quota left.
+fn usage_limit_reached(limit: i64) -> Response {
+    json_res(
+        429,
+        &json::obj([
+            ("error", json::s("Usage limit reached")),
+            ("remaining", json::i(0)),
+            ("total", json::i(limit)),
+            ("isSubscriber", Json::Bool(false)),
+        ]),
+    )
+}
+
 fn usage(state: &AppState, req: &Request) -> Response {
     let user_id = match require_auth(state, req) {
         Ok(id) => id,
         Err(r) => return r,
     };
+    // `operation: "track"` increments a stored counter, so this is a mutation.
+    // The body is parsed as JSON regardless of Content-Type, which means a
+    // cross-site form post could otherwise reach it without a preflight.
+    if let Err(res) = require_csrf(state, req, &user_id) {
+        return res;
+    }
     let body = match json::parse(&req.body) {
         Ok(v) => v,
         Err(e) => {
@@ -653,43 +671,36 @@ fn usage(state: &AppState, req: &Request) -> Response {
     let limit = state.free_usage_limit;
     let now = config::now_secs();
     let mut usage = resolve_usage(&user);
-    if usage.reset_at.map(|r| now > r).unwrap_or(true) {
-        let new_reset = now + 30 * 24 * 60 * 60;
-        if let Err(e) = state.pool.update_user_usage(
-            &user_id,
-            &Usage {
-                count: 0,
-                reset_at: Some(new_reset),
-            },
-        ) {
-            return db_err(state, "Usage tracking error", &e);
-        }
-        usage = Usage {
-            count: 0,
-            reset_at: Some(new_reset),
-        };
+    let is_tracking = operation == "track";
+    // A limit below 1 admits nothing, including the first request of a new
+    // window — which the window reset below would otherwise wave through.
+    if is_tracking && limit < 1 {
+        return usage_limit_reached(limit);
     }
-    if operation == "track" {
-        if let Err(e) = state.pool.increment_usage_count(&user_id, 1) {
-            return db_err(state, "Usage tracking error", &e);
-        }
-        let actual = match state.pool.find_user(&UserQuery::Id(user_id.clone())) {
-            Ok(u) => u.and_then(|u| u.usage).map(|u| u.count).unwrap_or(1),
+    if usage.reset_at.map(|r| now > r).unwrap_or(true) {
+        let new_reset = now + USAGE_WINDOW_SECS;
+        // Reset and first increment together: a separate increment could be
+        // issued by a concurrent request and then erased by this reset.
+        match state
+            .pool
+            .reset_usage_window(&user_id, new_reset, is_tracking)
+        {
+            Ok(count) => {
+                usage = Usage {
+                    count,
+                    reset_at: Some(new_reset),
+                }
+            }
             Err(e) => return db_err(state, "Usage tracking error", &e),
-        };
-        if actual > limit {
-            let _ = state.pool.increment_usage_count(&user_id, -1);
-            return json_res(
-                429,
-                &json::obj([
-                    ("error", json::s("Usage limit reached")),
-                    ("remaining", json::i(0)),
-                    ("total", json::i(limit)),
-                    ("isSubscriber", Json::Bool(false)),
-                ]),
-            );
         }
-        usage.count = actual;
+    } else if is_tracking {
+        // The limit is enforced inside the UPDATE, so concurrent requests
+        // cannot both be admitted at the boundary.
+        match state.pool.consume_usage(&user_id, limit) {
+            Ok(Some(count)) => usage.count = count,
+            Ok(None) => return usage_limit_reached(limit),
+            Err(e) => return db_err(state, "Usage tracking error", &e),
+        }
     }
     let remaining = (limit - usage.count).max(0);
     let mut m = BTreeMap::new();
@@ -717,12 +728,11 @@ fn checkout(state: &AppState, req: &Request) -> Response {
         Ok(id) => id,
         Err(r) => return r,
     };
-    let extra = match require_csrf(state, req, &user_id) {
-        Ok(c) => c,
-        Err(r) => return r,
-    };
+    if let Err(res) = require_csrf(state, req, &user_id) {
+        return res;
+    }
     let Some(stripe) = state.stripe.as_ref() else {
-        return with_cookie(err_json(503, "Stripe is not configured"), extra);
+        return err_json(503, "Stripe is not configured");
     };
     let body = match json::parse(&req.body) {
         Ok(v) => v,
@@ -730,11 +740,11 @@ fn checkout(state: &AppState, req: &Request) -> Response {
             state
                 .log
                 .error("Checkout session error", &[("error", json::s(e.to_string()))]);
-            return with_cookie(err_json(500, "Stripe session failed"), extra);
+            return err_json(500, "Stripe session failed");
         }
     };
     let (Some(email), Some(lookup_key)) = (body.get_str("email"), body.get_str("lookup_key")) else {
-        return with_cookie(err_json(400, "Missing email or lookup_key"), extra);
+        return err_json(400, "Missing email or lookup_key");
     };
     let user = match state.pool.find_user(&UserQuery::Id(user_id)) {
         Ok(u) => u,
@@ -742,25 +752,22 @@ fn checkout(state: &AppState, req: &Request) -> Response {
             state
                 .log
                 .error("Checkout session error", &[("error", json::s(e.to_string()))]);
-            return with_cookie(err_json(500, "Stripe session failed"), extra);
+            return err_json(500, "Stripe session failed");
         }
     };
     if user.as_ref().map(|u| u.email.as_str()) != Some(email) {
-        return with_cookie(err_json(403, "Email mismatch"), extra);
+        return err_json(403, "Email mismatch");
     }
     let price_id = match stripe.price_id_for_lookup_key(lookup_key) {
         Ok(Some(id)) => id,
         Ok(None) => {
-            return with_cookie(
-                err_json(400, &format!("No price found for lookup_key: {lookup_key}")),
-                extra,
-            )
+            return err_json(400, &format!("No price found for lookup_key: {lookup_key}"))
         }
         Err(e) => {
             state
                 .log
                 .error("Checkout session error", &[("error", json::s(e.to_string()))]);
-            return with_cookie(err_json(500, "Stripe session failed"), extra);
+            return err_json(500, "Stripe session failed");
         }
     };
     let origin = state.redirect_origin(req.header("origin"));
@@ -775,25 +782,22 @@ fn checkout(state: &AppState, req: &Request) -> Response {
         app_name: app_name.as_deref(),
         idempotency_key: None,
     }) {
-        Ok(session) => with_cookie(
-            json_res(
-                200,
-                &json::obj([
-                    ("url", session.url.map(json::s).unwrap_or(Json::Null)),
-                    ("id", json::s(session.id)),
-                    (
-                        "customerID",
-                        session.customer.map(json::s).unwrap_or(Json::Null),
-                    ),
-                ]),
-            ),
-            extra,
+        Ok(session) => json_res(
+            200,
+            &json::obj([
+                ("url", session.url.map(json::s).unwrap_or(Json::Null)),
+                ("id", json::s(session.id)),
+                (
+                    "customerID",
+                    session.customer.map(json::s).unwrap_or(Json::Null),
+                ),
+            ]),
         ),
         Err(e) => {
             state
                 .log
                 .error("Checkout session error", &[("error", json::s(e.to_string()))]);
-            with_cookie(err_json(500, "Stripe session failed"), extra)
+            err_json(500, "Stripe session failed")
         }
     }
 }
@@ -803,12 +807,11 @@ fn portal(state: &AppState, req: &Request) -> Response {
         Ok(id) => id,
         Err(r) => return r,
     };
-    let extra = match require_csrf(state, req, &user_id) {
-        Ok(c) => c,
-        Err(r) => return r,
-    };
+    if let Err(res) = require_csrf(state, req, &user_id) {
+        return res;
+    }
     let Some(stripe) = state.stripe.as_ref() else {
-        return with_cookie(err_json(503, "Stripe is not configured"), extra);
+        return err_json(503, "Stripe is not configured");
     };
     let body = match json::parse(&req.body) {
         Ok(v) => v,
@@ -816,11 +819,11 @@ fn portal(state: &AppState, req: &Request) -> Response {
             state
                 .log
                 .error("Portal session error", &[("error", json::s(e.to_string()))]);
-            return with_cookie(err_json(500, "Stripe portal failed"), extra);
+            return err_json(500, "Stripe portal failed");
         }
     };
     let Some(customer_id) = body.get_str("customerID") else {
-        return with_cookie(err_json(400, "Missing customerID"), extra);
+        return err_json(400, "Missing customerID");
     };
     let user = match state.pool.find_user(&UserQuery::Id(user_id)) {
         Ok(u) => u,
@@ -828,38 +831,43 @@ fn portal(state: &AppState, req: &Request) -> Response {
             state
                 .log
                 .error("Portal session error", &[("error", json::s(e.to_string()))]);
-            return with_cookie(err_json(500, "Stripe portal failed"), extra);
+            return err_json(500, "Stripe portal failed");
         }
     };
-    let unauthorized = match &user {
-        None => true,
-        Some(u) => u
-            .subscription
-            .as_ref()
-            .map(|s| !s.stripe_id.is_empty() && s.stripe_id != customer_id)
-            .unwrap_or(false),
-    };
-    if unauthorized {
-        return with_cookie(err_json(403, "Unauthorized customerID"), extra);
+    // The caller may only manage the Stripe customer recorded against their own
+    // account. Anything else — no user, no subscription, a blank stored id, or a
+    // mismatch — is refused. Defaulting to "allow" when the account has no
+    // subscription would let any signed-in user open a billing portal for an
+    // arbitrary customer id and read or cancel someone else's subscription.
+    let stored_id = user
+        .as_ref()
+        .and_then(|u| u.subscription.as_ref())
+        .map(|s| s.stripe_id.as_str())
+        .filter(|id| !id.is_empty());
+    let authorized = stored_id
+        .is_some_and(|id| ct_eq(id.as_bytes(), customer_id.as_bytes()));
+    if !authorized {
+        state.log.warn(
+            "Portal denied - customerID does not match the caller's subscription",
+            &[("path", json::s(req.path.clone()))],
+        );
+        return err_json(403, "Unauthorized customerID");
     }
     let origin = state.redirect_origin(req.header("origin"));
     let return_url = format!("{origin}/app/payment?portal=return");
     match stripe.create_portal_session(customer_id, &return_url) {
-        Ok(session) => with_cookie(
-            json_res(
-                200,
-                &json::obj([
-                    ("url", session.url.map(json::s).unwrap_or(Json::Null)),
-                    ("id", json::s(session.id)),
-                ]),
-            ),
-            extra,
+        Ok(session) => json_res(
+            200,
+            &json::obj([
+                ("url", session.url.map(json::s).unwrap_or(Json::Null)),
+                ("id", json::s(session.id)),
+            ]),
         ),
         Err(e) => {
             state
                 .log
                 .error("Portal session error", &[("error", json::s(e.to_string()))]);
-            with_cookie(err_json(500, "Stripe portal failed"), extra)
+            err_json(500, "Stripe portal failed")
         }
     }
 }
@@ -898,18 +906,6 @@ fn apply_sub_patch(state: &AppState, email: &str, sub: &Subscription) -> bool {
                 .error("Webhook processing error", &[("error", json::s(e.to_string()))]);
             false
         }
-    }
-}
-
-fn rollback_webhook(state: &AppState, event_id: &str) {
-    if let Err(e) = state.pool.delete_webhook_event(event_id) {
-        state.log.error(
-            "Failed to roll back webhook event record",
-            &[
-                ("eventId", json::s(event_id)),
-                ("error", json::s(e.to_string())),
-            ],
-        );
     }
 }
 
@@ -971,23 +967,37 @@ fn payment(state: &AppState, req: &Request) -> Response {
             return Response::empty(500);
         }
     }
-    if let Err(e) = state
-        .pool
-        .insert_webhook_event(&event_id, &event_type, config::now_ms())
-    {
-        state
-            .log
-            .error("Webhook processing error", &[("error", json::s(e.to_string()))]);
-        return Response::empty(500);
-    }
     let obj = event
         .get("data")
         .and_then(|d| d.get("object"))
         .cloned()
         .unwrap_or(json::obj([]));
     if let Err(e) = process_webhook(state, &event_id, &event_type, &obj) {
-        rollback_webhook(state, &event_id);
         return e;
+    }
+    // Recorded only after the effect has been applied, so the record can never
+    // claim an event was handled when it was not. Recording first and deleting
+    // on failure only covers a returned error: a crash, timeout, or kill
+    // between the insert and the update would leave the event marked as
+    // processed forever, and the retry Stripe sends would be skipped.
+    //
+    // This ordering trades that for the possibility of applying an event twice,
+    // which is safe here because every write these handlers perform sets
+    // subscription columns to absolute values read from Stripe rather than
+    // mutating them relative to what is already stored.
+    if let Err(e) = state
+        .pool
+        .insert_webhook_event(&event_id, &event_type, config::now_ms())
+    {
+        // The effect is already applied. Asking Stripe to retry would only
+        // repeat idempotent work, so acknowledge and keep the error visible.
+        state.log.error(
+            "Applied webhook event but failed to record it - a retry would be reprocessed",
+            &[
+                ("eventId", json::s(event_id)),
+                ("error", json::s(e.to_string())),
+            ],
+        );
     }
     Response::empty(200)
 }
@@ -1267,6 +1277,40 @@ mod tests {
         }
     }
 
+    /// Replay the cookies set by `sources`, in order, with later responses
+    /// overriding earlier ones by cookie name — so an auth cookie from signup
+    /// can be combined with a replacement CSRF cookie from a later response.
+    ///
+    /// `send_csrf` controls whether the matching `x-csrf-token` header is sent,
+    /// which is what separates "client has no token" from "token is stale".
+    fn replay_cookies(req: &mut Request, sources: &[&Response], send_csrf: bool) {
+        let mut jar: Vec<(String, String)> = Vec::new();
+        for res in sources {
+            let set_cookies = res
+                .headers
+                .iter()
+                .filter(|(k, _)| k.eq_ignore_ascii_case("Set-Cookie"));
+            for (_, value) in set_cookies {
+                let pair = value.split(';').next().unwrap_or(value);
+                let Some((name, token)) = pair.split_once('=') else {
+                    continue;
+                };
+                jar.retain(|(existing, _)| existing != name);
+                jar.push((name.to_string(), token.to_string()));
+            }
+        }
+        if !jar.is_empty() {
+            let serialized: Vec<String> =
+                jar.iter().map(|(n, v)| format!("{n}={v}")).collect();
+            req.set_test_header("cookie", &serialized.join("; "));
+        }
+        if send_csrf {
+            if let Some((_, token)) = jar.iter().find(|(name, _)| name == "csrf_token") {
+                req.set_test_header("x-csrf-token", token);
+            }
+        }
+    }
+
     #[test]
     fn health_ok() {
         let (state, dir) = test_state();
@@ -1328,6 +1372,152 @@ mod tests {
         let res = handle(&state, Request::for_test("GET", "/app"));
         assert_eq!(res.status, 200);
         assert_eq!(res.body, b"Welcome to Skateboard API");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Sign up, then return the state and the signup response (which carries
+    /// the auth cookies and the CSRF token).
+    fn signed_up(state: &AppState, email: &str) -> Response {
+        let mut req = Request::for_test("POST", "/api/signup");
+        req.set_test_body(
+            format!(r#"{{"email":"{email}","password":"secret1","name":"P"}}"#).into_bytes(),
+        );
+        let res = handle(state, req);
+        assert_eq!(res.status, 201, "{}", String::from_utf8_lossy(&res.body));
+        res
+    }
+
+    /// POST `/api/portal` with `customer_id`, carrying the cookies from `signup`.
+    fn portal_request(state: &AppState, signup: &Response, customer_id: &str) -> Response {
+        let mut req = Request::for_test("POST", "/api/portal");
+        cookie_header(&mut req, signup);
+        req.set_test_body(format!(r#"{{"customerID":"{customer_id}"}}"#).into_bytes());
+        handle(state, req)
+    }
+
+    #[test]
+    fn usage_track_requires_csrf() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "usage@example.com");
+        let mut req = Request::for_test("POST", "/api/usage");
+        replay_cookies(&mut req, &[&signup], false);
+        req.set_test_body(br#"{"operation":"track"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 403, "{}", String::from_utf8_lossy(&res.body));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn signout_requires_csrf() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "out@example.com");
+        let mut req = Request::for_test("POST", "/api/signout");
+        replay_cookies(&mut req, &[&signup], false);
+        let res = handle(&state, req);
+        assert_eq!(res.status, 403, "{}", String::from_utf8_lossy(&res.body));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn csrf_store_miss_is_refused_not_auto_accepted() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "miss@example.com");
+        let user_id = state
+            .pool
+            .find_user(&UserQuery::Email("miss@example.com".into()))
+            .expect("query")
+            .expect("user")
+            .id;
+        // Simulates a restart: the cookie and header survive, the store does not.
+        state.csrf.remove(&user_id);
+
+        let mut req = Request::for_test("PUT", "/api/me");
+        replay_cookies(&mut req, &[&signup], true);
+        req.set_test_body(br#"{"name":"Renamed"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(
+            res.status, 403,
+            "a store miss must not accept the request: {}",
+            String::from_utf8_lossy(&res.body)
+        );
+        // The name must be unchanged, proving the mutation did not run.
+        let after = state
+            .pool
+            .find_user(&UserQuery::Id(user_id))
+            .expect("query")
+            .expect("user");
+        assert_eq!(after.name, "P");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn csrf_refusal_issues_a_token_usable_on_retry() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "retry@example.com");
+        let user_id = state
+            .pool
+            .find_user(&UserQuery::Email("retry@example.com".into()))
+            .expect("query")
+            .expect("user")
+            .id;
+        state.csrf.remove(&user_id);
+
+        let mut first = Request::for_test("PUT", "/api/me");
+        replay_cookies(&mut first, &[&signup], true);
+        first.set_test_body(br#"{"name":"Renamed"}"#.to_vec());
+        let refused = handle(&state, first);
+        assert_eq!(refused.status, 403);
+
+        // Retry with the replacement token the refusal set.
+        let mut second = Request::for_test("PUT", "/api/me");
+        replay_cookies(&mut second, &[&signup, &refused], true);
+        second.set_test_body(br#"{"name":"Renamed"}"#.to_vec());
+        let res = handle(&state, second);
+        assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
+        assert_eq!(json_body(&res).get_str("name"), Some("Renamed"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn portal_refuses_a_customer_id_the_caller_does_not_own() {
+        let (mut state, dir) = test_state();
+        // A configured client makes the route reach the authorization check; the
+        // check itself is local, so a refusal never touches the network.
+        state.stripe = Some(crate::stripe::StripeClient::new("sk_test_unused".into()));
+        let signup = signed_up(&state, "noone@example.com");
+
+        // This account has no subscription, so it owns no Stripe customer.
+        let res = portal_request(&state, &signup, "cus_someoneElsesCustomer");
+        assert_eq!(res.status, 403, "{}", String::from_utf8_lossy(&res.body));
+        assert_eq!(json_body(&res).get_str("error"), Some("Unauthorized customerID"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn portal_refuses_a_customer_id_belonging_to_another_subscriber() {
+        let (mut state, dir) = test_state();
+        state.stripe = Some(crate::stripe::StripeClient::new("sk_test_unused".into()));
+        let signup = signed_up(&state, "mine@example.com");
+
+        let user = state
+            .pool
+            .find_user(&UserQuery::Email("mine@example.com".into()))
+            .expect("query")
+            .expect("user");
+        state
+            .pool
+            .update_user_subscription(
+                &user.id,
+                &Subscription {
+                    stripe_id: "cus_mine".into(),
+                    expires: None,
+                    status: "active".into(),
+                },
+            )
+            .expect("set subscription");
+
+        let res = portal_request(&state, &signup, "cus_theirs");
+        assert_eq!(res.status, 403, "{}", String::from_utf8_lossy(&res.body));
         std::fs::remove_dir_all(&dir).ok();
     }
 
