@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.18.0
+
+  Update README for Rust
+
 4.17.0
 
   Replace Hono with Rust
