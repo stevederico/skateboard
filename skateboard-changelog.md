@@ -15,6 +15,12 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.17.0
+
+  Replace Hono with Rust
+  Drop Node backend workspace
+  Drop npm cargo wrapper
+
 4.16.0
 
   Roll back webhook record on failure

@@ -4,7 +4,7 @@ Complete reference for the Skateboard boilerplate. Quick links:
 
 - [Architecture](#architecture) — Application Shell pattern, structure, scaling
 - [API Reference](#api-reference) — REST endpoints
-- [Database Schema](#database-schema) — Tables, fields, multi-DB adapters
+- [Database Schema](#database-schema) — SQLite tables and fields
 - [Deployment](#deployment) — Vercel, Render, Netlify, Docker
 - [Migration](#migration) — Upgrade prompt for AI agents
 
@@ -992,13 +992,13 @@ FREE_USAGE_LIMIT=20
 
 | Setting | Development | Production |
 |---------|-------------|------------|
-| Database | SQLite (local config) | PostgreSQL/MongoDB (env vars) |
+| Database | SQLite (local file) | SQLite (volume) |
 | CORS | localhost | CORS_ORIGINS env var |
 | Redirects | localhost:5173 | FRONTEND_URL env var |
 
 #### Docker Deployment
 
-The included Dockerfile uses the Node.js runtime:
+The included Dockerfile builds the Vite frontend, then a zero-crate Rust backend:
 
 ```bash
 docker build -t skateboard .
@@ -1600,19 +1600,9 @@ Configuration in `backend/config.json`:
 ./databases/MyApp.db
 ```
 
-**PostgreSQL:**
-```
-postgresql://user:password@localhost:5432/myapp
-${DATABASE_URL}
-```
+Postgres and Mongo are not supported. `dbType` must be `sqlite`.
 
-**MongoDB:**
-```
-mongodb://localhost:27017
-${MONGODB_URL}
-```
-
-Environment variable syntax `${VAR_NAME}` is supported for production deployments.
+Environment variable syntax `${VAR_NAME}` is supported in `connectionString`.
 
 ---
 
@@ -1657,20 +1647,13 @@ subscription_stripeID = 'cus_xxx'
 subscription_status = 'active'
 ```
 
-This is handled automatically by the database adapters in `backend/adapters/`.
+Schema is created on first open in `backend/src/db.rs` (`ensure_schema`).
 
 ---
 
 ### Migration Notes
 
-When switching database types:
-
-1. Export data from current database
-2. Transform nested ↔ flat structure as needed
-3. Import to new database
-4. Update `config.json` with new `dbType` and `connectionString`
-
-The adapter pattern ensures API compatibility regardless of database backend.
+SQLite is the only supported database. There is no Postgres or Mongo adapter.
 
 ---
 
@@ -1698,8 +1681,6 @@ CORS_ORIGINS=https://yourapp.com
 FRONTEND_URL=https://yourapp.com
 
 ## Optional
-POSTGRES_URL=postgresql://...  # If using PostgreSQL
-MONGODB_URL=mongodb://...      # If using MongoDB
 FREE_USAGE_LIMIT=20            # Monthly limit for free users
 ```
 
@@ -1718,36 +1699,9 @@ For all platforms, configure your Stripe webhook:
 
 ---
 
-### Vercel (Recommended)
+### Vercel (frontend only)
 
-Single deployment for both frontend and backend.
-
-#### 1. Create vercel.json
-
-```json
-{
-  "version": 2,
-  "builds": [
-    { "src": "backend/server.js", "use": "@vercel/node" },
-    { "src": "package.json", "use": "@vercel/static-build" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "backend/server.js" },
-    { "src": "/(.*)", "dest": "$1" }
-  ],
-  "buildCommand": "npm run build"
-}
-```
-
-#### 2. Update Backend for Vercel
-
-Add to end of `backend/server.js`:
-
-```javascript
-export default app;
-```
-
-#### 3. Deploy
+The Rust backend is a long-running process. Host it on Railway, Render, or Docker. Vercel can serve the Vite `dist/` frontend.
 
 1. Go to [vercel.com](https://vercel.com) → New Project
 2. Import your GitHub repository
@@ -1755,23 +1709,8 @@ export default app;
    - Framework Preset: Other
    - Build Command: `npm run build`
    - Output Directory: `dist`
-4. Add environment variables
+4. Point `src/constants.json` `backendURL` at the Rust host
 5. Deploy
-
-#### 4. Update Configuration
-
-Update `src/constants.json`:
-```json
-{ "backendURL": "/api" }
-```
-
-Update `backend/config.json`:
-```json
-{
-  "client": "https://yourproject.vercel.app",
-  "database": { ... }
-}
-```
 
 ---
 
@@ -1828,8 +1767,8 @@ Netlify for frontend, Railway for backend.
 1. Go to [railway.app](https://railway.app) → New Project
 2. Deploy from GitHub repo
 3. Configure:
-   - Build Command: `npm install --workspace=backend`
-   - Start Command: `npm run --workspace=backend start`
+   - Build Command: `cargo build --release --manifest-path backend/Cargo.toml`
+   - Start Command: `./backend/target/release/skateboard-backend`
 4. Add environment variables
 5. Deploy and copy the backend URL
 
@@ -1903,8 +1842,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md#production-configuration) for environment 
 
 Upgrade an existing skateboard project with the bundled updater — it is version-agnostic
 (reads the current pins from the reference repo, no hardcoded versions to go stale) and
-handles the TypeScript file renames (`backend/server.js` → `backend/server.ts`, etc.) with a
-3-way merge that preserves your edits:
+3-way-merges template files and deletes the old Node/Hono backend (4.17.0+ is zero-crate Rust):
 
 ```bash
 node scripts/update-skateboard.js          # interactive — diff per file
@@ -1915,8 +1853,8 @@ Then install, sync the version label, and validate:
 
 ```bash
 npm install                                # root deps + lockfile
-npm install --workspace=backend            # backend deps
-npm run typecheck && npm run test          # gate the upgrade
+npm run typecheck && npm run test
+cd backend && cargo test --locked
 ```
 
 After applying, bump both `version` and `skateboardVersion` in `package.json` to match the
