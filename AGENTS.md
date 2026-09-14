@@ -10,6 +10,7 @@ This file is the source of truth; `CLAUDE.md` is a symlink to it.
 npm run start          # Start both frontend and backend concurrently
 npm run front          # Frontend only (Vite dev server on :5173)
 npm run server         # Backend only (Hono server on :8000)
+cargo run --manifest-path backend-rs/Cargo.toml   # Optional Rust backend on :8000
 ```
 
 **Build Commands:**
@@ -402,11 +403,12 @@ skateboard/
 │   ├── main.tsx         # Route definitions (16 lines)
 │   └── constants.json   # All your app config
 ├── backend/
-│   ├── server.ts        # Hono server
+│   ├── server.ts        # Hono server (canonical)
 │   ├── adapters/        # Database adapters (SQLite, PostgreSQL, MongoDB)
 │   ├── databases/       # SQLite database files
 │   ├── tsconfig.json    # Backend TypeScript config
 │   └── config.json      # Backend config with database settings
+├── backend-rs/          # Optional zero-crate Rust port (SQLite-only; does not replace Hono)
 ├── package.json         # Dependencies (includes skateboard-ui)
 ├── tsconfig.json        # Frontend TypeScript config (strict)
 └── vite.config.ts       # Vite configuration (app-owned)
@@ -425,7 +427,8 @@ skateboard/
 - Tailwind CSS v4+ with @tailwindcss/vite plugin
 
 ### Backend Stack
-- Runtime: Node.js with Hono
+- Runtime: Node.js with Hono (canonical)
+- Optional parallel port: `backend-rs/` — zero-crate Rust, SQLite + system libcurl, empty `[dependencies]`
 - Database: SQLite preferred, MongoDB if SQLite not available
 - Always use the `mongodb` npm package (never mongoose)
 - HTTP client: native `fetch` only
@@ -633,7 +636,7 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@4.16.0
+- skateboard@4.17.0
 - skateboard-ui@4.14.0
 
 ## Updating from Skateboard Boilerplate

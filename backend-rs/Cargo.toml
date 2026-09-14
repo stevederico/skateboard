@@ -1,0 +1,18 @@
+[package]
+name = "skateboard-backend"
+version = "4.17.0"
+edition = "2021"
+rust-version = "1.95"
+description = "Skateboard application backend — zero-crate Rust"
+publish = false
+
+# Zero-crate: this list stays empty. Stdlib, system libs (libsqlite3, libcurl),
+# or write the used surface. A crate needs an explicit yes.
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "unwind"
+strip = true
