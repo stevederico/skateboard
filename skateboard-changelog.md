@@ -15,6 +15,18 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.20.1
+
+  Lockout keyed per IP
+  Decay failed attempts
+  Bound lockout map
+  Validate redirect origin
+  Bound connection queue
+  Expose peer IP
+  Reject multi-statement SQL
+  Check sqlite threadsafe
+  Redact webhook emails
+
 4.20.0
 
   Drop stale base-ui README line

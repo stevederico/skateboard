@@ -97,6 +97,14 @@ pub struct Request {
     pub headers: Headers,
     /// Request body bytes. Empty when the request had no body.
     pub body: Vec<u8>,
+    /// IP address of the peer socket, or empty when it could not be read.
+    ///
+    /// This is the *transport* peer, not a forwarded client address: it is
+    /// taken from the socket and cannot be spoofed by a header, which is what
+    /// makes it usable for abuse accounting. Behind a proxy every request will
+    /// share the proxy's address, so treat it as a coarse bucket rather than a
+    /// client identity.
+    pub peer_ip: String,
 }
 
 impl Request {
@@ -148,6 +156,7 @@ impl Request {
             query: String::new(),
             headers: Headers::default(),
             body: Vec::new(),
+            peer_ip: String::new(),
         }
     }
 
@@ -432,20 +441,33 @@ pub struct Config {
     pub max_body_bytes: usize,
     /// Largest accepted request line + header block. Larger gets 431.
     pub max_header_bytes: usize,
+    /// Connections that may sit accepted-but-unhandled before new ones are
+    /// shed.
+    ///
+    /// Every queued connection holds a file descriptor and its kernel buffers
+    /// while doing nothing. With an unbounded queue, a client opening
+    /// connections faster than the workers drain them makes the process
+    /// accumulate descriptors until it hits `EMFILE`, at which point it cannot
+    /// accept *any* connection, including from healthy clients. Shedding at a
+    /// fixed depth keeps that failure local to the excess traffic.
+    pub max_queued_connections: usize,
 }
 
 impl Default for Config {
     /// Port 8000, `available_parallelism() * 4` threads (minimum 8), 30s
-    /// timeouts, 2 MiB body cap, 32 KiB header cap.
+    /// timeouts, 2 MiB body cap, 32 KiB header cap, and an intake queue eight
+    /// deep per worker.
     fn default() -> Self {
         let cores = thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
+        let threads = (cores * 4).max(8);
         Config {
             port: 8000,
-            threads: (cores * 4).max(8),
+            threads,
             read_timeout: Duration::from_secs(30),
             write_timeout: Duration::from_secs(30),
             max_body_bytes: 2 * 1024 * 1024,
             max_header_bytes: 32 * 1024,
+            max_queued_connections: threads * 8,
         }
     }
 }
@@ -630,7 +652,7 @@ where
         live_cv: Condvar::new(),
     });
 
-    let (tx, rx) = mpsc::channel::<TcpStream>();
+    let (tx, rx) = mpsc::sync_channel::<TcpStream>(cfg.max_queued_connections.max(1));
     let rx = Arc::new(Mutex::new(rx));
     let handler = Arc::new(handler);
 
@@ -662,11 +684,16 @@ where
                     break;
                 }
                 match stream {
-                    Ok(s) => {
-                        if tx.send(s).is_err() {
-                            break;
-                        }
-                    }
+                    // Shed rather than block: blocking here would stop
+                    // draining the listen backlog, so a flood would also
+                    // stall clients that the workers could still serve.
+                    // Dropping closes the socket immediately and frees the
+                    // descriptor, which is the whole point of the bound.
+                    Ok(s) => match tx.try_send(s) {
+                        Ok(()) => {}
+                        Err(mpsc::TrySendError::Full(shed)) => drop(shed),
+                        Err(mpsc::TrySendError::Disconnected(_)) => break,
+                    },
                     // A per-connection error (RST during handshake, EMFILE)
                     // must not kill the accept loop.
                     Err(_) => continue,
@@ -719,6 +746,11 @@ where
     let _ = stream.set_write_timeout(Some(cfg.write_timeout));
     let _ = stream.set_nodelay(true);
 
+    let peer_ip = stream
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default();
+
     let mut writer = match stream.try_clone() {
         Ok(w) => w,
         Err(_) => return,
@@ -730,10 +762,11 @@ where
             Ok(None) => break, // clean close between requests
             Ok(Some(parsed)) => {
                 let Parsed {
-                    req,
+                    mut req,
                     http_11,
                     keep_alive,
                 } = parsed;
+                req.peer_ip = peer_ip.clone();
                 let head_only = req.method == "HEAD";
                 let res = match catch_unwind(AssertUnwindSafe(|| handler(req))) {
                     Ok(r) => r,
@@ -857,6 +890,7 @@ fn read_request(
             query,
             headers,
             body,
+            peer_ip: String::new(),
         },
         http_11,
         keep_alive,
@@ -1321,6 +1355,7 @@ mod tests {
             write_timeout: Duration::from_secs(5),
             max_body_bytes: 1024,
             max_header_bytes: 2048,
+            max_queued_connections: 32,
         };
         serve(cfg, handler).expect("bind")
     }

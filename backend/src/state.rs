@@ -78,11 +78,22 @@ impl AppState {
 
     /// The origin used for Stripe success/cancel/return URLs.
     ///
-    /// `FRONTEND_URL` wins, then the request's `Origin` header, then a
-    /// localhost fallback — matching the Node checkout and portal routes.
+    /// `FRONTEND_URL` wins, then the request's `Origin` header *if it is an
+    /// allowed origin*, then a localhost fallback.
+    ///
+    /// The allow-list check is what keeps this from being an open redirect.
+    /// These origins are pasted into URLs that Stripe sends the user back to,
+    /// so taking the `Origin` header on trust lets an attacker hand a victim a
+    /// checkout link that returns them to an attacker-controlled site wearing
+    /// the trust of a payment flow. `Origin` is attacker-settable on a
+    /// non-browser request, so it cannot be used unchecked.
+    ///
+    /// # Arguments
+    ///
+    /// * `request_origin` - Value of the request's `Origin` header, if present.
     pub fn redirect_origin(&self, request_origin: Option<&str>) -> String {
         config::env_nonempty("FRONTEND_URL")
-            .or_else(|| request_origin.map(str::to_string))
+            .or_else(|| allowed_origin(&self.cors_origins, request_origin))
             .unwrap_or_else(|| format!("http://localhost:{}", self.port))
     }
 
@@ -161,6 +172,22 @@ impl AppState {
     }
 }
 
+/// `request_origin` if it exactly matches one of `cors_origins`.
+///
+/// Matching is exact, never prefix or substring: both `https://evil.com` and
+/// `https://app.example.com.evil.com` have to fail, and a `contains`-style
+/// test would admit the second.
+fn allowed_origin(cors_origins: &[String], request_origin: Option<&str>) -> Option<String> {
+    let candidate = request_origin?.trim();
+    if candidate.is_empty() {
+        return None;
+    }
+    cors_origins
+        .iter()
+        .find(|allowed| allowed.as_str() == candidate)
+        .cloned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,6 +215,47 @@ mod tests {
     fn cors_origins_default_to_dev_list() {
         std::env::remove_var("CORS_ORIGINS");
         assert_eq!(AppState::resolve_cors_origins().len(), 4);
+    }
+
+    /// The origins a deployment would configure.
+    fn origins() -> Vec<String> {
+        vec![
+            "https://app.example.com".to_string(),
+            "https://admin.example.com".to_string(),
+        ]
+    }
+
+    #[test]
+    fn allowed_origin_accepts_a_listed_origin() {
+        assert_eq!(
+            allowed_origin(&origins(), Some("https://app.example.com")),
+            Some("https://app.example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn allowed_origin_refuses_anything_unlisted() {
+        // Each of these would otherwise be pasted into a Stripe return URL.
+        for hostile in [
+            "https://evil.com",
+            "https://app.example.com.evil.com",
+            "https://app.example.com/../evil",
+            "http://app.example.com",
+            "app.example.com",
+            "",
+            "   ",
+        ] {
+            assert_eq!(
+                allowed_origin(&origins(), Some(hostile)),
+                None,
+                "must refuse {hostile:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn allowed_origin_refuses_a_missing_header() {
+        assert_eq!(allowed_origin(&origins(), None), None);
     }
 
     #[test]
