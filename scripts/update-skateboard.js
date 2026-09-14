@@ -55,33 +55,25 @@ const BRANCH = process.env.SKATEBOARD_BRANCH || '';
 // Template-owned files (current names at HEAD). App-owned files (constants.json,
 // components, config.json, .env, main.jsx) are never touched — see SKIP_NOTE.
 const ALLOWLIST = [
-  'backend/server.ts',
-  'backend/server.test.ts',
-  'backend/server.lifecycle.test.js',
-  'backend/server.prod-import.test.js',
-  'backend/adapters/manager.ts',
-  'backend/adapters/manager.test.js',
-  'backend/adapters/sqlite.ts',
-  'backend/adapters/sqlite.test.js',
-  'backend/adapters/postgres.ts',
-  'backend/adapters/postgres.test.js',
-  'backend/adapters/mongodb.ts',
-  'backend/adapters/mongodb.test.js',
-  'backend/lib/auth.ts',
-  'backend/lib/auth.test.js',
-  'backend/lib/env.ts',
-  'backend/lib/env.test.js',
-  'backend/lib/logger.ts',
-  'backend/lib/logger.test.js',
-  'backend/lib/store.ts',
-  'backend/lib/store.test.js',
-  'backend/lib/validation.ts',
-  'backend/lib/validation.test.js',
-  'backend/types.ts',
-  'backend/tsconfig.json',
-  'backend/vendor/legacy-bcrypt.js',
-  'backend/vendor/legacy-bcrypt.d.ts',
-  'backend/package.json',
+  'backend/Cargo.toml',
+  'backend/Cargo.lock',
+  'backend/rust-toolchain.toml',
+  'backend/.gitignore',
+  'backend/src/lib.rs',
+  'backend/src/main.rs',
+  'backend/src/auth.rs',
+  'backend/src/config.rs',
+  'backend/src/crypto.rs',
+  'backend/src/db.rs',
+  'backend/src/http.rs',
+  'backend/src/json.rs',
+  'backend/src/kdf.rs',
+  'backend/src/middleware.rs',
+  'backend/src/routes.rs',
+  'backend/src/state.rs',
+  'backend/src/stores.rs',
+  'backend/src/stripe.rs',
+  'backend/src/validation.rs',
   'tsconfig.json',
   'vite.config.ts',
   'vite.plugins.ts',
@@ -112,18 +104,50 @@ const SYMLINKS = { 'CLAUDE.md': 'AGENTS.md' };
 // driver types; src/skateboard-ui.d.ts would hide skateboard-ui's own .d.ts ≥3.10.0).
 const REMOVED = [
   'backend/ambient.d.ts',
-  'src/skateboard-ui.d.ts'
+  'src/skateboard-ui.d.ts',
+  'backend/package.json',
+  'backend/tsconfig.json',
+  'backend/types.ts',
+  'backend/server.ts',
+  'backend/server.js',
+  'backend/server.test.ts',
+  'backend/server.test.js',
+  'backend/server.lifecycle.test.js',
+  'backend/server.prod-import.test.js',
+  'backend/adapters/manager.ts',
+  'backend/adapters/manager.js',
+  'backend/adapters/manager.test.js',
+  'backend/adapters/sqlite.ts',
+  'backend/adapters/sqlite.js',
+  'backend/adapters/sqlite.test.js',
+  'backend/adapters/postgres.ts',
+  'backend/adapters/postgres.js',
+  'backend/adapters/postgres.test.js',
+  'backend/adapters/mongodb.ts',
+  'backend/adapters/mongodb.js',
+  'backend/adapters/mongodb.test.js',
+  'backend/lib/auth.ts',
+  'backend/lib/auth.js',
+  'backend/lib/auth.test.js',
+  'backend/lib/env.ts',
+  'backend/lib/env.js',
+  'backend/lib/env.test.js',
+  'backend/lib/logger.ts',
+  'backend/lib/logger.js',
+  'backend/lib/logger.test.js',
+  'backend/lib/store.ts',
+  'backend/lib/store.js',
+  'backend/lib/store.test.js',
+  'backend/lib/validation.ts',
+  'backend/lib/validation.js',
+  'backend/lib/validation.test.js',
+  'backend/vendor/legacy-bcrypt.js',
+  'backend/vendor/legacy-bcrypt.d.ts'
 ];
 
 // Template renames: new path at HEAD → old path apps may still have. Apps with the
 // old-named file get a 3-way merge across the rename (see migrateRenamedFile).
 const RENAMES = {
-  'backend/server.ts': 'backend/server.js',
-  'backend/server.test.ts': 'backend/server.test.js',
-  'backend/adapters/manager.ts': 'backend/adapters/manager.js',
-  'backend/adapters/sqlite.ts': 'backend/adapters/sqlite.js',
-  'backend/adapters/postgres.ts': 'backend/adapters/postgres.js',
-  'backend/adapters/mongodb.ts': 'backend/adapters/mongodb.js',
   'vite.config.ts': 'vite.config.js',
   // The instruction file flipped from CLAUDE.md (real file) to AGENTS.md (real file)
   // + CLAUDE.md symlink. An app whose CLAUDE.md is still a regular file gets its edits
@@ -559,6 +583,10 @@ async function mergePackageJson(baselineTag, stamp = true) {
     }
   }
 
+  if (basePkg && !newPkg.workspaces && appPkg.workspaces) {
+    removes.workspaces = JSON.stringify(appPkg.workspaces);
+  }
+
   const versionChanged = stamp && appPkg.skateboardVersion !== newPkg.version;
   if (!Object.keys(adds).length && !Object.keys(removes).length && !Object.keys(updates).length && !versionChanged) {
     console.log('\n[ok] package.json — no changes needed');
@@ -613,6 +641,11 @@ async function mergePackageJson(baselineTag, stamp = true) {
     }
   }
   if (stamp) appPkg.skateboardVersion = newPkg.version;
+  // Template dropped the Node backend workspace; leave a stale `workspaces`
+  // entry pointing at a deleted backend/package.json and `npm install` dies.
+  if (basePkg && !newPkg.workspaces && appPkg.workspaces) {
+    delete appPkg.workspaces;
+  }
   writeJSON(join(APP_ROOT, 'package.json'), appPkg);
   console.log('[wrote] package.json');
 }

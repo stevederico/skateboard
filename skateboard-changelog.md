@@ -17,7 +17,8 @@
 
 4.17.0
 
-  Add zero-crate Rust backend
+  Replace Hono with Rust
+  Drop Node backend workspace
 
 4.16.0
 
