@@ -1853,7 +1853,8 @@ Then install, sync the version label, and validate:
 
 ```bash
 npm install                                # root deps + lockfile
-npm run typecheck && npm run test          # cargo test + frontend
+npm run typecheck && npm run test
+cd backend && cargo test --locked
 ```
 
 After applying, bump both `version` and `skateboardVersion` in `package.json` to match the

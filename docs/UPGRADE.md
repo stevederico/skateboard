@@ -37,7 +37,7 @@ Upgrade this skateboard app to the latest skateboard template. Follow these step
    - npm run typecheck — frontend only. App src/*.jsx files are NOT typechecked; leave them.
    - npm run test — cargo test for the Rust backend plus frontend tests. Never change
      test expectations to make them pass; fix the code.
-   - npm run start — smoke-test: app boots, sign-in works, one API round-trip succeeds.
+   - npm run start and `cd backend && cargo run` — smoke-test: app boots, sign-in works, one API round-trip succeeds.
 
 6. COMMIT on the branch with a message describing the template version jump
    (old skateboardVersion → new). Do not push or merge without my approval.

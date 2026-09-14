@@ -19,6 +19,7 @@
 
   Replace Hono with Rust
   Drop Node backend workspace
+  Drop npm cargo wrapper
 
 4.16.0
 
