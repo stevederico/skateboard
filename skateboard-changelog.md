@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.20.0
+
+  Drop stale base-ui README line
+
 4.19.0
 
   Drop vitest coverage package
