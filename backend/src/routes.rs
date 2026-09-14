@@ -419,7 +419,7 @@ fn signin(state: &AppState, req: &Request) -> Response {
     email = email.to_lowercase().trim().to_string();
     state.log.debug("Attempting signin", &[]);
 
-    let lock = state.lockout.is_locked(&email, config::now_ms());
+    let lock = state.lockout.is_locked(&email, &req.peer_ip, config::now_ms());
     if lock.locked {
         let body = json::obj([
             ("error", json::s("Account temporarily locked. Try again later.")),
@@ -434,12 +434,12 @@ fn signin(state: &AppState, req: &Request) -> Response {
     };
     let Some(auth) = auth else {
         state.log.debug("Auth record not found", &[]);
-        state.lockout.record_failure(&email, config::now_ms());
+        state.lockout.record_failure(&email, &req.peer_ip, config::now_ms());
         return err_json(401, "Invalid credentials");
     };
     if !kdf::verify_password(password, &auth.password) {
         state.log.debug("Password verification failed", &[]);
-        state.lockout.record_failure(&email, config::now_ms());
+        state.lockout.record_failure(&email, &req.peer_ip, config::now_ms());
         return err_json(401, "Invalid credentials");
     }
     if kdf::needs_rehash(&auth.password) {
@@ -466,7 +466,7 @@ fn signin(state: &AppState, req: &Request) -> Response {
         state.log.error("User not found for auth record", &[]);
         return err_json(401, "Invalid credentials");
     };
-    state.lockout.clear(&email);
+    state.lockout.clear(&email, &req.peer_ip);
     let token = match generate_token(state, &user.id) {
         Ok(t) => t,
         Err(r) => return r,
@@ -897,7 +897,7 @@ fn apply_sub_patch(state: &AppState, email: &str, sub: &Subscription) -> bool {
         Ok(None) => {
             state
                 .log
-                .warn("Webhook: No user found for email", &[("email", json::s(email))]);
+                .warn("Webhook: No user found for email", &[("email", json::s(redact_email(email)))]);
             false
         }
         Err(e) => {
@@ -906,6 +906,24 @@ fn apply_sub_patch(state: &AppState, email: &str, sub: &Subscription) -> bool {
                 .error("Webhook processing error", &[("error", json::s(e.to_string()))]);
             false
         }
+    }
+}
+
+/// Mask an email address for logging.
+///
+/// Webhook logs are verbose, shipped off-host, and retained far longer than the
+/// request that produced them, so writing full addresses turns the log into a
+/// copy of the customer list. Keeping the first character and the domain leaves
+/// enough to match a support report against a log line without storing the
+/// address itself. Anything without an `@` is dropped entirely rather than
+/// guessed at.
+fn redact_email(email: &str) -> String {
+    let Some((local, domain)) = email.split_once('@') else {
+        return "[redacted]".to_string();
+    };
+    match local.chars().next() {
+        Some(first) => format!("{first}***@{domain}"),
+        None => format!("***@{domain}"),
     }
 }
 
@@ -1045,7 +1063,7 @@ fn process_webhook(
                 "Subscription updated",
                 &[
                     ("type", json::s(event_type)),
-                    ("email", json::s(email)),
+                    ("email", json::s(redact_email(&email))),
                     ("status", json::s(sub.status)),
                 ],
             );
@@ -1080,7 +1098,7 @@ fn process_webhook(
                 state.log.info(
                     "Checkout completed",
                     &[
-                        ("email", json::s(email)),
+                        ("email", json::s(redact_email(&email))),
                         ("status", json::s(patch.status)),
                     ],
                 );
@@ -1113,7 +1131,7 @@ fn process_webhook(
             };
             let patch = build_sub_patch(stripe_id, &sub_json);
             if apply_sub_patch(state, &email, &patch) {
-                state.log.info("Invoice paid", &[("email", json::s(email))]);
+                state.log.info("Invoice paid", &[("email", json::s(redact_email(&email)))]);
             }
         }
     }
@@ -1127,12 +1145,12 @@ fn process_webhook(
                     Ok(Some(_)) => {
                         state
                             .log
-                            .warn("Invoice payment failed", &[("email", json::s(email))]);
+                            .warn("Invoice payment failed", &[("email", json::s(redact_email(&email)))]);
                     }
                     Ok(None) => {
                         state.log.warn(
                             "Webhook: No user found for email",
-                            &[("email", json::s(email))],
+                            &[("email", json::s(redact_email(&email)))],
                         );
                     }
                     Err(e) => {
@@ -1393,6 +1411,21 @@ mod tests {
         cookie_header(&mut req, signup);
         req.set_test_body(format!(r#"{{"customerID":"{customer_id}"}}"#).into_bytes());
         handle(state, req)
+    }
+
+    #[test]
+    fn redact_email_keeps_only_a_hint_and_the_domain() {
+        assert_eq!(redact_email("alice@example.com"), "a***@example.com");
+        assert_eq!(redact_email("@example.com"), "***@example.com");
+        assert_eq!(redact_email("not-an-email"), "[redacted]");
+        assert_eq!(redact_email(""), "[redacted]");
+    }
+
+    #[test]
+    fn redact_email_never_contains_the_local_part() {
+        let redacted = redact_email("verylongname@example.com");
+        assert!(!redacted.contains("verylongname"));
+        assert!(!redacted.contains("erylongname"));
     }
 
     #[test]

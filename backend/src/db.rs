@@ -129,6 +129,7 @@ mod ffi {
         pub fn sqlite3_errmsg(db: *mut Sqlite3) -> *const c_char;
         pub fn sqlite3_extended_errcode(db: *mut Sqlite3) -> c_int;
         pub fn sqlite3_busy_timeout(db: *mut Sqlite3, ms: c_int) -> c_int;
+        pub fn sqlite3_threadsafe() -> c_int;
     }
 }
 
@@ -414,18 +415,20 @@ impl Db {
         let len = c_int::try_from(bytes.len())
             .map_err(|_| DbError::local("SQL statement exceeds the driver length limit"))?;
         let mut ptr: *mut ffi::Sqlite3Stmt = std::ptr::null_mut();
+        let mut tail: *const c_char = std::ptr::null();
 
         // SAFETY: `bytes` is a live UTF-8 buffer of exactly `len` bytes for the
         // duration of the call (an explicit length means no NUL terminator is
-        // required); `ptr` is a valid out-pointer; a null tail out-pointer
-        // discards any text after the first statement.
+        // required); `ptr` and `tail` are valid out-pointers. On success
+        // `tail` points into `bytes`, just past the statement that was
+        // compiled.
         let rc = unsafe {
             ffi::sqlite3_prepare_v2(
                 self.handle,
                 bytes.as_ptr().cast::<c_char>(),
                 len,
                 &mut ptr,
-                std::ptr::null_mut(),
+                &mut tail,
             )
         };
         if rc != ffi::SQLITE_OK {
@@ -434,7 +437,19 @@ impl Db {
         if ptr.is_null() {
             return Err(DbError::local("SQL text contained no statement"));
         }
-        Ok(Stmt { _db: self, ptr })
+        // Built before the tail check so that returning early still finalizes
+        // the compiled statement, via this guard's `Drop`.
+        let stmt = Stmt { _db: self, ptr };
+        if has_trailing_statement(bytes, tail) {
+            // `prepare_v2` compiles only the first statement and reports the
+            // rest through `tail`. Discarding that silently means a string
+            // holding two statements runs one and drops the other with no
+            // error anywhere — a typo that looks like it worked.
+            return Err(DbError::local(
+                "SQL text contained more than one statement; prepare compiles only the first",
+            ));
+        }
+        Ok(stmt)
     }
 
     /// Bind positional parameters (1-based) to a prepared statement.
@@ -598,6 +613,7 @@ impl Pool {
     /// Returns [`DbError`] if the directory cannot be created, a connection
     /// cannot be opened, or the schema cannot be created or migrated.
     pub fn open(path: &str, size: usize) -> Result<Pool, DbError> {
+        require_threadsafe_sqlite()?;
         if let Some(parent) = Path::new(path).parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent).map_err(|e| {
@@ -1009,6 +1025,56 @@ fn user_from_row(row: &Row) -> Option<User> {
 
 // ==== STORE API ====
 
+/// Verify the linked libsqlite3 was built thread-safe.
+///
+/// `unsafe impl Send for Db` is justified by opening with
+/// `SQLITE_OPEN_FULLMUTEX`, but that flag is only honored when the library was
+/// compiled with `SQLITE_THREADSAFE` set to 1 or 2. A build with
+/// `SQLITE_THREADSAFE=0` ignores it and does no internal locking at all, which
+/// would make moving a handle between worker threads undefined behavior instead
+/// of merely slow. Since the library is the system's and not vendored, this is
+/// checked at runtime rather than assumed.
+///
+/// # Errors
+/// Returns [`DbError`] when `sqlite3_threadsafe()` reports 0, so the process
+/// refuses to serve rather than racing inside the driver.
+fn require_threadsafe_sqlite() -> Result<(), DbError> {
+    // SAFETY: takes no arguments, returns a compile-time constant, and is safe
+    // to call before any connection exists.
+    let threadsafe = unsafe { ffi::sqlite3_threadsafe() };
+    if threadsafe == 0 {
+        return Err(DbError::local(
+            "the system libsqlite3 was built with SQLITE_THREADSAFE=0, which does not \
+             serialize access; this server shares connections across threads and cannot \
+             run safely against it",
+        ));
+    }
+    Ok(())
+}
+
+/// Whether `tail` points at anything other than trailing whitespace and
+/// semicolons within `sql`.
+///
+/// `tail` comes from `sqlite3_prepare_v2` and points into `sql` just past the
+/// statement it compiled. A pointer outside `sql` is treated as "nothing left"
+/// rather than trusted, so a surprising value cannot produce an out-of-range
+/// slice.
+fn has_trailing_statement(sql: &[u8], tail: *const c_char) -> bool {
+    if tail.is_null() {
+        return false;
+    }
+    let start = sql.as_ptr() as usize;
+    let end = start + sql.len();
+    let tail_addr = tail as usize;
+    if tail_addr < start || tail_addr > end {
+        return false;
+    }
+    let remainder = &sql[tail_addr - start..];
+    remainder
+        .iter()
+        .any(|b| !b.is_ascii_whitespace() && *b != b';')
+}
+
 /// Insert a new user on an existing connection.
 ///
 /// Only `_id`, `email`, `name`, `created_at` are written; the subscription and
@@ -1419,6 +1485,42 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
+    }
+
+    // --- statement compilation ---
+
+    #[test]
+    fn query_rejects_more_than_one_statement() {
+        let tmp = TempDb::new("multi-stmt");
+        let pool = Pool::open(&tmp.path(), 1).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+
+        let err = pool
+            .with(|db| db.run("DELETE FROM Users; DELETE FROM Auths", &[]))
+            .expect_err("a second statement must be refused, not dropped");
+        assert!(err.message.contains("more than one statement"), "{err}");
+        assert!(
+            pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_some(),
+            "nothing should have run"
+        );
+    }
+
+    #[test]
+    fn query_allows_trailing_semicolons_and_whitespace() {
+        let tmp = TempDb::new("trailing-semi");
+        let pool = Pool::open(&tmp.path(), 1).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+        let rows = pool
+            .with(|db| db.query("SELECT _id FROM Users ;  \n", &[]))
+            .expect("a trailing semicolon is not a second statement");
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[test]
+    fn linked_sqlite_is_threadsafe() {
+        // The `Send` impl on `Db` is only sound against a thread-safe build, so
+        // this is a requirement on the environment, not a property of our code.
+        require_threadsafe_sqlite().expect("libsqlite3 must be built thread-safe");
     }
 
     // --- transactions ---
