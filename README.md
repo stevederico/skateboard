@@ -24,9 +24,13 @@
 
 ```bash
 npx create-skateboard-app
+cd my-app
+npm install
+npm start                 # frontend  http://localhost:5173
+cd backend && cargo run   # backend   http://localhost:8000
 ```
 
-That's it, your app is now running at `http://localhost:5173` 🎉
+Frontend is Vite. Backend is Rust (`cargo run`). There is no `npm run server`.
 
 <br />
 
@@ -65,11 +69,11 @@ Everything you need to ship a production-ready app:
 
 ### 🛠️ **Developer Experience**
 - **Hot Module Replacement** with Vite 8
-- **Zero config** - just works out of the box
-- **Multi-database support** - SQLite (default), MongoDB, PostgreSQL
+- **Zero-crate Rust backend** - empty `[dependencies]`; system libsqlite3 + libcurl
+- **SQLite only** - no Postgres, no Mongo
 - **constants.json** - customize everything in one place
 - **TypeScript without a build step** - strict mode, Node 24 runs `.ts` natively, Vite compiles `.tsx`
-- **Typecheck gates** - `npm run typecheck` wired into build, test, and a pre-commit hook
+- **Typecheck gates** - `npm run typecheck` for the frontend; `cargo test` for the backend
 - **Built-in hooks** - useListData, useForm for common patterns
 - **API utilities** - apiRequest with automatic auth and error handling
 
@@ -89,11 +93,16 @@ Update `src/constants.json` to customize your app:
 
 ## 📖 Backend Configuration
 
+```bash
+cd backend && cargo run     # listen on :8000
+cd backend && cargo test --locked
+```
+
 **Database Configuration** - Update `backend/config.json`:
 
 ```json
 {
-  "client": "http://localhost:5173",
+  "staticDir": "../dist",
   "database": {
     "db": "MyApp",
     "dbType": "sqlite",
@@ -139,7 +148,7 @@ To enable payments, configure your Stripe products:
 3. **Setup Webhook**
    - Go to **stripe.com** → **Developers** (lower left) → **Webhooks**
    - Click **Add Endpoint**
-   - Add your endpoint URL: `https://yourdomain.com/payment`
+   - Add your endpoint URL: `https://yourdomain.com/api/payment`
    - Select these events:
      - `customer.subscription.created` - Customer signed up for new plan
      - `customer.subscription.deleted` - Customer's subscription ends
@@ -153,12 +162,9 @@ To enable payments, configure your Stripe products:
 
 ## 📈 Scaling Notes
 
-The default configuration uses in-memory stores for rate limiting and CSRF tokens. This works great for single-instance deployments.
+CSRF tokens and sign-in lockouts live in process memory. That is fine for one instance.
 
-**For horizontal scaling** (multiple server instances):
-- Replace in-memory rate limiter with Redis
-- Move CSRF tokens to database or Redis
-- Use sticky sessions or shared session store
+**Multiple instances:** move those stores to SQLite or another shared store. There is no rate limiter in this backend.
 
 See [Guide → Architecture](docs/GUIDE.md#architecture) for details.
 
@@ -168,12 +174,12 @@ See [Guide → Architecture](docs/GUIDE.md#architecture) for details.
 
 Skateboard is intentionally lean — current footprint (counting what ships at runtime):
 
-| | Frontend runtime | Frontend dev | Backend runtime |
+| | Frontend runtime | Frontend dev | Backend crates |
 |---|---|---|---|
 | Before (v2.x) | 12 | 4 | 7 |
-| **Now** | **4** | **13** | **3** |
+| **Now** | **4** | **13** | **0** |
 
-The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, and leftover bcrypt hashes still verify then rehash. SQLite only.
+The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, leftover bcrypt hashes still verify then rehash. SQLite via system `libsqlite3`. Stripe via system `libcurl`. Do not `cargo add`.
 
 The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui), which itself runs on a single hard dep (`@base-ui/react`) plus optional peer deps for heavy components users opt into.
 
@@ -188,7 +194,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v4.13+ | Application Shell, Components, Theming |
+| **skateboard-ui** | v4.14.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (Oxc/Rolldown) |
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.15+ | Routing |
@@ -245,7 +251,7 @@ node scripts/update-skateboard.js --yes    # apply all without prompts
 
 Updates only files in the safe allowlist (`backend/src/*`, `vite.config.ts`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
 
-See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. 4.17.0 replaces the Node/Hono backend with zero-crate Rust — the updater deletes the old JS files.
+See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. 4.17.0 replaced the Node/Hono backend with zero-crate Rust — the updater deletes the old JS files. Backend commands are `cargo run` / `cargo test`, not npm.
 
 <br />
 
