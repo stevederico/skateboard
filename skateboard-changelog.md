@@ -15,6 +15,13 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.1.0
+
+  Bump vite for CVEs
+  Bump react 19.2.8
+  Bump Tailwind 4.3.3
+  Bump @types patches
+
 5.0.0
 
   Major: skateboard-ui 5.0.0
