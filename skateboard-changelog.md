@@ -15,6 +15,14 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.26.0
+
+  Drop vite force reload
+  Drop SWC react plugin
+  Add lucide-react dependency
+  Drop coverage scripts
+  Document lucide icon imports
+
 4.25.0
 
   Note skateboard-ui 4.16.0 cuts

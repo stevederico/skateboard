@@ -379,11 +379,11 @@ Apps own their `vite.config.js` directly. skateboard-ui is a pure component libr
 ```javascript
 // vite.config.js
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [tailwindcss()],
+  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   server: { port: 5173 }
 });
 ```
@@ -605,11 +605,11 @@ Apps own their `vite.config.js` - customize directly:
 
 ```javascript
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [tailwindcss()],
+  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   server: {
     port: 3000,
     proxy: { '/api': 'http://localhost:8080' }
@@ -918,7 +918,6 @@ export default function HomeView() {
 ```javascript
 // vite.config.js
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import fs from 'fs';
@@ -930,12 +929,12 @@ const myAnalyticsPlugin = () => { /* ... */ };
 
 export default defineConfig({
   plugins: [
-    react(),
     tailwindcss(),
     customLoggerPlugin(),
     htmlReplacePlugin(),
     myAnalyticsPlugin()
   ],
+  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   server: {
     port: 3000,
     proxy: { '/api': 'http://backend:8080' }

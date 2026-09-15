@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import type { ESBuildOptions } from 'vite';
-import react from '@vitejs/plugin-react-swc';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 import {
@@ -15,7 +14,6 @@ import {
 
 export default defineConfig({
   plugins: [
-    react(),
     tailwindcss(),
     customLoggerPlugin(),
     htmlReplacePlugin(),
@@ -26,6 +24,7 @@ export default defineConfig({
   // Vite 8 ships without esbuild installed, so its ESBuildOptions type loses
   // esbuild's TransformOptions fields (including `drop`); cast keeps the
   // option exactly as-is without a runtime change.
+  // JSX: Vite's esbuild transform (no @vitejs/plugin-react-swc) — full reload on edit.
   esbuild: {
     jsx: 'automatic',
     jsxImportSource: 'react',
@@ -53,12 +52,8 @@ export default defineConfig({
       'cookie',
       'set-cookie-parser'
     ],
-    force: true,
     exclude: [
       '@stevederico/skateboard-ui',
-      '@swc/core',
-      '@swc/core-darwin-arm64',
-      '@swc/wasm',
       '@tailwindcss/oxide',
       '@tailwindcss/oxide-darwin-arm64',
       '@tailwindcss/oxide-darwin-x64',

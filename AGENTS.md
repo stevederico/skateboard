@@ -208,8 +208,12 @@ All of these silence the compiler instead of proving correctness:
 
 ### Icons
 
-- Default icon library: Lucide React (`lucide-react`)
-- Never use emoji as UI icons — use proper icon components (exception: `constants.json` feature icons where the shell renders them as text)
+- Default library: Lucide React (`lucide-react`) — runtime dep of skateboard-ui 4.18+ (hoisted); apps may still declare it
+- **Always named-import from `lucide-react`:** `import { Plus, Trash2 } from 'lucide-react'`
+- **Never** import from `@stevederico/skateboard-ui/icons` or `@stevederico/skateboard-ui/icons/*` — that path is gone (4.18+)
+- **Never** use public DynamicIcon — removed in 4.17; shell-only `constantsIcon` resolves `constants.json` icon strings
+- When upgrading an app past ui 4.17: rewrite every `skateboard-ui/icons` (and any leftover `DynamicIcon`) import to a named `lucide-react` import
+- Never use emoji as UI icons — use proper icon components (exception: `constants.json` feature icons where the shell renders unknown/legacy values as text)
 - Icon-only buttons must have `aria-label`
 - Standard sizes: 16px inline, 18px buttons, 24px cards, 48px empty states
 
@@ -623,7 +627,7 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@4.25.0
+- skateboard@4.26.0
 - skateboard-ui@4.15.0
 
 ## Updating from Skateboard Boilerplate
