@@ -15,6 +15,25 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.2.0
+
+  Audit release
+  Prod requires JWT_SECRET
+  Health probes SQLite
+  Prune webhook events
+  Harden JWT exp parsing
+  PUT /api/me 400
+  Cache index.html prod
+  Trim vite config
+  Lazy CommandMenu, BlankView
+  Drop root opacity gate
+  Absolute og:image URLs
+  Remove dead CSS
+  BlankView CTA needs handler
+  Generate robots, sitemap, manifest
+  CI Node 24
+  Docs match backend
+
 5.1.0
 
   Bump vite for CVEs

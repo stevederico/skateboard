@@ -98,7 +98,7 @@ When making ANY code changes, you MUST update:
 ### TypeScript Style
 
 - TypeScript everywhere — `.ts` / `.tsx` files, `strict` mode always on
-- No build-step typechecking: `npm run typecheck` runs `tsc --noEmit` for the frontend; it gates `build`, `prod`, and `test`. Backend is `cargo test`.
+- No build-step typechecking: `npm run typecheck` runs `tsc -p tsconfig.json` (`noEmit` is set in tsconfig) for the frontend; it gates `build`, `prod`, and `test`. Backend is `cargo test`.
 - `@types` packages are dev-only dependencies (`@types/node`, `@types/react`, `@types/react-dom`)
 - Prefer `const` over `let` — use `let` only when reassigning
 - Prefer `async`/`await` over `.then()` chains
@@ -127,7 +127,7 @@ All of these silence the compiler instead of proving correctness:
 
 - Never use dotenv — manually load `.env` file
 - Never use `require()` — ES modules only
-- Never use mongoose — use the `mongodb` npm package
+- Never add a database driver package — the backend is SQLite through system `libsqlite3` FFI
 - Never use axios, got, or similar — native `fetch` only
 - Never use PostCSS, autoprefixer, or `tailwind.config.js`
 - Never use ESLint or the `globals` package
@@ -395,7 +395,7 @@ Skateboard uses an **Application Shell Architecture** where skateboard-ui provid
 **Key principle:** Update skateboard-ui package once, all apps inherit improvements.
 
 ### Monorepo Structure
-- **Root**: React frontend with Vite 7.1+ build system using skateboard-ui
+- **Root**: React 19 frontend on Vite 8 using skateboard-ui
 - **Backend**: zero-crate Rust (`backend/`), SQLite via system libsqlite3
 
 ### Project Structure
@@ -405,7 +405,7 @@ skateboard/
 │   ├── components/       # Your custom components (e.g., HomeView.tsx)
 │   ├── assets/
 │   │   └── styles.css   # Brand color override (7 lines)
-│   ├── main.tsx         # Route definitions (16 lines)
+│   ├── main.tsx         # Route definitions + lazy view imports
 │   └── constants.json   # All your app config
 ├── backend/
 │   ├── src/             # Zero-crate Rust server
@@ -418,7 +418,7 @@ skateboard/
 ```
 
 **What's NOT in your app (provided by skateboard-ui):**
-- `context.jsx` - Imported from skateboard-ui/Context
+- App context/state - Imported from `@stevederico/skateboard-ui/Context`
 - Complex routing setup - Uses createSkateboardApp()
 - Full theme CSS - Imports base theme from skateboard-ui
 
@@ -615,7 +615,11 @@ Backend requires `.env` file with:
 - `CORS_ORIGINS` - Comma-separated allowed origins (production)
 - `FRONTEND_URL` - Frontend URL for Stripe redirects (production)
 - `FREE_USAGE_LIMIT` - Usage limit for free users (default: 20)
-- `MONGODB_URL`, `POSTGRES_URL`, `DATABASE_URL` - Database connections (production)
+- `NODE_ENV` - `production` enables HSTS, skips `.env` loading, and requires a 32+ character `JWT_SECRET`
+- `PORT` - Listen port (default: 8000)
+
+Database connection is SQLite only and lives in `backend/config.json` — there are no
+`DATABASE_URL`, `MONGODB_URL`, or `POSTGRES_URL` variables.
 
 ## Reference Documentation
 
@@ -648,7 +652,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.1.0
+- skateboard@5.2.0
 - skateboard-ui@5.0.0
 
 ## Migrating 4.x → 5.0 (exact checklist)

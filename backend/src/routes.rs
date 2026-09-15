@@ -36,7 +36,7 @@ pub fn handle(state: &AppState, req: Request) -> Response {
 fn dispatch(state: &AppState, req: &Request) -> Response {
     match (req.method.as_str(), req.path.as_str()) {
         ("POST", "/api/payment") => payment(state, req),
-        ("GET", "/api/health") => health(),
+        ("GET", "/api/health") => health(state),
         ("GET", "/api/__integration_error_test__") if config::env("NODE_ENV").as_deref() == Some("test") => {
             unhandled(state, req, "Intentional integration test error")
         }
@@ -60,11 +60,23 @@ fn dispatch(state: &AppState, req: &Request) -> Response {
     }
 }
 
-fn health() -> Response {
+/// Liveness plus a real database round-trip, so a container healthcheck fails when
+/// SQLite is unreachable instead of reporting a process that cannot serve anything.
+fn health(state: &AppState) -> Response {
+    let (status, database) = match state.pool.ping() {
+        Ok(()) => (200, "connected"),
+        Err(e) => {
+            state
+                .log
+                .error("Health check database probe failed", &[("error", json::s(e.to_string()))]);
+            (503, "unavailable")
+        }
+    };
     json_res(
-        200,
+        status,
         &json::obj([
-            ("status", json::s("ok")),
+            ("status", json::s(if status == 200 { "ok" } else { "degraded" })),
+            ("database", json::s(database)),
             ("timestamp", json::i(config::now_ms())),
         ]),
     )
@@ -537,14 +549,11 @@ fn me_put(state: &AppState, req: &Request) -> Response {
     if let Err(res) = require_csrf(state, req, &user_id) {
         return res;
     }
-    let body = match json::parse(&req.body) {
+    // A malformed body is the caller's mistake, so it answers 400 like every other
+    // JSON route — not the 500 an earlier revision returned.
+    let body = match parse_json_body(req) {
         Ok(v) => v,
-        Err(e) => {
-            state
-                .log
-                .error("Update user error", &[("error", json::s(e.to_string()))]);
-            return err_json(500, "Failed to update user");
-        }
+        Err(r) => return r,
     };
     if let Some(name) = body.get("name") {
         let Some(name) = name.as_str() else {
@@ -1209,11 +1218,28 @@ fn static_or_spa(state: &AppState, req: &Request) -> Response {
     spa_fallback(state)
 }
 
+/// Production-only cache of `index.html`, which never changes while the process runs.
+static INDEX_HTML: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// Serve the SPA shell for any non-API path.
+///
+/// In production the file is read once and kept in memory — every client-side route
+/// lands here, so re-reading it per request is pure syscall overhead. Development
+/// reads from disk each time so a rebuild shows up without restarting the server.
 fn spa_fallback(state: &AppState) -> Response {
-    let index = state.static_dir.join("index.html");
-    match std::fs::read(&index) {
-        Ok(bytes) => Response::html(200, &String::from_utf8_lossy(&bytes)),
-        Err(_) => Response::text(200, "Welcome to Skateboard API"),
+    let read_index = || {
+        std::fs::read(state.static_dir.join("index.html"))
+            .ok()
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+    };
+    let html = if state.prod {
+        INDEX_HTML.get_or_init(read_index).clone()
+    } else {
+        read_index()
+    };
+    match html {
+        Some(body) => Response::html(200, &body),
+        None => Response::text(200, "Welcome to Skateboard API"),
     }
 }
 
@@ -1225,6 +1251,24 @@ pub fn run_csrf_cleanup(state: &AppState) {
             "CSRF cleanup completed",
             &[("removedTokens", json::i(cleaned as i64))],
         );
+    }
+}
+
+/// Days a processed Stripe webhook id is remembered for replay protection.
+/// Stripe stops retrying an event after ~3 days, so 30 is generous.
+const WEBHOOK_RETENTION_DAYS: i64 = 30;
+
+/// Drop webhook records past [`WEBHOOK_RETENTION_DAYS`]. Called from the hourly thread.
+pub fn run_webhook_cleanup(state: &AppState) {
+    let cutoff = config::now_ms() - WEBHOOK_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    match state.pool.prune_webhook_events(cutoff) {
+        Ok(removed) if removed > 0 => state
+            .log
+            .debug("Webhook cleanup completed", &[("removedEvents", json::i(removed))]),
+        Ok(_) => {}
+        Err(e) => state
+            .log
+            .error("Webhook cleanup failed", &[("error", json::s(e.to_string()))]),
     }
 }
 
@@ -1576,6 +1620,47 @@ mod tests {
         put.set_test_body(br#"{"name":"New"}"#.to_vec());
         let res = handle(&state, put);
         assert_eq!(res.status, 403);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn put_me_rejects_malformed_json_as_bad_request() {
+        let (state, dir) = test_state();
+        let signed = signed_up(&state, "badjson@example.com");
+
+        let mut put = Request::for_test("PUT", "/api/me");
+        cookie_header(&mut put, &signed);
+        put.set_test_body(b"{not json".to_vec());
+        let res = handle(&state, put);
+
+        assert_eq!(res.status, 400);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn health_reports_the_database_probe() {
+        let (state, dir) = test_state();
+        let body = json_body(&handle(&state, Request::for_test("GET", "/api/health")));
+
+        assert_eq!(body.get_str("database"), Some("connected"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn webhook_cleanup_drops_only_expired_records() {
+        let (state, dir) = test_state();
+        let day_ms = 24 * 60 * 60 * 1000;
+        let now = config::now_ms();
+        state
+            .pool
+            .insert_webhook_event("evt_old", "invoice.paid", now - (WEBHOOK_RETENTION_DAYS + 1) * day_ms)
+            .unwrap();
+        state.pool.insert_webhook_event("evt_new", "invoice.paid", now).unwrap();
+
+        run_webhook_cleanup(&state);
+
+        assert!(state.pool.find_webhook_event("evt_old").unwrap().is_none());
+        assert!(state.pool.find_webhook_event("evt_new").unwrap().is_some());
         std::fs::remove_dir_all(&dir).ok();
     }
 

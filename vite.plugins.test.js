@@ -173,7 +173,73 @@ describe('dynamicManifestPlugin', () => {
     assert.equal(manifest.short_name, 'Test App');
     assert.equal(manifest.name, 'Test App');
     assert.equal(manifest.description, 'Try Something New');
-    assert.equal(manifest.start_url, './app');
+    assert.equal(manifest.start_url, '/app');
+    assert.deepEqual(manifest.icons, [
+      { src: '/icons/icon.png', sizes: '600x600', type: 'image/png', purpose: 'any maskable' }
+    ]);
     assert.equal(manifest.display, 'standalone');
+  });
+});
+
+describe('dev server generated files', () => {
+  beforeEach(() => {
+    constantsMode = 'without-http';
+  });
+
+  /**
+   * Run a plugin's dev middleware and capture the response it writes.
+   *
+   * @param plugin - Plugin exposing configureServer
+   * @returns Registered route, response content type, and body
+   */
+  function callDevMiddleware(plugin) {
+    let registered = null;
+    plugin.configureServer({
+      middlewares: {
+        use(route, handler) {
+          registered = { route, handler };
+        }
+      }
+    });
+
+    const headers = {};
+    let body = '';
+    registered.handler(
+      {},
+      {
+        setHeader(name, value) {
+          headers[name] = value;
+        },
+        end(chunk) {
+          body = chunk;
+        }
+      }
+    );
+
+    return { route: registered.route, contentType: headers['Content-Type'], body };
+  }
+
+  it('serves robots.txt matching the built asset', () => {
+    const dev = callDevMiddleware(dynamicRobotsPlugin());
+    const built = [];
+    dynamicRobotsPlugin().generateBundle.call({ emitFile: (file) => built.push(file) });
+
+    assert.equal(dev.route, '/robots.txt');
+    assert.equal(dev.body, built[0].source);
+  });
+
+  it('serves sitemap.xml as XML', () => {
+    const dev = callDevMiddleware(dynamicSitemapPlugin());
+
+    assert.equal(dev.route, '/sitemap.xml');
+    assert.equal(dev.contentType, 'application/xml; charset=utf-8');
+  });
+
+  it('serves manifest.json as a web app manifest', () => {
+    const dev = callDevMiddleware(dynamicManifestPlugin());
+
+    assert.equal(dev.route, '/manifest.json');
+    assert.equal(dev.contentType, 'application/manifest+json');
+    assert.equal(JSON.parse(dev.body).start_url, '/app');
   });
 });

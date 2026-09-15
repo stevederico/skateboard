@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { Plugin } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
 
 /**
  * Shape of the fields read from src/constants.json by these plugins.
@@ -63,6 +63,29 @@ function toAbsoluteUrl(website: string): string {
 }
 
 /**
+ * Serve a build-time generated file from the dev server on the same path it ships at.
+ *
+ * Keeps `npm run start` and `npm run build` byte-identical for robots.txt, sitemap.xml,
+ * and manifest.json — without committing stale copies under `public/`.
+ *
+ * @param server - Vite dev server
+ * @param route - Absolute request path to intercept (e.g. `/robots.txt`)
+ * @param contentType - Value for the `Content-Type` response header
+ * @param build - Generator returning the file body
+ */
+function serveGenerated(
+  server: ViteDevServer,
+  route: string,
+  contentType: string,
+  build: () => string
+): void {
+  server.middlewares.use(route, (_req, res) => {
+    res.setHeader('Content-Type', contentType);
+    res.end(build());
+  });
+}
+
+/**
  * Custom logger plugin to simplify Vite server startup output
  *
  * Overrides default Vite URL printer to show single clean message.
@@ -108,21 +131,35 @@ export const htmlReplacePlugin = (): Plugin => {
  * Dynamic robots.txt generation plugin
  *
  * Generates robots.txt at build time with:
- * - Bot-specific rules (Googlebot, Bingbot, Applebot, social crawlers)
- * - Protected routes (/app/, /console/, /signin/, /signup/)
+ * - Allow-all baseline for conventional crawlers
+ * - Explicit allow for AI search bots (GPTBot, ChatGPT-User, PerplexityBot, ClaudeBot, anthropic-ai, Google-Extended)
+ * - Disallow for training-only crawlers (CCBot)
  * - Sitemap reference from constants.json
- * - Disallows all other bots from entire site
  *
  * @returns Vite plugin object
  */
 export const dynamicRobotsPlugin = (): Plugin => {
   return {
     name: 'dynamic-robots',
+    configureServer(server) {
+      serveGenerated(server, '/robots.txt', 'text/plain; charset=utf-8', buildRobotsTxt);
+    },
     generateBundle() {
-      const constants = readConstants();
-      const website = toAbsoluteUrl(constants.companyWebsite);
+      this.emitFile({ type: 'asset', fileName: 'robots.txt', source: buildRobotsTxt() });
+    }
+  };
+};
 
-      const robotsContent = `User-agent: *
+/**
+ * Build the robots.txt body from constants.json.
+ *
+ * @returns robots.txt contents, including the absolute sitemap URL
+ */
+export function buildRobotsTxt(): string {
+  const { companyWebsite } = readConstants();
+  const website = toAbsoluteUrl(companyWebsite);
+
+  return `User-agent: *
 Allow: /
 
 # AI search bots — welcome
@@ -150,15 +187,7 @@ Disallow: /
 
 Sitemap: ${website}/sitemap.xml
 `;
-
-      this.emitFile({
-        type: 'asset',
-        fileName: 'robots.txt',
-        source: robotsContent
-      });
-    }
-  };
-};
+}
 
 /**
  * Dynamic sitemap.xml generation plugin
@@ -177,13 +206,26 @@ Sitemap: ${website}/sitemap.xml
 export const dynamicSitemapPlugin = (): Plugin => {
   return {
     name: 'dynamic-sitemap',
+    configureServer(server) {
+      serveGenerated(server, '/sitemap.xml', 'application/xml; charset=utf-8', buildSitemapXml);
+    },
     generateBundle() {
-      const constants = readConstants();
-      const website = toAbsoluteUrl(constants.companyWebsite);
+      this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: buildSitemapXml() });
+    }
+  };
+};
 
-      const currentDate = new Date().toISOString().split('T')[0];
+/**
+ * Build the sitemap.xml body for the shell's public routes.
+ *
+ * @returns sitemap.xml contents with today's date as lastmod
+ */
+export function buildSitemapXml(): string {
+  const { companyWebsite } = readConstants();
+  const website = toAbsoluteUrl(companyWebsite);
+  const currentDate = new Date().toISOString().split('T')[0];
 
-      const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>${website}/</loc>
@@ -216,22 +258,14 @@ export const dynamicSitemapPlugin = (): Plugin => {
     <priority>0.7</priority>
   </url>
 </urlset>`;
-
-      this.emitFile({
-        type: 'asset',
-        fileName: 'sitemap.xml',
-        source: sitemapContent
-      });
-    }
-  };
-};
+}
 
 /**
  * Dynamic PWA manifest.json generation plugin
  *
  * Generates Web App Manifest at build time with:
  * - App name and description from constants.json
- * - Icon configuration (192x192 SVG)
+ * - Icon configuration (600x600 PNG from public/icons)
  * - Standalone display mode
  * - Start URL pointing to /app
  * - Black theme color, white background
@@ -243,31 +277,42 @@ export const dynamicSitemapPlugin = (): Plugin => {
 export const dynamicManifestPlugin = (): Plugin => {
   return {
     name: 'dynamic-manifest',
+    configureServer(server) {
+      serveGenerated(server, '/manifest.json', 'application/manifest+json', buildManifestJson);
+    },
     generateBundle() {
-      const constants = readConstants();
-
-      const manifestContent = {
-        short_name: constants.appName,
-        name: constants.appName,
-        description: constants.tagline,
-        icons: [
-          {
-            src: '/icons/icon.svg',
-            sizes: '192x192',
-            type: 'image/svg+xml'
-          }
-        ],
-        start_url: './app',
-        display: 'standalone',
-        theme_color: '#000000',
-        background_color: '#ffffff'
-      };
-
-      this.emitFile({
-        type: 'asset',
-        fileName: 'manifest.json',
-        source: JSON.stringify(manifestContent, null, 2)
-      });
+      this.emitFile({ type: 'asset', fileName: 'manifest.json', source: buildManifestJson() });
     }
   };
 };
+
+/**
+ * Build the Web App Manifest body from constants.json.
+ *
+ * @returns Pretty-printed manifest.json contents
+ */
+export function buildManifestJson(): string {
+  const { appName, tagline } = readConstants();
+
+  return JSON.stringify(
+    {
+      short_name: appName,
+      name: appName,
+      description: tagline,
+      icons: [
+        {
+          src: '/icons/icon.png',
+          sizes: '600x600',
+          type: 'image/png',
+          purpose: 'any maskable'
+        }
+      ],
+      start_url: '/app',
+      display: 'standalone',
+      theme_color: '#000000',
+      background_color: '#ffffff'
+    },
+    null,
+    2
+  );
+}
