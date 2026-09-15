@@ -15,4 +15,5 @@ pub mod routes;
 pub mod state;
 pub mod stores;
 pub mod stripe;
+pub mod stripe_worker;
 pub mod validation;

@@ -15,7 +15,8 @@ use crate::kdf;
 use crate::middleware;
 use crate::state::AppState;
 use crate::stores::CSRF_TOKEN_EXPIRY_MS;
-use crate::stripe::{self, CheckoutParams};
+use crate::stripe;
+use crate::stripe_worker::OwnedCheckoutParams;
 use crate::validation;
 
 /// Dispatch one request: CORS, security headers, routes, access log.
@@ -92,6 +93,22 @@ fn json_res(status: u16, v: &Json) -> Response {
 
 fn err_json(status: u16, msg: &str) -> Response {
     json_res(status, &json::obj([("error", json::s(msg))]))
+}
+
+/// Map a Stripe worker / client error to an HTTP response.
+///
+/// Timeouts answer 504 so a slow Stripe cannot look like an application bug;
+/// every other failure stays 500 with a generic body.
+fn stripe_err(state: &AppState, log_msg: &str, e: crate::stripe::StripeError) -> Response {
+    state
+        .log
+        .error(log_msg, &[("error", json::s(e.to_string()))]);
+    match e {
+        crate::stripe::StripeError::Timeout => err_json(504, "Payment provider timed out"),
+        _ if log_msg.starts_with("Portal") => err_json(500, "Stripe portal failed"),
+        _ if log_msg.starts_with("Checkout") => err_json(500, "Stripe session failed"),
+        _ => err_json(500, "Stripe request failed"),
+    }
 }
 
 fn unhandled(state: &AppState, req: &Request, message: &str) -> Response {
@@ -336,6 +353,9 @@ fn is_duplicate(e: &db::DbError) -> bool {
 }
 
 fn signup(state: &AppState, req: &Request) -> Response {
+    if let Err(res) = enforce_auth_rate_limit(state, req) {
+        return res;
+    }
     let body = match parse_json_body(req) {
         Ok(v) => v,
         Err(r) => return r,
@@ -415,6 +435,9 @@ fn signup(state: &AppState, req: &Request) -> Response {
 }
 
 fn signin(state: &AppState, req: &Request) -> Response {
+    if let Err(res) = enforce_auth_rate_limit(state, req) {
+        return res;
+    }
     let body = match parse_json_body(req) {
         Ok(v) => v,
         Err(r) => return r,
@@ -431,7 +454,8 @@ fn signin(state: &AppState, req: &Request) -> Response {
     email = email.to_lowercase().trim().to_string();
     state.log.debug("Attempting signin", &[]);
 
-    let lock = state.lockout.is_locked(&email, &req.peer_ip, config::now_ms());
+    let ip = client_ip(req);
+    let lock = state.lockout.is_locked(&email, &ip, config::now_ms());
     if lock.locked {
         let body = json::obj([
             ("error", json::s("Account temporarily locked. Try again later.")),
@@ -446,12 +470,12 @@ fn signin(state: &AppState, req: &Request) -> Response {
     };
     let Some(auth) = auth else {
         state.log.debug("Auth record not found", &[]);
-        state.lockout.record_failure(&email, &req.peer_ip, config::now_ms());
+        state.lockout.record_failure(&email, &ip, config::now_ms());
         return err_json(401, "Invalid credentials");
     };
     if !kdf::verify_password(password, &auth.password) {
         state.log.debug("Password verification failed", &[]);
-        state.lockout.record_failure(&email, &req.peer_ip, config::now_ms());
+        state.lockout.record_failure(&email, &ip, config::now_ms());
         return err_json(401, "Invalid credentials");
     }
     if kdf::needs_rehash(&auth.password) {
@@ -478,7 +502,7 @@ fn signin(state: &AppState, req: &Request) -> Response {
         state.log.error("User not found for auth record", &[]);
         return err_json(401, "Invalid credentials");
     };
-    state.lockout.clear(&email, &req.peer_ip);
+    state.lockout.clear(&email, &ip);
     let token = match generate_token(state, &user.id) {
         Ok(t) => t,
         Err(r) => return r,
@@ -772,23 +796,18 @@ fn checkout(state: &AppState, req: &Request) -> Response {
         Ok(None) => {
             return err_json(400, &format!("No price found for lookup_key: {lookup_key}"))
         }
-        Err(e) => {
-            state
-                .log
-                .error("Checkout session error", &[("error", json::s(e.to_string()))]);
-            return err_json(500, "Stripe session failed");
-        }
+        Err(e) => return stripe_err(state, "Checkout session error", e),
     };
     let origin = state.redirect_origin(req.header("origin"));
     let app_name = AppState::app_name();
     let success = format!("{origin}/app/payment?success=true");
     let cancel = format!("{origin}/app/payment?canceled=true");
-    match stripe.create_checkout_session(CheckoutParams {
-        customer_email: email,
-        price_id: &price_id,
-        success_url: &success,
-        cancel_url: &cancel,
-        app_name: app_name.as_deref(),
+    match stripe.create_checkout_session(OwnedCheckoutParams {
+        customer_email: email.to_string(),
+        price_id,
+        success_url: success,
+        cancel_url: cancel,
+        app_name,
         idempotency_key: None,
     }) {
         Ok(session) => json_res(
@@ -802,12 +821,7 @@ fn checkout(state: &AppState, req: &Request) -> Response {
                 ),
             ]),
         ),
-        Err(e) => {
-            state
-                .log
-                .error("Checkout session error", &[("error", json::s(e.to_string()))]);
-            err_json(500, "Stripe session failed")
-        }
+        Err(e) => stripe_err(state, "Checkout session error", e),
     }
 }
 
@@ -872,12 +886,7 @@ fn portal(state: &AppState, req: &Request) -> Response {
                 ("id", json::s(session.id)),
             ]),
         ),
-        Err(e) => {
-            state
-                .log
-                .error("Portal session error", &[("error", json::s(e.to_string()))]);
-            err_json(500, "Stripe portal failed")
-        }
+        Err(e) => stripe_err(state, "Portal session error", e),
     }
 }
 
@@ -1272,15 +1281,54 @@ pub fn run_webhook_cleanup(state: &AppState) {
     }
 }
 
-/// Drop expired lockout entries. Called from the 15-minute cleanup thread.
+/// Drop expired lockout and auth-rate entries. Called from the 15-minute cleanup thread.
 pub fn run_lockout_cleanup(state: &AppState) {
-    let cleaned = state.lockout.cleanup(config::now_ms());
+    let now = config::now_ms();
+    let cleaned = state.lockout.cleanup(now);
     if cleaned > 0 {
         state.log.debug(
             "Lockout cleanup completed",
             &[("removedEntries", json::i(cleaned as i64))],
         );
     }
+    let rate_cleaned = state.auth_rate.cleanup(now);
+    if rate_cleaned > 0 {
+        state.log.debug(
+            "Auth rate-limit cleanup completed",
+            &[("removedEntries", json::i(rate_cleaned as i64))],
+        );
+    }
+}
+
+/// Client IP used for auth rate limiting and lockout keys.
+///
+/// Transport `peer_ip` by default. When `TRUST_PROXY=1`, the first
+/// `X-Forwarded-For` hop is used so a reverse proxy's client address is seen
+/// instead of the proxy itself — only enable this behind a trusted proxy.
+fn client_ip(req: &Request) -> String {
+    if config::env("TRUST_PROXY").as_deref() == Some("1") {
+        if let Some(xff) = req.header("x-forwarded-for") {
+            let first = xff.split(',').next().unwrap_or("").trim();
+            if !first.is_empty() {
+                return first.to_string();
+            }
+        }
+    }
+    req.peer_ip.clone()
+}
+
+/// Refuse the request when this IP has exhausted the auth sliding window.
+fn enforce_auth_rate_limit(state: &AppState, req: &Request) -> Result<(), Response> {
+    let ip = client_ip(req);
+    let status = state.auth_rate.check_and_record(&ip, config::now_ms());
+    if !status.limited {
+        return Ok(());
+    }
+    let body = json::obj([
+        ("error", json::s("Too many authentication attempts. Try again later.")),
+        ("retryAfter", json::i(status.retry_after_secs)),
+    ]);
+    Err(json_res(429, &body).header("Retry-After", &status.retry_after_secs.to_string()))
 }
 
 #[cfg(test)]
@@ -1297,6 +1345,11 @@ mod tests {
 
     fn test_state() -> (AppState, std::path::PathBuf) {
         let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        test_state_locked()
+    }
+
+    /// Like [`test_state`] but assumes the caller already holds [`ENV_LOCK`].
+    fn test_state_locked() -> (AppState, std::path::PathBuf) {
         let n = TEST_DIR_SEQ.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("sk-rs-{}-{n}", std::process::id()));
         std::fs::create_dir_all(dir.join("databases")).unwrap();
@@ -1560,7 +1613,9 @@ mod tests {
         let (mut state, dir) = test_state();
         // A configured client makes the route reach the authorization check; the
         // check itself is local, so a refusal never touches the network.
-        state.stripe = Some(crate::stripe::StripeClient::new("sk_test_unused".into()));
+        state.stripe = Some(crate::stripe_worker::StripeWorker::spawn(
+            crate::stripe::StripeClient::new("sk_test_unused".into()),
+        ));
         let signup = signed_up(&state, "noone@example.com");
 
         // This account has no subscription, so it owns no Stripe customer.
@@ -1573,7 +1628,9 @@ mod tests {
     #[test]
     fn portal_refuses_a_customer_id_belonging_to_another_subscriber() {
         let (mut state, dir) = test_state();
-        state.stripe = Some(crate::stripe::StripeClient::new("sk_test_unused".into()));
+        state.stripe = Some(crate::stripe_worker::StripeWorker::spawn(
+            crate::stripe::StripeClient::new("sk_test_unused".into()),
+        ));
         let signup = signed_up(&state, "mine@example.com");
 
         let user = state
@@ -1623,6 +1680,52 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+
+    #[test]
+    fn auth_rate_limit_blocks_after_cap() {
+        let (state, dir) = test_state();
+        let now = config::now_ms();
+        for _ in 0..crate::stores::AUTH_RATE_LIMIT {
+            assert!(!state.auth_rate.check_and_record("198.51.100.9", now).limited);
+        }
+        let mut req = Request::for_test("POST", "/api/signup");
+        req.peer_ip = "198.51.100.9".into();
+        req.set_test_body(br#"{"email":"overflow@example.com","password":"secret1","name":"R"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 429);
+        assert!(res.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("retry-after")));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn auth_rate_limit_honors_forwarded_for_when_trust_proxy_set() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: ENV_LOCK is held for the whole test so TRUST_PROXY cannot race.
+        unsafe {
+            std::env::set_var("TRUST_PROXY", "1");
+        }
+        let (state, dir) = test_state_locked();
+        let now = config::now_ms();
+        for _ in 0..crate::stores::AUTH_RATE_LIMIT {
+            assert!(!state.auth_rate.check_and_record("198.51.100.10", now).limited);
+        }
+        let mut req = Request::for_test("POST", "/api/signup");
+        req.peer_ip = "10.0.0.1".into();
+        req.set_test_header("x-forwarded-for", "198.51.100.10");
+        req.set_test_body(br#"{"email":"xff-over@example.com","password":"secret1","name":"R"}"#.to_vec());
+        assert_eq!(handle(&state, req).status, 429);
+        // Different forwarded IP still allowed (socket peer is the same proxy).
+        let mut req = Request::for_test("POST", "/api/signup");
+        req.peer_ip = "10.0.0.1".into();
+        req.set_test_header("x-forwarded-for", "198.51.100.11");
+        req.set_test_body(br#"{"email":"xff-other@example.com","password":"secret1","name":"R"}"#.to_vec());
+        assert_eq!(handle(&state, req).status, 201);
+        unsafe {
+            std::env::remove_var("TRUST_PROXY");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn put_me_rejects_malformed_json_as_bad_request() {
         let (state, dir) = test_state();
@@ -1668,7 +1771,9 @@ mod tests {
 
     fn stripe_state_with_mock(mock: crate::stripe::StripeMock) -> (AppState, std::path::PathBuf) {
         let (mut state, dir) = test_state();
-        state.stripe = Some(crate::stripe::StripeClient::with_mock(mock));
+        state.stripe = Some(crate::stripe_worker::StripeWorker::spawn(
+            crate::stripe::StripeClient::with_mock(mock),
+        ));
         state.stripe_endpoint_secret = Some(WHSEC.into());
         (state, dir)
     }

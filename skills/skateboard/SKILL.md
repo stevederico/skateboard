@@ -8,7 +8,7 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.2.0"
+  version: "5.3.0"
   skateboard-ui: "5.0.0"
   sources:
     - https://github.com/stevederico/skateboard
@@ -21,7 +21,7 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.2.0** | App scaffold (copied into new repos) |
+| **skateboard** (boilerplate) | **5.3.0** | App scaffold (copied into new repos) |
 | **@stevederico/skateboard-ui** | **5.0.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui

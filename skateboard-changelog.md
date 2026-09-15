@@ -15,6 +15,14 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.3.0
+
+  Stripe worker threads
+  Auth IP rate limit
+  TRUST_PROXY support
+  Drop script unsafe-inline
+  External theme-init.js
+
 5.2.0
 
   Audit release

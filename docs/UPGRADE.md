@@ -7,6 +7,12 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x--50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.3.0.** Auth routes (`/api/signup`, `/api/signin`) now enforce a per-IP sliding
+window (20 / 15 min). Set `TRUST_PROXY=1` only when a trusted reverse proxy sets
+`X-Forwarded-For`. CSP `script-src` no longer allows `'unsafe-inline'` — the dark-mode
+bootstrap lives at `/theme-init.js`. Stripe Checkout/Portal/webhook HTTP calls run on a
+dedicated worker thread with a 10s timeout (504 on stall).
+
 **5.2.0 deploy check.** With `NODE_ENV=production` the backend now refuses to start unless
 `JWT_SECRET` is set, at least 32 characters, and not the `.env.example` placeholder. Rotate any
 shorter production secret *before* deploying — the process exits with the reason on stderr.

@@ -128,6 +128,8 @@ pub enum StripeError {
     Parse(String),
     /// The circuit breaker is open after repeated failures; no call was made.
     CircuitOpen,
+    /// The Stripe worker did not finish within [`crate::stripe_worker::STRIPE_CALL_TIMEOUT`].
+    Timeout,
 }
 
 impl std::fmt::Display for StripeError {
@@ -142,6 +144,9 @@ impl std::fmt::Display for StripeError {
             StripeError::Parse(m) => write!(f, "stripe response parse error: {m}"),
             StripeError::CircuitOpen => {
                 write!(f, "stripe circuit breaker open after repeated failures")
+            }
+            StripeError::Timeout => {
+                write!(f, "stripe call timed out waiting for worker")
             }
         }
     }
@@ -374,11 +379,16 @@ pub struct StripeMock {
     pub checkout: Option<CheckoutSession>,
     /// Fixed Billing Portal Session response.
     pub portal: Option<PortalSession>,
+    /// Artificial delay applied before every mocked response (worker / pool tests).
+    pub delay_ms: u64,
 }
 
 #[cfg(test)]
 impl StripeMock {
     fn handle_get(&self, url: &str) -> Result<Json, StripeError> {
+        if self.delay_ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(self.delay_ms));
+        }
         if let Some(rest) = url.strip_prefix(&format!("{API_BASE}/v1/customers/")) {
             let id = rest.split('?').next().unwrap_or(rest);
             let id = percent_decode_basic(id);
@@ -424,6 +434,9 @@ impl StripeMock {
     }
 
     fn handle_post(&self, url: &str, _form: &str) -> Result<Json, StripeError> {
+        if self.delay_ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(self.delay_ms));
+        }
         if url == format!("{API_BASE}/v1/checkout/sessions") {
             let Some(session) = &self.checkout else {
                 return Err(StripeError::Transport("unmocked checkout session".into()));
