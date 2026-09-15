@@ -105,6 +105,7 @@ fn stripe_err(state: &AppState, log_msg: &str, e: crate::stripe::StripeError) ->
         .error(log_msg, &[("error", json::s(e.to_string()))]);
     match e {
         crate::stripe::StripeError::Timeout => err_json(504, "Payment provider timed out"),
+        crate::stripe::StripeError::Busy => err_json(503, "Payment provider busy"),
         _ if log_msg.starts_with("Portal") => err_json(500, "Stripe portal failed"),
         _ if log_msg.starts_with("Checkout") => err_json(500, "Stripe session failed"),
         _ => err_json(500, "Stripe request failed"),
@@ -778,6 +779,13 @@ fn checkout(state: &AppState, req: &Request) -> Response {
     };
     let (Some(email), Some(lookup_key)) = (body.get_str("email"), body.get_str("lookup_key")) else {
         return err_json(400, "Missing email or lookup_key");
+    };
+    if !state
+        .stripe_lookup_keys
+        .iter()
+        .any(|allowed| allowed == lookup_key)
+    {
+        return err_json(400, "Unknown lookup_key");
     };
     let user = match state.pool.find_user(&UserQuery::Id(user_id)) {
         Ok(u) => u,
@@ -1843,9 +1851,15 @@ mod tests {
 
     fn stripe_state_with_mock(mock: crate::stripe::StripeMock) -> (AppState, std::path::PathBuf) {
         let (mut state, dir) = test_state();
+        let keys: Vec<String> = mock.prices.keys().cloned().collect();
         state.stripe = Some(crate::stripe_worker::StripeWorker::spawn(
             crate::stripe::StripeClient::with_mock(mock),
         ));
+        state.stripe_lookup_keys = if keys.is_empty() {
+            vec!["pro_monthly".into()]
+        } else {
+            keys
+        };
         state.stripe_endpoint_secret = Some(WHSEC.into());
         (state, dir)
     }
@@ -2096,10 +2110,25 @@ mod tests {
         req.set_test_body(br#"{"email":"pay2@example.com","lookup_key":"missing"}"#.to_vec());
         let res = handle(&state, req);
         assert_eq!(res.status, 400);
-        assert!(json_body(&res)
-            .get_str("error")
-            .unwrap_or("")
-            .contains("No price found"));
+        assert_eq!(json_body(&res).get_str("error"), Some("Unknown lookup_key"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn checkout_rejects_unlisted_lookup_key_even_when_stripe_has_it() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.prices.insert("internal_price".into(), "price_secret".into());
+        let (mut state, dir) = stripe_state_with_mock(mock);
+        state.stripe_lookup_keys = vec!["pro_monthly".into()];
+        let signup = signed_up(&state, "pay3@example.com");
+        let mut req = Request::for_test("POST", "/api/checkout");
+        replay_cookies(&mut req, &[&signup], true);
+        req.set_test_body(
+            br#"{"email":"pay3@example.com","lookup_key":"internal_price"}"#.to_vec(),
+        );
+        let res = handle(&state, req);
+        assert_eq!(res.status, 400);
+        assert_eq!(json_body(&res).get_str("error"), Some("Unknown lookup_key"));
         std::fs::remove_dir_all(&dir).ok();
     }
 

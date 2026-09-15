@@ -295,6 +295,31 @@ pub fn load_config(dir: &Path, log: &Logger) -> BackendConfig {
     }
 }
 
+/// Sellable Stripe `lookup_key`s from `src/constants.json`.
+///
+/// Checkout rejects anything not in this list so a client cannot pick an
+/// internal or legacy price that still has a lookup_key on the Stripe account.
+/// Missing or unreadable constants yield an empty list (fail closed).
+pub fn load_stripe_lookup_keys(backend_dir: &Path) -> Vec<String> {
+    let path = backend_dir.join("../src/constants.json");
+    let Ok(bytes) = fs::read(&path) else {
+        return Vec::new();
+    };
+    let Ok(parsed) = json::parse(&bytes) else {
+        return Vec::new();
+    };
+    let Some(items) = parsed.get("stripeProducts").and_then(Json::as_arr) else {
+        return Vec::new();
+    };
+    items
+        .iter()
+        .filter_map(|item| item.get_str("lookup_key"))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 /// Warn about missing required environment variables.
 ///
 /// Never exits: the Node server starts with reduced functionality and this
@@ -627,5 +652,27 @@ mod tests {
         let cfg = load_config(Path::new("/nonexistent-skateboard-dir"), &log());
         assert_eq!(cfg.static_dir, "../dist");
         assert_eq!(cfg.database.db_type, "sqlite");
+    }
+
+    #[test]
+    fn load_stripe_lookup_keys_reads_constants() {
+        let n = std::process::id();
+        let root = std::env::temp_dir().join(format!("sk-keys-{n}"));
+        let backend = root.join("backend");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(&backend).unwrap();
+        std::fs::write(
+            root.join("src/constants.json"),
+            r#"{"stripeProducts":[{"lookup_key":"pro_monthly"},{"lookup_key":" "},{"title":"x"}]}"#,
+        )
+        .unwrap();
+        let keys = load_stripe_lookup_keys(&backend);
+        assert_eq!(keys, vec!["pro_monthly".to_string()]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn load_stripe_lookup_keys_missing_file_is_empty() {
+        assert!(load_stripe_lookup_keys(Path::new("/nonexistent-skateboard-dir")).is_empty());
     }
 }
