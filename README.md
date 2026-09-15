@@ -9,7 +9,7 @@
   </p>
   <h1 align="center" style="border-bottom: none; margin-bottom: 0;">Skateboard</h1>
   <h3 align="center" style="margin-top: 0; font-weight: normal;">
-    a react + rust starter with auth, stripe, shadcn, and sqlite
+    a react + rust starter with auth, stripe, and sqlite
   </h3>
 
   <p align="center">
