@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "4.26.0",
-  "skateboardVersion": "4.26.0",
+  "version": "5.0.0",
+  "skateboardVersion": "5.0.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -20,7 +20,7 @@
     "test:build": "node --experimental-test-module-mocks --test vite.plugins.test.js scripts/verify-ui-version.test.js scripts/update-skateboard.test.js scripts/version-consistency.test.js"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "4.15.0",
+    "@stevederico/skateboard-ui": "5.0.0",
     "lucide-react": "0.546.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"

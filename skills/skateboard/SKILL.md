@@ -5,11 +5,11 @@ description: >
   Build, modify, and upgrade apps with Skateboard boilerplate + @stevederico/skateboard-ui.
   Use when scaffolding, editing a skateboard app, choosing components, constants.json,
   Rust backend auth/Stripe/SQLite, upgrading boilerplate / skateboardVersion,
-  running update-skateboard.js, fixing template drift, or the user says skateboard /
-  skateboard-ui.
+  running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
+  or the user says skateboard / skateboard-ui.
 metadata:
-  version: "4.24.0"
-  skateboard-ui: "4.15.0"
+  version: "5.0.0"
+  skateboard-ui: "5.0.0"
   sources:
     - https://github.com/stevederico/skateboard
     - https://github.com/stevederico/skateboard-ui
@@ -21,12 +21,14 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **4.24.0** | App scaffold (copied into new repos) |
-| **@stevederico/skateboard-ui** | **4.15.0** | Shell + components (npm package — pin exact) |
+| **skateboard** (boilerplate) | **5.0.0** | App scaffold (copied into new repos) |
+| **@stevederico/skateboard-ui** | **5.0.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
 
 > **Template drift:** scaffolded apps are *copies*. `skateboardVersion` in `package.json` is a **label**, not proof the tree matches upstream. Prefer bumping **skateboard-ui** as a dependency; use **`scripts/update-skateboard.js`** for vendored boilerplate (especially backend).
+
+> **4.x → 5.0 (breaking):** follow **AGENTS.md → Migrating 4.x → 5.0** in the reference repo (full checklist). Also `docs/UPGRADE.md`.
 
 ## The Four Commandments
 
@@ -58,7 +60,7 @@ cd backend && cargo run               # Rust :8000
 
 - Frontend: http://localhost:5173  
 - Backend: http://localhost:8000  
-- Stack: **React 19** · **react-router v7** · **Vite 8** · **Tailwind v4** · **zero-crate Rust** · **SQLite**
+- Stack: **React 19** · **react-router v7.18+** (via ui) · **Vite 8** (esbuild JSX, no SWC plugin) · **Tailwind v4** · **lucide-react** · **zero-crate Rust** · **SQLite**
 
 ## Project Structure (current boilerplate)
 
@@ -243,7 +245,7 @@ FRONTEND_URL=               # Stripe redirects
 | Confirm | `<AlertDialog>` | `window.confirm` |
 | Field group | `<Field>` | freeform label/input/error |
 
-~47 shadcn components under `shadcn/ui/` in skateboard-ui 4.15.
+Import primitives as `@stevederico/skateboard-ui/shadcn/ui/<name>` (public path; ui **5.0** remaps exports to `ui/`). Shell uses a subset; fleet apps use more (button, empty, card, dialog, command, …).
 
 ## Header
 
@@ -303,12 +305,13 @@ node scripts/update-skateboard.js --yes
 # 3) Resolve conflicts — custom Hono routes must be ported into backend/src/routes.rs.
 #    Schema lives in backend/src/db.rs (ensure_schema). DIFF before taking canonical.
 
-# 4) Bump UI to the version pin in canonical package.json (exact)
-npm install @stevederico/skateboard-ui@4.15.0 --save-exact
+# 4) Bump UI to 5.0.0 (exact)
+npm install @stevederico/skateboard-ui@5.0.0 --save-exact
 # If your registry enforces a min-release-age and the package is <7 days old,
 # use a *scoped* bypass only for this package, e.g.:
-#   bun add @stevederico/skateboard-ui@4.15.0 --exact --minimum-release-age 0
+#   bun add @stevederico/skateboard-ui@5.0.0 --exact --minimum-release-age 0
 # Never bare --min-release-age=0 / --minimum-release-age 0 on a full tree install.
+# Then complete AGENTS.md "Migrating 4.x → 5.0" (icons, Vite/SWC, verify).
 
 # 5) Lockfile: commit package-lock.json (source of truth). If you use Bun for install:
 #    bun install
@@ -361,6 +364,7 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 | Issue | Fix |
 |---|---|
 | Feature icons empty | `constants.features.items[].icon` must be **Lucide names** (`lock`, `credit-card`), not emoji |
+| `skateboard-ui/icons` or `DynamicIcon` import fails | **5.0** — named-import from `lucide-react` instead |
 | Landing header CTA short | Button `size="default"` next to icon ThemeToggle (not `sm`) |
 | Updater `.js` conflict missed | `git grep` conflict markers in **all** extensions |
 | Empty `STRIPE_ENDPOINT_SECRET=` in `.env.example` | Can poison tests that load example into `process.env` |

@@ -59,6 +59,7 @@ const ALLOWLIST = [
   'backend/Cargo.lock',
   'backend/rust-toolchain.toml',
   'backend/.gitignore',
+  'backend/scripts/stripe-cli-replay.sh',
   'backend/src/lib.rs',
   'backend/src/main.rs',
   'backend/src/auth.rs',

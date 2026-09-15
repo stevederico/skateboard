@@ -1578,4 +1578,281 @@ mod tests {
         assert_eq!(res.status, 403);
         std::fs::remove_dir_all(&dir).ok();
     }
+
+    const WHSEC: &str = "whsec_test_route_secret";
+
+    fn stripe_state_with_mock(mock: crate::stripe::StripeMock) -> (AppState, std::path::PathBuf) {
+        let (mut state, dir) = test_state();
+        state.stripe = Some(crate::stripe::StripeClient::with_mock(mock));
+        state.stripe_endpoint_secret = Some(WHSEC.into());
+        (state, dir)
+    }
+
+    fn signed_webhook(payload: &[u8]) -> Request {
+        let mut req = Request::for_test("POST", "/api/payment");
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(1_800_000_000);
+        let header = crate::stripe::sign_webhook_header(WHSEC, payload, ts);
+        req.set_test_header("stripe-signature", &header);
+        req.set_test_body(payload.to_vec());
+        req
+    }
+
+    fn user_subscription(state: &AppState, email: &str) -> Option<Subscription> {
+        state
+            .pool
+            .find_user(&UserQuery::Email(email.into()))
+            .expect("query")
+            .expect("user")
+            .subscription
+    }
+
+    #[test]
+    fn payment_rejects_missing_signature() {
+        let (state, dir) = stripe_state_with_mock(crate::stripe::StripeMock::default());
+        let mut req = Request::for_test("POST", "/api/payment");
+        req.set_test_body(br#"{"id":"evt_x"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 400);
+        assert_eq!(json_body(&res).get_str("error"), Some("Missing signature"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn payment_rejects_bad_signature() {
+        let (state, dir) = stripe_state_with_mock(crate::stripe::StripeMock::default());
+        let mut req = Request::for_test("POST", "/api/payment");
+        req.set_test_header("stripe-signature", "t=1800000000,v1=deadbeef");
+        req.set_test_body(br#"{"id":"evt_bad","type":"customer.subscription.updated"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 400);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn payment_subscription_created_patches_user() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.customers
+            .insert("cus_new".into(), "subber@example.com".into());
+        let (state, dir) = stripe_state_with_mock(mock);
+        let _ = signed_up(&state, "subber@example.com");
+
+        let payload = br#"{
+            "id":"evt_sub_created",
+            "type":"customer.subscription.created",
+            "data":{"object":{
+                "id":"sub_1",
+                "customer":"cus_new",
+                "status":"active",
+                "current_period_end":1893456000
+            }}
+        }"#;
+        let res = handle(&state, signed_webhook(payload));
+        assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
+
+        let sub = user_subscription(&state, "subber@example.com").expect("subscription");
+        assert_eq!(sub.stripe_id, "cus_new");
+        assert_eq!(sub.status, "active");
+        assert_eq!(sub.expires, Some(1_893_456_000));
+
+        assert!(state
+            .pool
+            .find_webhook_event("evt_sub_created")
+            .expect("find")
+            .is_some());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn payment_subscription_updated_and_deleted() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.customers
+            .insert("cus_life".into(), "life@example.com".into());
+        let (state, dir) = stripe_state_with_mock(mock);
+        let _ = signed_up(&state, "life@example.com");
+
+        let updated = br#"{
+            "id":"evt_sub_updated",
+            "type":"customer.subscription.updated",
+            "data":{"object":{
+                "customer":"cus_life",
+                "status":"past_due",
+                "current_period_end":1890000000
+            }}
+        }"#;
+        assert_eq!(handle(&state, signed_webhook(updated)).status, 200);
+        let sub = user_subscription(&state, "life@example.com").expect("sub");
+        assert_eq!(sub.status, "past_due");
+
+        let deleted = br#"{
+            "id":"evt_sub_deleted",
+            "type":"customer.subscription.deleted",
+            "data":{"object":{
+                "customer":"cus_life",
+                "status":"canceled",
+                "current_period_end":1890000000
+            }}
+        }"#;
+        assert_eq!(handle(&state, signed_webhook(deleted)).status, 200);
+        let sub = user_subscription(&state, "life@example.com").expect("sub");
+        assert_eq!(sub.status, "canceled");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn payment_checkout_session_completed_retrieves_subscription() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.subscriptions.insert(
+            "sub_cs".into(),
+            r#"{"id":"sub_cs","status":"active","current_period_end":1900000000}"#.into(),
+        );
+        let (state, dir) = stripe_state_with_mock(mock);
+        let _ = signed_up(&state, "buyer@example.com");
+
+        let payload = br#"{
+            "id":"evt_cs_done",
+            "type":"checkout.session.completed",
+            "data":{"object":{
+                "customer":"cus_buyer",
+                "customer_email":"Buyer@Example.com",
+                "subscription":"sub_cs"
+            }}
+        }"#;
+        let res = handle(&state, signed_webhook(payload));
+        assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
+        let sub = user_subscription(&state, "buyer@example.com").expect("sub");
+        assert_eq!(sub.stripe_id, "cus_buyer");
+        assert_eq!(sub.status, "active");
+        assert_eq!(sub.expires, Some(1_900_000_000));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn payment_invoice_paid_and_payment_failed() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.customers
+            .insert("cus_inv".into(), "invoice@example.com".into());
+        mock.subscriptions.insert(
+            "sub_inv".into(),
+            r#"{"id":"sub_inv","status":"active","current_period_end":1910000000}"#.into(),
+        );
+        let (state, dir) = stripe_state_with_mock(mock);
+        let _ = signed_up(&state, "invoice@example.com");
+
+        let paid = br#"{
+            "id":"evt_inv_paid",
+            "type":"invoice.paid",
+            "data":{"object":{
+                "customer":"cus_inv",
+                "subscription":"sub_inv"
+            }}
+        }"#;
+        assert_eq!(handle(&state, signed_webhook(paid)).status, 200);
+        let sub = user_subscription(&state, "invoice@example.com").expect("sub");
+        assert_eq!(sub.status, "active");
+        assert_eq!(sub.expires, Some(1_910_000_000));
+
+        // payment_failed only logs when the user exists — still 200.
+        let failed = br#"{
+            "id":"evt_inv_fail",
+            "type":"invoice.payment_failed",
+            "data":{"object":{"customer":"cus_inv"}}
+        }"#;
+        assert_eq!(handle(&state, signed_webhook(failed)).status, 200);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn payment_event_is_idempotent() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.customers
+            .insert("cus_idem".into(), "idem@example.com".into());
+        let (state, dir) = stripe_state_with_mock(mock);
+        let _ = signed_up(&state, "idem@example.com");
+
+        let payload = br#"{
+            "id":"evt_idem_1",
+            "type":"customer.subscription.updated",
+            "data":{"object":{
+                "customer":"cus_idem",
+                "status":"active",
+                "current_period_end":1920000000
+            }}
+        }"#;
+        assert_eq!(handle(&state, signed_webhook(payload)).status, 200);
+        assert_eq!(handle(&state, signed_webhook(payload)).status, 200);
+        // Still one row, still active.
+        assert!(state
+            .pool
+            .find_webhook_event("evt_idem_1")
+            .expect("find")
+            .is_some());
+        assert_eq!(
+            user_subscription(&state, "idem@example.com")
+                .expect("sub")
+                .status,
+            "active"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn checkout_returns_mocked_session() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.prices.insert("pro_monthly".into(), "price_pro".into());
+        mock.checkout = Some(crate::stripe::CheckoutSession {
+            id: "cs_test_123".into(),
+            url: Some("https://checkout.stripe.com/c/pay/cs_test_123".into()),
+            customer: Some("cus_from_checkout".into()),
+        });
+        let (state, dir) = stripe_state_with_mock(mock);
+        let signup = signed_up(&state, "pay@example.com");
+
+        let mut req = Request::for_test("POST", "/api/checkout");
+        replay_cookies(&mut req, &[&signup], true);
+        req.set_test_body(br#"{"email":"pay@example.com","lookup_key":"pro_monthly"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
+        let body = json_body(&res);
+        assert_eq!(body.get_str("id"), Some("cs_test_123"));
+        assert_eq!(
+            body.get_str("url"),
+            Some("https://checkout.stripe.com/c/pay/cs_test_123")
+        );
+        assert_eq!(body.get_str("customerID"), Some("cus_from_checkout"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn checkout_rejects_unknown_lookup_key() {
+        let (state, dir) = stripe_state_with_mock(crate::stripe::StripeMock::default());
+        let signup = signed_up(&state, "pay2@example.com");
+        let mut req = Request::for_test("POST", "/api/checkout");
+        replay_cookies(&mut req, &[&signup], true);
+        req.set_test_body(br#"{"email":"pay2@example.com","lookup_key":"missing"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 400);
+        assert!(json_body(&res)
+            .get_str("error")
+            .unwrap_or("")
+            .contains("No price found"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn checkout_rejects_email_mismatch() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.prices.insert("pro_monthly".into(), "price_pro".into());
+        let (state, dir) = stripe_state_with_mock(mock);
+        let signup = signed_up(&state, "real@example.com");
+        let mut req = Request::for_test("POST", "/api/checkout");
+        replay_cookies(&mut req, &[&signup], true);
+        req.set_test_body(br#"{"email":"other@example.com","lookup_key":"pro_monthly"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 403);
+        assert_eq!(json_body(&res).get_str("error"), Some("Email mismatch"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }
