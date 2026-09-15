@@ -7,6 +7,14 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.6.0 — security, upgrade promptly.** Parser panics no longer kill HTTP
+workers (`catch_unwind` around `handle_connection` plus a live-count drop
+guard). Request reads have a 15s wall-clock budget and keep-alive idles 30s,
+so a slowloris dribble cannot pin the pool. The Stripe worker queue is bounded
+(full → 503); jobs that miss their 10s deadline are dropped instead of still
+calling Stripe. `POST /api/checkout` only accepts `lookup_key` values listed
+in `src/constants.json` `stripeProducts`.
+
 **5.5.0 — security, upgrade promptly.** Fixes an unauthenticated remote DoS: a
 `Transfer-Encoding: chunked` chunk size could overflow the body-size check
 (release builds have overflow checks off), panicking the worker outside

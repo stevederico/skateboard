@@ -28,6 +28,8 @@ pub struct AppState {
     pub auth_rate: RateLimitStore,
     /// Stripe worker handle, or `None` when `STRIPE_KEY` is unset (routes 503).
     pub stripe: Option<StripeWorker>,
+    /// Sellable `lookup_key`s from `src/constants.json` `stripeProducts`.
+    pub stripe_lookup_keys: Vec<String>,
     /// Webhook signing secret, or `None` when unset (webhook 503s).
     pub stripe_endpoint_secret: Option<String>,
     /// JWT signing secret, or `None` when unset (auth routes 503).
@@ -164,6 +166,7 @@ impl AppState {
             stripe: config::env_nonempty("STRIPE_KEY")
                 .map(StripeClient::new)
                 .map(StripeWorker::spawn),
+            stripe_lookup_keys: config::load_stripe_lookup_keys(dir),
             stripe_endpoint_secret: config::env_nonempty("STRIPE_ENDPOINT_SECRET"),
             jwt_secret: config::env_nonempty("JWT_SECRET"),
             cors_origins: AppState::resolve_cors_origins(),

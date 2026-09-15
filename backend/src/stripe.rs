@@ -16,6 +16,10 @@
 
 use std::ffi::{c_char, c_int, c_long, c_void, CString};
 use std::sync::{Mutex, Once};
+#[cfg(test)]
+use std::sync::atomic::{AtomicU32, Ordering};
+#[cfg(test)]
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::crypto::{ct_eq, hex_encode, hmac_sha256, random_uuid_v4};
@@ -130,6 +134,8 @@ pub enum StripeError {
     CircuitOpen,
     /// The Stripe worker did not finish within [`crate::stripe_worker::STRIPE_CALL_TIMEOUT`].
     Timeout,
+    /// The bounded Stripe worker queue was full; the call was not started.
+    Busy,
 }
 
 impl std::fmt::Display for StripeError {
@@ -148,6 +154,7 @@ impl std::fmt::Display for StripeError {
             StripeError::Timeout => {
                 write!(f, "stripe call timed out waiting for worker")
             }
+            StripeError::Busy => write!(f, "stripe worker queue full"),
         }
     }
 }
@@ -381,11 +388,14 @@ pub struct StripeMock {
     pub portal: Option<PortalSession>,
     /// Artificial delay applied before every mocked response (worker / pool tests).
     pub delay_ms: u64,
+    /// How many mock HTTP operations ran.
+    pub call_count: Arc<AtomicU32>,
 }
 
 #[cfg(test)]
 impl StripeMock {
     fn handle_get(&self, url: &str) -> Result<Json, StripeError> {
+        self.call_count.fetch_add(1, Ordering::SeqCst);
         if self.delay_ms > 0 {
             std::thread::sleep(std::time::Duration::from_millis(self.delay_ms));
         }
@@ -434,6 +444,7 @@ impl StripeMock {
     }
 
     fn handle_post(&self, url: &str, _form: &str) -> Result<Json, StripeError> {
+        self.call_count.fetch_add(1, Ordering::SeqCst);
         if self.delay_ms > 0 {
             std::thread::sleep(std::time::Duration::from_millis(self.delay_ms));
         }
@@ -556,7 +567,7 @@ impl StripeClient {
     pub fn with_mock(mock: StripeMock) -> Self {
         StripeClient {
             secret_key: "sk_test_mock".into(),
-            mock: Some(std::sync::Arc::new(std::sync::Mutex::new(mock))),
+            mock: Some(Arc::new(Mutex::new(mock))),
         }
     }
 

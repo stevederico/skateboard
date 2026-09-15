@@ -15,6 +15,13 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.6.0
+
+  Catch worker parser panics
+  Cap request wall clock
+  Bound Stripe job queue
+  Allowlist checkout lookup keys
+
 5.5.0
 
   Fix chunked body overflow DoS

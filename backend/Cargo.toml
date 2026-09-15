@@ -1,6 +1,6 @@
 [package]
 name = "skateboard-backend"
-version = "5.5.0"
+version = "5.6.0"
 edition = "2021"
 rust-version = "1.95"
 description = "Skateboard application backend — zero-crate Rust"

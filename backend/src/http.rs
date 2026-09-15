@@ -19,7 +19,7 @@ use std::path::{Component, Path};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 // ==== HEADERS ====
 
@@ -433,10 +433,17 @@ pub struct Config {
     pub port: u16,
     /// Worker threads. Each owns one connection at a time.
     pub threads: usize,
-    /// Per-read socket timeout; bounds slowloris-style header dribbling.
+    /// Per-read socket timeout; a floor under the wall-clock budgets below.
     pub read_timeout: Duration,
     /// Per-write socket timeout.
     pub write_timeout: Duration,
+    /// Wall-clock cap for reading one request line, headers, and body.
+    ///
+    /// `read_timeout` is per syscall, so a client that dribbles one byte just
+    /// inside that window can pin a worker forever. This budget is absolute.
+    pub request_timeout: Duration,
+    /// Wall-clock cap for an idle keep-alive wait between requests.
+    pub idle_timeout: Duration,
     /// Largest accepted request body. Larger requests get 413.
     pub max_body_bytes: usize,
     /// Largest accepted request line + header block. Larger gets 431.
@@ -455,8 +462,8 @@ pub struct Config {
 
 impl Default for Config {
     /// Port 8000, `available_parallelism() * 4` threads (minimum 8), 30s
-    /// timeouts, 2 MiB body cap, 32 KiB header cap, and an intake queue eight
-    /// deep per worker.
+    /// socket timeouts, 15s per-request wall clock, 30s keep-alive idle, 2 MiB
+    /// body cap, 32 KiB header cap, and an intake queue eight deep per worker.
     fn default() -> Self {
         let cores = thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
         let threads = (cores * 4).max(8);
@@ -465,6 +472,8 @@ impl Default for Config {
             threads,
             read_timeout: Duration::from_secs(30),
             write_timeout: Duration::from_secs(30),
+            request_timeout: Duration::from_secs(15),
+            idle_timeout: Duration::from_secs(30),
             max_body_bytes: 2 * 1024 * 1024,
             max_header_bytes: 32 * 1024,
             max_queued_connections: threads * 8,
@@ -532,6 +541,19 @@ fn wake_addrs(addr: SocketAddr) -> Vec<SocketAddr> {
 /// these mutexes is a counter and a bool, both meaningful after a panic.
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Decrements [`Inner::live`] when a worker thread exits, including on unwind.
+struct LiveGuard {
+    inner: Arc<Inner>,
+}
+
+impl Drop for LiveGuard {
+    fn drop(&mut self) {
+        let mut live = lock(&self.inner.live);
+        *live = live.saturating_sub(1);
+        self.inner.live_cv.notify_all();
+    }
 }
 
 /// A running server. Dropping it triggers shutdown without waiting.
@@ -631,7 +653,8 @@ fn bind(port: u16) -> std::io::Result<TcpListener> {
 /// Accepting runs on a background thread and each connection is handed to a
 /// fixed pool of `cfg.threads` workers; `handler` is called once per request
 /// and may be entered concurrently, hence the `Send + Sync` bound. A panic
-/// inside `handler` is caught and answered with 500.
+/// inside `handler` is caught and answered with 500. A panic in the parser is
+/// caught around `handle_connection` so it cannot shrink the pool.
 ///
 /// # Errors
 /// Returns the underlying `io::Error` when the port cannot be bound.
@@ -662,17 +685,21 @@ where
         let inner = Arc::clone(&inner);
         let cfg = cfg.clone();
         thread::spawn(move || {
+            let _guard = LiveGuard {
+                inner: Arc::clone(&inner),
+            };
             loop {
                 // Hold the receiver lock only while dequeuing.
                 let job = lock(&rx).recv();
                 match job {
-                    Ok(stream) => handle_connection(&cfg, handler.as_ref(), &inner, stream),
+                    Ok(stream) => {
+                        let _ = catch_unwind(AssertUnwindSafe(|| {
+                            handle_connection(&cfg, handler.as_ref(), &inner, stream)
+                        }));
+                    }
                     Err(_) => break,
                 }
             }
-            let mut live = lock(&inner.live);
-            *live -= 1;
-            inner.live_cv.notify_all();
         });
     }
 
@@ -757,10 +784,21 @@ where
     };
     let mut reader = BufReader::with_capacity(8 * 1024, stream);
 
+    let mut first = true;
     loop {
-        match read_request(&mut reader, &mut writer, cfg) {
+        let head_timeout = if first {
+            cfg.request_timeout
+        } else {
+            cfg.idle_timeout
+        };
+        first = false;
+        match read_request(&mut reader, &mut writer, cfg, head_timeout) {
             Ok(None) => break, // clean close between requests
             Ok(Some(parsed)) => {
+                #[cfg(test)]
+                if parsed.req.path == "/__panic_worker" {
+                    panic!("test: connection handler panic");
+                }
                 let Parsed {
                     mut req,
                     http_11,
@@ -797,19 +835,29 @@ where
 ///
 /// # Errors
 /// [`HttpError`] with the status to report: 400 malformed, 413 body too large,
-/// 431 header block too large, 501 unknown transfer coding, 505 bad version,
-/// or 0 to close silently.
+/// 431 header block too large, 408 over the wall-clock budget, 501 unknown
+/// transfer coding, 505 bad version, or 0 to close silently.
 fn read_request(
     reader: &mut BufReader<TcpStream>,
     writer: &mut TcpStream,
     cfg: &Config,
+    head_timeout: Duration,
 ) -> Result<Option<Parsed>, HttpError> {
     let mut used = 0usize;
     let mut line = Vec::new();
+    let head_deadline = Instant::now() + head_timeout;
 
     // RFC 7230 §3.5: tolerate stray CRLFs before the request line.
     loop {
-        let n = read_line_limited(reader, &mut line, &mut used, cfg.max_header_bytes)?;
+        let n = read_line_limited(
+            reader,
+            &mut line,
+            &mut used,
+            cfg.max_header_bytes,
+            head_deadline,
+            cfg.read_timeout,
+            false,
+        )?;
         if n == 0 {
             return Ok(None);
         }
@@ -836,10 +884,20 @@ fn read_request(
     };
     let (raw_path, path, query) = parse_target(target)?;
 
+    let req_deadline = Instant::now() + cfg.request_timeout;
+
     // Header block.
     let mut fields: Vec<(String, String)> = Vec::new();
     loop {
-        let n = read_line_limited(reader, &mut line, &mut used, cfg.max_header_bytes)?;
+        let n = read_line_limited(
+            reader,
+            &mut line,
+            &mut used,
+            cfg.max_header_bytes,
+            req_deadline,
+            cfg.read_timeout,
+            true,
+        )?;
         if n == 0 {
             return Err(HttpError::close()); // truncated header block
         }
@@ -880,7 +938,7 @@ fn read_request(
         let _ = writer.flush();
     }
 
-    let body = read_body(reader, &headers, cfg, &mut used)?;
+    let body = read_body(reader, &headers, cfg, &mut used, req_deadline)?;
 
     Ok(Some(Parsed {
         req: Request {
@@ -946,6 +1004,7 @@ fn read_body(
     headers: &Headers,
     cfg: &Config,
     used: &mut usize,
+    deadline: Instant,
 ) -> Result<Vec<u8>, HttpError> {
     let te = headers.get("transfer-encoding");
     let lens = headers.get_all("content-length");
@@ -959,7 +1018,7 @@ fn read_body(
         if !te.trim().eq_ignore_ascii_case("chunked") {
             return Err(HttpError::new(501, "Not Implemented"));
         }
-        return read_chunked(reader, cfg, used);
+        return read_chunked(reader, cfg, used, deadline);
     }
 
     if lens.is_empty() {
@@ -976,9 +1035,7 @@ fn read_body(
         return Err(HttpError::new(413, "Payload Too Large"));
     }
     let mut body = vec![0u8; len];
-    reader
-        .read_exact(&mut body)
-        .map_err(|_| HttpError::close())?;
+    read_exact_timed(reader, &mut body, deadline, cfg.read_timeout)?;
     Ok(body)
 }
 
@@ -990,12 +1047,21 @@ fn read_chunked(
     reader: &mut BufReader<TcpStream>,
     cfg: &Config,
     used: &mut usize,
+    deadline: Instant,
 ) -> Result<Vec<u8>, HttpError> {
     let mut out: Vec<u8> = Vec::new();
     let mut line = Vec::new();
     loop {
         let mut line_used = 0usize;
-        let n = read_line_limited(reader, &mut line, &mut line_used, MAX_CHUNK_LINE)?;
+        let n = read_line_limited(
+            reader,
+            &mut line,
+            &mut line_used,
+            MAX_CHUNK_LINE,
+            deadline,
+            cfg.read_timeout,
+            true,
+        )?;
         if n == 0 {
             return Err(HttpError::close());
         }
@@ -1012,7 +1078,15 @@ fn read_chunked(
         if size == 0 {
             // Trailer section: read until the terminating empty line.
             loop {
-                let n = read_line_limited(reader, &mut line, used, cfg.max_header_bytes)?;
+                let n = read_line_limited(
+                    reader,
+                    &mut line,
+                    used,
+                    cfg.max_header_bytes,
+                    deadline,
+                    cfg.read_timeout,
+                    true,
+                )?;
                 if n == 0 {
                     return Err(HttpError::close());
                 }
@@ -1035,17 +1109,53 @@ fn read_chunked(
             return Err(HttpError::new(413, "Payload Too Large"));
         }
         out.resize(end, 0);
-        reader
-            .read_exact(&mut out[start..])
-            .map_err(|_| HttpError::close())?;
+        read_exact_timed(reader, &mut out[start..], deadline, cfg.read_timeout)?;
         // Trailing CRLF after the chunk data.
         let mut crlf = [0u8; 2];
-        reader
-            .read_exact(&mut crlf)
-            .map_err(|_| HttpError::close())?;
+        read_exact_timed(reader, &mut crlf, deadline, cfg.read_timeout)?;
         if &crlf != b"\r\n" {
             return Err(HttpError::new(400, "Bad Request"));
         }
+    }
+}
+
+/// 408 once the request has started; silent close while still idle.
+fn timed_out(started: bool) -> HttpError {
+    if started {
+        HttpError::new(408, "Request Timeout")
+    } else {
+        HttpError::close()
+    }
+}
+
+/// Cap the next socket read to the remaining wall-clock budget.
+fn arm_read_timeout(
+    reader: &mut BufReader<TcpStream>,
+    deadline: Instant,
+    cap: Duration,
+    started: bool,
+) -> Result<(), HttpError> {
+    let left = deadline.saturating_duration_since(Instant::now());
+    if left.is_zero() {
+        return Err(timed_out(started));
+    }
+    let _ = reader.get_mut().set_read_timeout(Some(left.min(cap)));
+    Ok(())
+}
+
+fn read_exact_timed(
+    reader: &mut BufReader<TcpStream>,
+    buf: &mut [u8],
+    deadline: Instant,
+    cap: Duration,
+) -> Result<(), HttpError> {
+    arm_read_timeout(reader, deadline, cap, true)?;
+    match reader.read_exact(buf) {
+        Ok(()) => Ok(()),
+        Err(ref e) if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock => {
+            Err(timed_out(true))
+        }
+        Err(_) => Err(HttpError::close()),
     }
 }
 
@@ -1054,19 +1164,27 @@ fn read_chunked(
 /// Returns the line length including its terminator, or `0` at a clean EOF.
 ///
 /// # Errors
-/// 431 when `max` would be exceeded; status 0 on socket error or a truncated
-/// final line.
-fn read_line_limited<R: BufRead>(
-    r: &mut R,
+/// 431 when `max` would be exceeded; 408 when the wall-clock budget is spent
+/// after the request has started; status 0 on idle timeout, socket error, or a
+/// truncated final line.
+fn read_line_limited(
+    r: &mut BufReader<TcpStream>,
     buf: &mut Vec<u8>,
     used: &mut usize,
     max: usize,
+    deadline: Instant,
+    cap: Duration,
+    started: bool,
 ) -> Result<usize, HttpError> {
     buf.clear();
     loop {
+        arm_read_timeout(r, deadline, cap, started)?;
         let chunk = match r.fill_buf() {
             Ok(c) => c,
             Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
+            Err(ref e) if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock => {
+                return Err(timed_out(started));
+            }
             Err(_) => return Err(HttpError::close()),
         };
         if chunk.is_empty() {
@@ -1352,21 +1470,26 @@ mod tests {
     use super::*;
     use std::io::BufReader as StdBufReader;
 
+    fn test_cfg() -> Config {
+        Config {
+            port: 0,
+            threads: 4,
+            read_timeout: Duration::from_secs(5),
+            write_timeout: Duration::from_secs(5),
+            request_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(5),
+            max_body_bytes: 1024,
+            max_header_bytes: 2048,
+            max_queued_connections: 32,
+        }
+    }
+
     /// Boot a server on an OS-assigned port with a test handler.
     fn boot<F>(handler: F) -> Server
     where
         F: Fn(Request) -> Response + Send + Sync + 'static,
     {
-        let cfg = Config {
-            port: 0,
-            threads: 4,
-            read_timeout: Duration::from_secs(5),
-            write_timeout: Duration::from_secs(5),
-            max_body_bytes: 1024,
-            max_header_bytes: 2048,
-            max_queued_connections: 32,
-        };
-        serve(cfg, handler).expect("bind")
+        serve(test_cfg(), handler).expect("bind")
     }
 
     /// Connect to a running test server.
@@ -1565,6 +1688,46 @@ mod tests {
             head.starts_with("HTTP/1.1 505 HTTP Version Not Supported"),
             "{head}"
         );
+        s.shutdown(Duration::from_secs(2));
+    }
+
+    #[test]
+    fn parser_panic_does_not_kill_the_pool() {
+        let mut cfg = test_cfg();
+        cfg.threads = 1;
+        let s = serve(cfg, ok_handler).expect("bind");
+        for _ in 0..4 {
+            let mut c = connect(&s);
+            c.write_all(b"GET /__panic_worker HTTP/1.1\r\nHost: x\r\n\r\n")
+                .unwrap();
+            c.flush().unwrap();
+            let mut r = StdBufReader::new(c);
+            assert!(read_one(&mut r).is_none());
+        }
+        let (head, body) = round_trip(&s, b"GET /p HTTP/1.1\r\nHost: x\r\n\r\n");
+        assert!(head.starts_with("HTTP/1.1 200 OK"), "{head}");
+        assert_eq!(body, b"GET /p");
+        s.shutdown(Duration::from_secs(2));
+    }
+
+    #[test]
+    fn slow_header_dribble_is_408() {
+        let mut cfg = test_cfg();
+        cfg.threads = 1;
+        cfg.request_timeout = Duration::from_millis(150);
+        cfg.read_timeout = Duration::from_secs(2);
+        let s = serve(cfg, ok_handler).expect("bind");
+        let mut c = connect(&s);
+        c.write_all(b"GET /p HTTP/1.1\r\nHost: x\r\nX-Slow: ").unwrap();
+        c.flush().unwrap();
+        thread::sleep(Duration::from_millis(250));
+        let _ = c.write_all(b"v\r\n\r\n");
+        let mut r = StdBufReader::new(c);
+        let (head, _) = read_one(&mut r).expect("408 response");
+        assert!(head.starts_with("HTTP/1.1 408 Request Timeout"), "{head}");
+        let (head, body) = round_trip(&s, b"GET /p HTTP/1.1\r\nHost: x\r\n\r\n");
+        assert!(head.starts_with("HTTP/1.1 200 OK"), "{head}");
+        assert_eq!(body, b"GET /p");
         s.shutdown(Duration::from_secs(2));
     }
 
