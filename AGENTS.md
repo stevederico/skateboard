@@ -208,11 +208,11 @@ All of these silence the compiler instead of proving correctness:
 
 ### Icons
 
-- Default library: Lucide React (`lucide-react`) — runtime dep of skateboard-ui 4.18+ (hoisted); apps may still declare it
+- Default library: Lucide React (`lucide-react`) — runtime dep of skateboard-ui **5.0** (hoisted); apps should declare it too
 - **Always named-import from `lucide-react`:** `import { Plus, Trash2 } from 'lucide-react'`
-- **Never** import from `@stevederico/skateboard-ui/icons` or `@stevederico/skateboard-ui/icons/*` — that path is gone (4.18+)
-- **Never** use public DynamicIcon — removed in 4.17; shell-only `constantsIcon` resolves `constants.json` icon strings
-- When upgrading an app past ui 4.17: rewrite every `skateboard-ui/icons` (and any leftover `DynamicIcon`) import to a named `lucide-react` import
+- **Never** import from `@stevederico/skateboard-ui/icons` or `@stevederico/skateboard-ui/icons/*` — removed in 5.0 (was 4.18)
+- **Never** use public DynamicIcon — removed in 5.0 (was 4.17); shell-only `constantsIcon` resolves `constants.json` icon strings
+- When migrating from 4.x: rewrite every `skateboard-ui/icons` and `DynamicIcon` import to a named `lucide-react` import (see **Migrating 4.x → 5.0**)
 - Never use emoji as UI icons — use proper icon components (exception: `constants.json` feature icons where the shell renders unknown/legacy values as text)
 - Icon-only buttons must have `aria-label`
 - Standard sizes: 16px inline, 18px buttons, 24px cards, 48px empty states
@@ -459,6 +459,10 @@ skateboard/
 **Vite Configuration** (v1.1+ app-owned):
 Apps own their `vite.config.ts` directly. See [reference implementation](https://github.com/stevederico/skateboard/blob/master/vite.config.ts).
 
+- JSX via Vite's built-in esbuild (`jsx: 'automatic'`) — no `@vitejs/plugin-react-swc`
+- Do **not** pass `vite --force` or set `optimizeDeps.force: true` in normal dev (causes full dep re-bundle every start)
+- Dev edits full-reload the page (no React Fast Refresh plugin)
+
 **Styling:**
 ```css
 /* src/assets/styles.css */
@@ -476,6 +480,8 @@ Apps own their `vite.config.ts` directly. See [reference implementation](https:/
 **Always use the shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui` when building views.** The goal is the standard shadcn design look and feel — clean, consistent, and composable.
 
 **Import path:** `@stevederico/skateboard-ui/shadcn/ui/<component>`
+
+(From skateboard-ui **5.0**, that path is a package `exports` remap onto `ui/` — there are no linker shim files. Same import string for apps.)
 
 **Available components:**
 `accordion`, `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `calendar`, `card`, `checkbox`, `collapsible`, `command`, `dialog`, `drawer`, `dropdown-menu`, `empty`, `field`, `input`, `kbd`, `label`, `pagination`, `popover`, `progress`, `radio-group`, `scroll-area`, `select`, `separator`, `sheet`, `sidebar`, `skeleton`, `slider`, `spinner`, `switch`, `table`, `tabs`, `textarea`, `toggle`, `toggle-group`, `tooltip`
@@ -622,13 +628,114 @@ When working with these libraries, consult the provided documentation before mak
 | Rust std | https://doc.rust-lang.org/std/ |
 | Tailwind CSS v4 | https://raw.githubusercontent.com/tailwindlabs/tailwindcss.com/refs/heads/md-endpoints/llms.txt |
 
+## Agent skill (required reading)
+
+This repo ships **`skills/skateboard/SKILL.md`** — the Cursor/Claude skill for building and upgrading skateboard apps.
+
+**When to use it:** scaffolding, editing views/`constants.json`, choosing shadcn primitives, Rust backend auth/Stripe/SQLite, running `scripts/update-skateboard.js`, fixing template drift, or any task that mentions skateboard / skateboard-ui.
+
+**What agents must do:**
+1. Read `skills/skateboard/SKILL.md` first (and `skills/skateboard/rules/*` for icons/forms/styling/views as needed).
+2. Prefer shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui/*` over raw HTML.
+3. Named-import icons from `lucide-react` only (see Icons below).
+4. Treat `skateboardVersion` as a label — verify the tree (especially `backend/`) matches the template before claiming an upgrade is done.
+5. For upgrades, follow **Migrating 4.x → 5.0** below (and `docs/UPGRADE.md`).
+
+Canonical pins live in this repo’s `package.json` (`version` / `skateboardVersion` / `@stevederico/skateboard-ui`). Refresh the skill metadata when those move.
+
 ## Documentation
 
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@4.26.0
-- skateboard-ui@4.15.0
+- skateboard@5.0.0
+- skateboard-ui@5.0.0
+
+## Migrating 4.x → 5.0 (exact checklist)
+
+**5.0 is a breaking major** for both the boilerplate (`skateboard`) and the shell (`@stevederico/skateboard-ui`). Apps on any **4.x** pin must complete every step below. Do not stamp `skateboardVersion: "5.0.0"` until the checklist is green.
+
+### A. Preconditions
+
+1. Confirm the app is skateboard: `package.json` has `skateboardVersion`.
+2. Clean git tree (commit or stash). Branch: `chore/skateboard-5`.
+3. Note current versions: `skateboardVersion` and `@stevederico/skateboard-ui` in `package.json`.
+
+### B. Boilerplate / Rust backend (if still on Node/Hono or behind on Rust)
+
+4. Refresh the updater from master:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/stevederico/skateboard/master/scripts/update-skateboard.js -o scripts/update-skateboard.js
+   ```
+5. Run: `node scripts/update-skateboard.js --yes`
+   - If it says “Already on latest” but `backend/server.ts` or `backend/package.json` still exists, re-run with `--baseline <real-prior-version>` from git history.
+6. Resolve every `<<<<<<<` conflict. Port custom Hono routes into `backend/src/routes.rs`. Schema lives in `backend/src/db.rs`.
+7. Confirm zero-crate Rust: `backend/Cargo.toml` has empty `[dependencies]`. Backend commands are `cargo run` / `cargo test --locked` — not `npm run server`.
+
+### C. Install skateboard-ui 5.0.0
+
+8. Install exact pin (must match this template):
+   ```bash
+   npm install @stevederico/skateboard-ui@5.0.0 --save-exact
+   ```
+9. `npm run verify:ui` (or compare `package.json` vs `node_modules/@stevederico/skateboard-ui/package.json`). Declared must equal installed. Commit `package.json` **and** `package-lock.json` together.
+
+### D. Breaking frontend API changes (ui 5.0)
+
+10. **Icons — rewrite all imports**
+    ```bash
+    # Find call sites
+    rg -n "skateboard-ui/icons|DynamicIcon" src
+    ```
+    - Replace `import { X } from '@stevederico/skateboard-ui/icons'` (and `/icons/X`) with `import { X } from 'lucide-react'`.
+    - Delete every `import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon'` — use a named Lucide icon in app code. Shell still resolves `constants.json` `icon` strings privately (`constantsIcon`); apps do not get a public dynamic resolver.
+    - Ensure `lucide-react` is listed in app `dependencies` (boilerplate ships it; ui 5.0 also depends on it).
+
+11. **Keep shadcn import paths**
+    - Continue using `@stevederico/skateboard-ui/shadcn/ui/<name>`.
+    - Do **not** rewrite to `…/ui/<name>` unless you want to — both work; `shadcn/ui/*` is remapped via package `exports` (linker shim files are gone).
+
+12. **Routing**
+    - Apps must **not** depend on `react-router` / `react-router-dom` directly for shell navigation. Use `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`.
+    - ui 5.0 pins `react-router@7.18.3` (CVE-2026-55685). Do not downgrade below 7.18.0.
+
+13. **Removed Utilities (already gone in late 4.x — confirm)**
+    - No `useForm`, `logEvent`, or public `setSidebarVisible` / `setTabBarVisible` (use `showSidebar` / `hideSidebar` / `showTabBar` / `hideTabBar` if needed).
+
+### E. Vite / frontend toolchain (boilerplate 5.0)
+
+14. **Drop `@vitejs/plugin-react-swc`**
+    - Remove from `package.json` `devDependencies` and from `vite.config.ts` plugins.
+    - Keep Vite esbuild JSX: `esbuild: { jsx: 'automatic', jsxImportSource: 'react' }`.
+    - Expect **full page reload** on edit (no React Fast Refresh plugin).
+
+15. **Drop forced dep re-optimize**
+    - Scripts: `vite --mode development` — **not** `vite --force`.
+    - Remove `optimizeDeps.force: true` from `vite.config.ts`.
+
+16. **Drop leftover coverage scripts** if present: `test:coverage`, `test:coverage:build`.
+
+17. Align `vite.config.ts` / `vite.plugins.ts` with the template via the updater (or copy from the reference repo).
+
+### F. Verify
+
+18. `npm run typecheck`
+19. `npm run test` (frontend script tests)
+20. `cd backend && cargo test --locked`
+21. Smoke: `npm run start` + `cd backend && cargo run` — sign-in, one API round-trip, checkout/portal only if Stripe env is set.
+22. Optional live Stripe webhook: `backend/scripts/stripe-cli-replay.sh` (never CI).
+
+### G. Stamp versions
+
+23. Set `version` and `skateboardVersion` in `package.json` to **5.0.0** (must be equal).
+24. Update the app’s `CHANGELOG.md` / docs that name old versions.
+25. Commit on the branch. Do not push/merge without approval.
+
+### What 5.0 does *not* require
+
+- No rewrite of `constants.json` shape (icon **values** stay Lucide name strings).
+- No change to `@stevederico/skateboard-ui/shadcn/ui/*` import strings for apps.
+- Calendar / CommandMenu / TextView / mid-tier primitives (accordion, progress, …) remain available.
 
 ## Updating from Skateboard Boilerplate
 
@@ -636,13 +743,16 @@ This project was created from the skateboard boilerplate. The `skateboardVersion
 
 **Reference repo:** https://github.com/stevederico/skateboard
 
-### Update Workflow
+For **4.x → 5.0**, use the checklist above (not only the short workflow).
+
+### Update Workflow (general)
 
 1. Check `skateboardVersion` in package.json against latest release
 2. Review `skateboard-changelog.md` in the reference repo for changes
-3. Update skateboard-ui: `npm install @stevederico/skateboard-ui@latest`
-4. Compare and update boilerplate files
-5. Update `skateboardVersion` field after applying changes
+3. Update skateboard-ui to the pin in the reference `package.json`: `npm install @stevederico/skateboard-ui@<pin> --save-exact`
+4. Run `scripts/update-skateboard.js` for vendored boilerplate (especially `backend/`)
+5. Apply the breaking-change steps for that release (for 5.0: section **Migrating 4.x → 5.0**)
+6. Update `skateboardVersion` only after verify is green
 
 **CRITICAL — never bump a version in `package.json` without installing it.** Editing the
 dependency string (or running `npm install <pkg>@x` then reverting node_modules) leaves the

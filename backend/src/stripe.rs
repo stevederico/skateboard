@@ -360,12 +360,165 @@ pub struct PortalSession {
     pub id: String,
 }
 
+/// In-memory Stripe stand-in used by route tests. Never compiled into release.
+#[cfg(test)]
+#[derive(Default)]
+pub struct StripeMock {
+    /// `cus_…` → email.
+    pub customers: std::collections::HashMap<String, String>,
+    /// `sub_…` → raw subscription JSON object body.
+    pub subscriptions: std::collections::HashMap<String, String>,
+    /// Price lookup_key → `price_…` id.
+    pub prices: std::collections::HashMap<String, String>,
+    /// Fixed Checkout Session response.
+    pub checkout: Option<CheckoutSession>,
+    /// Fixed Billing Portal Session response.
+    pub portal: Option<PortalSession>,
+}
+
+#[cfg(test)]
+impl StripeMock {
+    fn handle_get(&self, url: &str) -> Result<Json, StripeError> {
+        if let Some(rest) = url.strip_prefix(&format!("{API_BASE}/v1/customers/")) {
+            let id = rest.split('?').next().unwrap_or(rest);
+            let id = percent_decode_basic(id);
+            return match self.customers.get(&id) {
+                Some(email) => Ok(json::obj([("id", json::s(id)), ("email", json::s(email.clone()))])),
+                None => Err(StripeError::Http {
+                    status: 404,
+                    code: Some("resource_missing".into()),
+                    message: format!("No such customer: '{id}'"),
+                }),
+            };
+        }
+        if let Some(rest) = url.strip_prefix(&format!("{API_BASE}/v1/subscriptions/")) {
+            let id = rest.split('?').next().unwrap_or(rest);
+            let id = percent_decode_basic(id);
+            return match self.subscriptions.get(&id) {
+                Some(body) => json::parse(body.as_bytes()).map_err(|e| StripeError::Parse(e.to_string())),
+                None => Err(StripeError::Http {
+                    status: 404,
+                    code: Some("resource_missing".into()),
+                    message: format!("No such subscription: '{id}'"),
+                }),
+            };
+        }
+        if url.starts_with(&format!("{API_BASE}/v1/prices?")) {
+            // lookup_keys[0]=KEY — form-encoded brackets become %5B0%5D
+            let key = url
+                .split("lookup_keys%5B0%5D=")
+                .nth(1)
+                .or_else(|| url.split("lookup_keys[0]=").nth(1))
+                .map(|s| s.split('&').next().unwrap_or(s))
+                .map(percent_decode_basic)
+                .unwrap_or_default();
+            return match self.prices.get(&key) {
+                Some(price_id) => Ok(json::obj([(
+                    "data",
+                    Json::Arr(vec![json::obj([("id", json::s(price_id.clone()))])]),
+                )])),
+                None => Ok(json::obj([("data", Json::Arr(vec![]))])),
+            };
+        }
+        Err(StripeError::Transport(format!("unmocked GET {url}")))
+    }
+
+    fn handle_post(&self, url: &str, _form: &str) -> Result<Json, StripeError> {
+        if url == format!("{API_BASE}/v1/checkout/sessions") {
+            let Some(session) = &self.checkout else {
+                return Err(StripeError::Transport("unmocked checkout session".into()));
+            };
+            return Ok(json::obj([
+                ("id", json::s(session.id.clone())),
+                (
+                    "url",
+                    session
+                        .url
+                        .as_ref()
+                        .map(|u| json::s(u.clone()))
+                        .unwrap_or(Json::Null),
+                ),
+                (
+                    "customer",
+                    session
+                        .customer
+                        .as_ref()
+                        .map(|c| json::s(c.clone()))
+                        .unwrap_or(Json::Null),
+                ),
+            ]));
+        }
+        if url == format!("{API_BASE}/v1/billing_portal/sessions") {
+            let Some(session) = &self.portal else {
+                return Err(StripeError::Transport("unmocked portal session".into()));
+            };
+            return Ok(json::obj([
+                ("id", json::s(session.id.clone())),
+                (
+                    "url",
+                    session
+                        .url
+                        .as_ref()
+                        .map(|u| json::s(u.clone()))
+                        .unwrap_or(Json::Null),
+                ),
+            ]));
+        }
+        Err(StripeError::Transport(format!("unmocked POST {url}")))
+    }
+}
+
+/// Decode the small set of percent-escapes used in Stripe path/query tests.
+#[cfg(test)]
+fn percent_decode_basic(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let h = |c: u8| -> Option<u8> {
+                match c {
+                    b'0'..=b'9' => Some(c - b'0'),
+                    b'a'..=b'f' => Some(c - b'a' + 10),
+                    b'A'..=b'F' => Some(c - b'A' + 10),
+                    _ => None,
+                }
+            };
+            if let (Some(hi), Some(lo)) = (h(bytes[i + 1]), h(bytes[i + 2])) {
+                out.push((hi << 4) | lo);
+                i += 3;
+                continue;
+            }
+        }
+        if bytes[i] == b'+' {
+            out.push(b' ');
+        } else {
+            out.push(bytes[i]);
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Build a valid `Stripe-Signature` header for `payload` (route / integration tests).
+///
+/// Uses the real HMAC scheme so [`construct_event`] accepts the request.
+pub fn sign_webhook_header(secret: &str, payload: &[u8], timestamp: i64) -> String {
+    format!(
+        "t={timestamp},v1={}",
+        expected_signature(secret, &timestamp.to_string(), payload)
+    )
+}
+
 /// Authenticated Stripe REST client.
 ///
 /// Holds the secret key. `Debug` is implemented by hand to print
 /// `StripeClient { .. }`, so the key cannot escape through logging.
 pub struct StripeClient {
     secret_key: String,
+    /// Test-only stand-in for libcurl. Production builds omit this field.
+    #[cfg(test)]
+    mock: Option<std::sync::Arc<std::sync::Mutex<StripeMock>>>,
 }
 
 impl std::fmt::Debug for StripeClient {
@@ -378,7 +531,20 @@ impl std::fmt::Debug for StripeClient {
 impl StripeClient {
     /// Build a client from a secret key (`sk_…` or a restricted `rk_…`).
     pub fn new(secret_key: String) -> Self {
-        StripeClient { secret_key }
+        StripeClient {
+            secret_key,
+            #[cfg(test)]
+            mock: None,
+        }
+    }
+
+    /// Build a client that never touches the network (unit / route tests only).
+    #[cfg(test)]
+    pub fn with_mock(mock: StripeMock) -> Self {
+        StripeClient {
+            secret_key: "sk_test_mock".into(),
+            mock: Some(std::sync::Arc::new(std::sync::Mutex::new(mock))),
+        }
     }
 
     /// Fetch a customer and return its lowercase email.
@@ -509,6 +675,13 @@ impl StripeClient {
 
     /// Issue an authenticated GET and decode the JSON body.
     fn get(&self, url: &str) -> Result<Json, StripeError> {
+        #[cfg(test)]
+        if let Some(mock) = &self.mock {
+            let guard = mock
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            return guard.handle_get(url);
+        }
         let auth = self.auth_header();
         let headers: Vec<(&str, &str)> = vec![
             ("Authorization", auth.as_str()),
@@ -530,6 +703,13 @@ impl StripeClient {
         form: &str,
         idempotency_key: Option<&str>,
     ) -> Result<Json, StripeError> {
+        #[cfg(test)]
+        if let Some(mock) = &self.mock {
+            let guard = mock
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            return guard.handle_post(url, form);
+        }
         let auth = self.auth_header();
         let key = match idempotency_key {
             Some(k) => k.to_string(),

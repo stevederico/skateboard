@@ -15,6 +15,17 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.0.0
+
+  Major: skateboard-ui 5.0.0
+  Drop vite force reload
+  Drop SWC react plugin
+  Add lucide-react dependency
+  Drop coverage scripts
+  Add mocked Stripe route tests
+  Add stripe-cli replay script
+  Document 4.x to 5.0 migration
+
 4.26.0
 
   Drop vite force reload

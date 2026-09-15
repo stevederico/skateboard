@@ -58,8 +58,8 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 │  ├── Utilities                                       │
 │  │   ├── API request handlers                       │
 │  │   ├── Auth utilities                             │
-│  │   ├── Hooks (useListData, useForm)              │
-│  │   └── Vite config generator                     │
+│  │   ├── Hooks (useListData)                        │
+│  │   └── (Vite config lives in the app)             │
 │  │                                                   │
 │  └── Base Theme (styles.css)                        │
 │                                                      │
@@ -388,7 +388,9 @@ export default defineConfig({
 });
 ```
 
-See the reference implementation for full config with SEO plugins: [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
+See the reference implementation for full config with SEO plugins: [skateboard/vite.config.ts](https://github.com/stevederico/skateboard/blob/master/vite.config.ts)
+
+JSX is handled by Vite's esbuild transform (`esbuild.jsx: 'automatic'`). There is no `@vitejs/plugin-react-swc`. Do not use `vite --force` or `optimizeDeps.force: true` for everyday dev.
 
 ### API Reference
 
@@ -524,43 +526,6 @@ return <List items={data} />;
   loading: boolean,         // Loading state
   error: string | null,     // Error message
   refetch: () => Promise    // Function to refetch data
-}
-```
-
-**useForm(initialValues, onSubmit)**
-
-Form state management with validation and submission handling.
-
-```javascript
-const { values, handleChange, handleSubmit, reset, submitting, error } = useForm(
-  { name: '', email: '' },
-  async (values) => {
-    await apiRequest('/users', {
-      method: 'POST',
-      body: JSON.stringify(values)
-    });
-  }
-);
-
-return (
-  <form onSubmit={handleSubmit}>
-    <input value={values.name} onChange={handleChange('name')} />
-    <input value={values.email} onChange={handleChange('email')} />
-    <button disabled={submitting}>Submit</button>
-    {error && <div>{error}</div>}
-  </form>
-);
-```
-
-**Returns**:
-```typescript
-{
-  values: object,                         // Current form values
-  handleChange: (field) => (e) => void,   // Change handler creator
-  handleSubmit: (e) => Promise,           // Submit handler
-  reset: () => void,                      // Reset to initial values
-  submitting: boolean,                    // Submission state
-  error: string | null                    // Error message
 }
 ```
 
@@ -777,16 +742,22 @@ createSkateboardApp({ constants, appRoutes });
 
 #### 5. Override Only What You Need
 
-**Good** (minimal override):
+**Good** (override pieces of the app-owned `vite.config.ts`):
 ```javascript
-export default getSkateboardViteConfig({
+import { defineConfig } from 'vite';
+import tailwindcss from '@tailwindcss/vite';
+// …import local plugins from './vite.plugins.ts'
+
+export default defineConfig({
+  plugins: [tailwindcss() /* … */],
+  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   server: { port: 3000 }
 });
 ```
 
-**Avoid** (copy entire config):
+**Avoid** (copy a giant unrelated config, or reintroduce `@vitejs/plugin-react-swc` / `vite --force` without a reason):
 ```javascript
-// Don't duplicate the entire config, just override what changes
+// Prefer small, intentional overrides — JSX already works via esbuild
 ```
 
 ### Extension Points
@@ -1690,11 +1661,26 @@ For all platforms, configure your Stripe webhook:
 1. Go to [dashboard.stripe.com](https://dashboard.stripe.com) → Developers → Webhooks
 2. Click "Add endpoint"
 3. URL: `https://your-backend-url/api/payment`
-4. Select events:
+4. Select events (match `process_webhook` in `backend/src/routes.rs`):
+   - `checkout.session.completed`
    - `customer.subscription.created`
-   - `customer.subscription.deleted`
    - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.payment_failed`
 5. Copy the signing secret to `STRIPE_ENDPOINT_SECRET`
+
+**Tests:** `cargo test` covers Stripe signature verification, form encoding, circuit breaker, webhook-event DB idempotency, portal customer ownership, and **mocked** route integration for `POST /api/payment` (all handled event types + idempotency) and `POST /api/checkout` (session create, unknown lookup key, email mismatch). Mock transport never calls the network.
+
+**Live Stripe is opt-in only — not CI.** The ignored test `stripe::tests::live_customer_lookup` needs `STRIPE_TEST_KEY` + `STRIPE_TEST_CUSTOMER`. For webhook replay against a local server:
+
+```bash
+cd backend && cargo run   # terminal 1
+./scripts/stripe-cli-replay.sh   # terminal 2 (requires stripe CLI)
+# or: stripe listen --forward-to localhost:8000/api/payment
+#     stripe trigger checkout.session.completed
+```
+
+Do not put live Stripe keys or stripe-cli into GitHub Actions.
 
 ---
 

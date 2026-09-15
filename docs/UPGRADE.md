@@ -5,50 +5,38 @@ Two ways to bring an existing app up to the latest skateboard template:
 1. **Interactive** — from the app root: `node scripts/update-skateboard.js` (3-way merge, prompts per file).
 2. **Agent-driven** — paste the prompt below into Claude Code from the app root and let it run the whole upgrade, including conflict resolution and verification.
 
-4.17.0 replaces the Node/Hono backend with zero-crate Rust. The updater deletes `backend/server.ts`, adapters, and `backend/package.json`. Port any custom routes into `backend/src/routes.rs`. Frontend `src/` is unchanged.
+**4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
-## Agent Prompt
+4.17.0 replaced the Node/Hono backend with zero-crate Rust. The updater deletes `backend/server.ts`, adapters, and `backend/package.json`. Port any custom routes into `backend/src/routes.rs`.
+
+## Agent Prompt (4.x → 5.0)
 
 Copy everything in the block below into Claude Code from the app's root directory:
 
 ```text
-Upgrade this skateboard app to the latest skateboard template. Follow these steps exactly:
+Upgrade this skateboard app from 4.x to skateboard 5.0.0 + @stevederico/skateboard-ui@5.0.0.
 
-1. PRECONDITIONS
-   - Confirm this is a skateboard app: package.json has a "skateboardVersion" field. Stop if not.
-   - Require a clean git tree (commit or stash anything pending), then create a branch: chore/skateboard-update.
+Follow AGENTS.md section "Migrating 4.x → 5.0 (exact checklist)" in the skateboard reference repo exactly:
+https://raw.githubusercontent.com/stevederico/skateboard/master/AGENTS.md
 
-2. GET THE LATEST UPDATER (it is self-describing and safe to overwrite)
-   curl -fsSL https://raw.githubusercontent.com/stevederico/skateboard/master/scripts/update-skateboard.js -o scripts/update-skateboard.js
+Summary of required work (do all of it):
+1. Clean git tree; branch chore/skateboard-5.
+2. Refresh scripts/update-skateboard.js from skateboard master; run with --yes (use --baseline if needed).
+3. Resolve conflicts; ensure zero-crate Rust backend (empty [dependencies]); port any Hono routes to backend/src/routes.rs.
+4. npm install @stevederico/skateboard-ui@5.0.0 --save-exact && npm run verify:ui.
+5. Rewrite all @stevederico/skateboard-ui/icons and DynamicIcon imports to named lucide-react imports; add lucide-react dependency if missing.
+6. Keep @stevederico/skateboard-ui/shadcn/ui/* imports (exports remap in 5.0).
+7. Drop @vitejs/plugin-react-swc; use Vite esbuild jsx automatic; drop vite --force and optimizeDeps.force.
+8. Drop test:coverage* scripts if present.
+9. npm run typecheck && npm run test && (cd backend && cargo test --locked). Smoke sign-in + one API call.
+10. Set version and skateboardVersion to 5.0.0 (equal). Update app CHANGELOG. Commit on the branch; do not push without approval.
 
-3. RUN IT
-   node scripts/update-skateboard.js --yes
-   - If it prints "Already on latest" but backend/server.ts still exists (a previous updater
-     stamped skateboardVersion without migrating), find the real prior version with
-     `git log -p -- package.json | grep skateboardVersion` and re-run:
-     node scripts/update-skateboard.js --yes --baseline <that-version>
-
-4. RESOLVE CONFLICTS
-   - Search the repo for "<<<<<<<" markers and resolve each one: keep the app's local
-     behavior, adopt the template's new types/structure. Show me anything ambiguous.
-
-5. INSTALL + VERIFY (all must pass before committing)
-   - npm install   (never bypass the npm min-release-age filter)
-   - npm run typecheck — frontend only. App src/*.jsx files are NOT typechecked; leave them.
-   - npm run test — cargo test for the Rust backend plus frontend tests. Never change
-     test expectations to make them pass; fix the code.
-   - npm run start and `cd backend && cargo run` — smoke-test: app boots, sign-in works, one API round-trip succeeds.
-
-6. COMMIT on the branch with a message describing the template version jump
-   (old skateboardVersion → new). Do not push or merge without my approval.
-
-Throughout: never touch src/constants.json, src/components/*, src/assets/styles.css,
-backend/config.json, or .env files beyond what the updater itself merged.
+Never touch src/constants.json, backend/config.json, or .env beyond what the updater merged. Prefer app-side AGENTS.md on conflicts.
 ```
 
 ## Notes
 
-- The updater never touches app-owned files (`src/constants.json`, `src/components/*`, `src/main.jsx`, `src/assets/styles.css`, `backend/config.json`, `.env*`).
+- The updater never touches app-owned files (`src/constants.json`, `src/components/*`, `src/main.jsx`, `src/assets/styles.css`, `backend/config.json`, `.env*`). Icon **rewrites inside** `src/components/*` are still required for 5.0 — do those manually (updater will not rewrite app imports).
 - skateboard-ui ≥3.10.0 ships its own TypeScript declarations, so the old `src/skateboard-ui.d.ts` shim is deleted on upgrade — a stale copy would shadow the package's real types.
 - `--baseline <version>` forces the 3-way merge baseline when `skateboardVersion` is wrong or was stamped prematurely. It also skips the "Already on latest" early-exit, so you can re-sync an app whose version was stamped without the files actually migrating.
 - If any file ends declined, conflicted, or errored, the updater does **not** stamp `skateboardVersion` — resolve the conflicts, then re-run with `--baseline <old-version>` to finish.

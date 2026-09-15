@@ -68,14 +68,15 @@ Everything you need to ship a production-ready app:
 - **Legal pages** (Terms, Privacy, EULA)
 
 ### 🛠️ **Developer Experience**
-- **Hot Module Replacement** with Vite 8
+- **Vite 8** with esbuild JSX (full reload on edit; no `@vitejs/plugin-react-swc`)
 - **Zero-crate Rust backend** - empty `[dependencies]`; system libsqlite3 + libcurl
 - **SQLite only** - no Postgres, no Mongo
 - **constants.json** - customize everything in one place
 - **TypeScript without a build step** - strict mode, Node 24 runs `.ts` natively, Vite compiles `.tsx`
 - **Typecheck gates** - `npm run typecheck` for the frontend; `cargo test` for the backend
-- **Built-in hooks** - useListData, useForm for common patterns
+- **Built-in hooks** - `useListData` for list fetching
 - **API utilities** - apiRequest with automatic auth and error handling
+- **Icons** - named imports from `lucide-react` (no `@stevederico/skateboard-ui/icons`)
 
 <br />
 
@@ -177,13 +178,13 @@ Skateboard is intentionally lean — current footprint (counting what ships at r
 | | Frontend runtime | Frontend dev | Backend crates |
 |---|---|---|---|
 | Before (v2.x) | 12 | 4 | 7 |
-| **Now** | **3** | **8** | **0** |
+| **Now** | **4** | **7** | **0** |
 
 The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, leftover bcrypt hashes still verify then rehash. SQLite via system `libsqlite3`. Stripe via system `libcurl`. Do not `cargo add`.
 
-The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). That package depends on `react-router` (pinned); peers are `react` and `react-dom`. Apps do not declare `react-router`. Navigate with `useSafeNavigate()`.
+The frontend pulls UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). That package depends on `react-router` and (from 4.18+) `lucide-react` (pinned); peers are `react` and `react-dom`. Apps do not declare `react-router`. Navigate with `useSafeNavigate()`. Named-import icons from `lucide-react` (boilerplate also lists it). There is no `@stevederico/skateboard-ui/icons` path.
 
-Frontend dev deps are the Vite/Tailwind toolchain plus `typescript` + `@types/*` for the typecheck gate. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` directly.
+Frontend dev deps are Vite + Tailwind (`@tailwindcss/vite`) plus `typescript` + `@types/*` for the typecheck gate. No `@vitejs/plugin-react-swc`. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` via esbuild.
 
 <br />
 
@@ -194,10 +195,12 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v4.15.0 | Application Shell, Components, Theming |
-| **Vite** | v8 | Build Tool & Dev Server (Oxc/Rolldown) |
+| **skateboard** | v5.0.0 | Boilerplate (this repo) |
+| **skateboard-ui** | v5.0.0 | Application Shell, Components, Theming |
+| **Vite** | v8 | Build Tool & Dev Server (esbuild JSX) |
 | **Tailwind CSS** | v4.3+ | Styling |
-| **React Router** | v7.15+ | Routing |
+| **React Router** | v7.18+ | Routing (via skateboard-ui) |
+| **lucide-react** | v0.546+ | Icons (named imports) |
 | **Rust** | 1.95 | Zero-crate backend |
 | **TypeScript** | v7 | Frontend types (strict, no build step) |
 | **Node.js** | v24+ | Frontend toolchain |
@@ -251,7 +254,7 @@ node scripts/update-skateboard.js --yes    # apply all without prompts
 
 Updates only files in the safe allowlist (`backend/src/*`, `vite.config.ts`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
 
-See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. 4.17.0 replaced the Node/Hono backend with zero-crate Rust — the updater deletes the old JS files. Backend commands are `cargo run` / `cargo test`, not npm.
+See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. **5.0.0** is a breaking major — see [AGENTS.md → Migrating 4.x → 5.0](AGENTS.md). 4.17.0 replaced the Node/Hono backend with zero-crate Rust. Backend commands are `cargo run` / `cargo test`, not npm. skateboard-ui **5.0** drops `@stevederico/skateboard-ui/icons` and public DynamicIcon — apps named-import from `lucide-react`; `shadcn/ui/*` imports still work (package exports remap to `ui/`).
 
 <br />
 
