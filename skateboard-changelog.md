@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.25.0
+
+  Note skateboard-ui 4.16.0 cuts
+  Soften component count copy
+
 4.24.0
 
   Drop app react-router

@@ -39,7 +39,7 @@ Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.c
 
 **Application Shell** in three parts:
 
-1. **Shell** (`@stevederico/skateboard-ui`) — routing, context, auth UI, 50+ components
+1. **Shell** (`@stevederico/skateboard-ui`) — routing, context, auth UI, shadcn-style UI primitives
 2. **Content** (your code) — views + business logic under `src/components/`
 3. **Config** (`src/constants.json`) — app-specific configuration
 
