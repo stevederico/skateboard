@@ -15,6 +15,12 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.5.0
+
+  Fix chunked body overflow DoS
+  Fix X-Forwarded-For hop trust
+  TRUST_PROXY is a hop count
+
 5.4.0
 
   Pin skateboard-ui 5.1

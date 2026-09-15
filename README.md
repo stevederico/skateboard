@@ -168,9 +168,9 @@ To enable payments, configure your Stripe products:
 
 ## 📈 Scaling Notes
 
-CSRF tokens and sign-in lockouts live in process memory. That is fine for one instance.
+CSRF tokens, sign-in lockouts, and the auth rate limiter live in process memory. That is fine for one instance.
 
-**Multiple instances:** move those stores to SQLite or another shared store. There is no rate limiter in this backend.
+**Multiple instances:** move those stores to SQLite or another shared store. Until then each instance counts separately, so the effective auth rate limit is the per-instance limit times the instance count.
 
 See [Guide → Architecture](docs/GUIDE.md#architecture) for details.
 

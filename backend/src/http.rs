@@ -1021,11 +1021,20 @@ fn read_chunked(
                 }
             }
         }
-        if out.len() + size > cfg.max_body_bytes {
+        // `size` is attacker-controlled and unbounded; the release profile has
+        // overflow-checks off, so a wrapping `out.len() + size` would slip past
+        // this gate and then panic on the slice index below.
+        if size > cfg.max_body_bytes {
             return Err(HttpError::new(413, "Payload Too Large"));
         }
         let start = out.len();
-        out.resize(start + size, 0);
+        let end = start
+            .checked_add(size)
+            .ok_or_else(|| HttpError::new(413, "Payload Too Large"))?;
+        if end > cfg.max_body_bytes {
+            return Err(HttpError::new(413, "Payload Too Large"));
+        }
+        out.resize(end, 0);
         reader
             .read_exact(&mut out[start..])
             .map_err(|_| HttpError::close())?;
@@ -1492,6 +1501,36 @@ mod tests {
     fn oversized_body_is_413() {
         let s = boot(ok_handler);
         let raw = b"POST /p HTTP/1.1\r\nHost: x\r\nContent-Length: 99999\r\n\r\n";
+        let (head, _) = round_trip(&s, raw);
+        assert!(head.starts_with("HTTP/1.1 413 Payload Too Large"), "{head}");
+        s.shutdown(Duration::from_secs(2));
+    }
+
+    #[test]
+    fn wrapping_chunk_size_is_413_and_all_workers_survive() {
+        // `10 + (2^64 - 6)` wraps to 4 with overflow-checks off, which used to
+        // slip past the size gate, shrink the buffer, and panic on the slice
+        // index — outside catch_unwind, so it unwound the worker itself. Enough
+        // of these took every worker down and dropped the listener.
+        let s = boot(ok_handler);
+        let raw = b"POST /p HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n\
+                    a\r\n0123456789\r\nfffffffffffffffa\r\n";
+        for _ in 0..8 {
+            let (head, _) = round_trip(&s, raw);
+            assert!(head.starts_with("HTTP/1.1 413 Payload Too Large"), "{head}");
+        }
+        // The listener is still accepting and the pool still has workers.
+        let (head, body) = round_trip(&s, b"GET /p HTTP/1.1\r\nHost: x\r\n\r\n");
+        assert!(head.starts_with("HTTP/1.1 200 OK"), "{head}");
+        assert_eq!(body, b"GET /p");
+        s.shutdown(Duration::from_secs(2));
+    }
+
+    #[test]
+    fn chunk_size_over_the_body_cap_is_413() {
+        let s = boot(ok_handler);
+        let raw = b"POST /p HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n\
+                    ffff\r\n";
         let (head, _) = round_trip(&s, raw);
         assert!(head.starts_with("HTTP/1.1 413 Payload Too Large"), "{head}");
         s.shutdown(Duration::from_secs(2));
