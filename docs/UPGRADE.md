@@ -7,6 +7,18 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.5.0 — security, upgrade promptly.** Fixes an unauthenticated remote DoS: a
+`Transfer-Encoding: chunked` chunk size could overflow the body-size check
+(release builds have overflow checks off), panicking the worker outside
+`catch_unwind` — a handful of requests took every worker down and dropped the
+listener until restart. Also fixes `X-Forwarded-For` trust: `TRUST_PROXY` is now
+the **number of trusted proxy hops** rather than an on/off flag, and the client
+IP is read Nth-from-last instead of leftmost. `TRUST_PROXY=1` keeps working
+unchanged for a single proxy; set it to your real hop count if you run more, and
+leave it unset when the process is exposed directly. Previously the leftmost hop
+was client-supplied, so rotating the header bypassed both the auth rate limit and
+the account lockout.
+
 **5.4.0.** Pin `@stevederico/skateboard-ui@5.1.0`. Move legal bodies out of
 `constants.json` into `src/legal.json` and pass `loadLegal: () => import('./legal.json')`
 to `createSkateboardApp`, with `hasTermsOfService` / `hasPrivacyPolicy` / `hasEULA` /
