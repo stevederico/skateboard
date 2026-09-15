@@ -1,11 +1,11 @@
 <div align="center">
-  <a href="#" />
+  <a href="https://github.com/stevederico/skateboard">
     <img alt="Skateboard - Ship your React app in minutes" width="40%" src="https://github.com/user-attachments/assets/b7f2b098-503b-4439-8454-7eb45ae82307">
   </a>
   </div>
 
   <p align="center" style="margin-top: 40px; margin-bottom: 5px;">
-    <img src="public/icons/icon.png" width="60" height="60" alt="Skateboard Logo">
+    <img src="public/icons/icon.svg" width="60" height="60" alt="Skateboard Logo">
   </p>
   <h1 align="center" style="border-bottom: none; margin-bottom: 0;">Skateboard</h1>
   <h3 align="center" style="margin-top: 0; font-weight: normal;">
@@ -13,14 +13,16 @@
   </h3>
 
   <p align="center">
-    <a href="https://stevederico.github.io/skateboard/"><strong>📖 Documentation</strong></a>
+    <a href="https://stevederico.github.io/skateboard/"><strong>Documentation</strong></a>
   </p>
 
 </div>
 
+Replace `public/icons/icon.svg`, `icon-192.png`, `icon-512.png`, and `og.png` when branding your app (favicon, PWA, Open Graph).
+
 <br />
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 npx create-skateboard-app
@@ -198,8 +200,8 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.3.0 | Boilerplate (this repo) |
-| **skateboard-ui** | v5.0.0 | Application Shell, Components, Theming |
+| **skateboard** | v5.4.0 | Boilerplate (this repo) |
+| **skateboard-ui** | v5.1.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (esbuild JSX) |
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.18+ | Routing (via skateboard-ui) |
@@ -212,35 +214,31 @@ Built with the latest and greatest:
 
 <br />
 
-## 📚 Architecture
+## Architecture
 
-Skateboard uses an **Application Shell Architecture** where the framework (skateboard-ui) provides structure and your app provides content.
+Application Shell: **skateboard-ui** owns routing, auth, layout, and theming; your app
+supplies routes, components, and `constants.json`. Full write-up:
+[docs/GUIDE.md](docs/GUIDE.md#architecture).
 
-**Your app in 3 parts:**
-1. **Shell** (skateboard-ui) - Routing, auth, context, utilities
-2. **Content** (your code) - Components and business logic
-3. **Config** (constants.json) - App-specific settings
-
-**Example main.tsx** (complete app):
 ```typescript
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
 import constants from './constants.json';
 import HomeView from './components/HomeView';
 
-const appRoutes = [
-  { path: 'home', element: <HomeView /> }
-];
-
-createSkateboardApp({ constants, appRoutes });
+createSkateboardApp({
+  constants,
+  appRoutes: [{ path: 'home', element: <HomeView /> }],
+  loadLegal: () => import('./legal.json'),
+});
 ```
 
-That's it! The shell handles routing, auth, layout, landing page, sign in/up, settings, payment, and all legal pages.
+<br />
 
 **Learn more:** [Documentation site](https://stevederico.github.io/skateboard/) for guides, or [docs/GUIDE.md](docs/GUIDE.md) for the consolidated reference (Architecture, API, Schema, Deployment, Migration).
 
 <br />
 
-## 🚀 Deployment
+## Deployment
 
 See [Guide → Deployment](docs/GUIDE.md#deployment) for step-by-step instructions on deploying to your preferred platform.
 
@@ -257,11 +255,22 @@ node scripts/update-skateboard.js --yes    # apply all without prompts
 
 Updates only files in the safe allowlist (`backend/src/*`, `vite.config.ts`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
 
-See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. **5.0.0** is a breaking major — see [AGENTS.md → Migrating 4.x → 5.0](AGENTS.md#migrating-4x--50-exact-checklist). 4.17.0 replaced the Node/Hono backend with zero-crate Rust. Backend commands are `cargo run` / `cargo test`, not npm. skateboard-ui **5.0** drops `@stevederico/skateboard-ui/icons` and public DynamicIcon — apps named-import from `lucide-react`; `shadcn/ui/*` imports still work (package exports remap to `ui/`).
+See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. **5.0.0** is a breaking major — see [AGENTS.md → Migrating 4.x → 5.0](AGENTS.md#migrating-4x-50-exact-checklist).
 
 <br />
 
-## 🤝 Contributing
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
+
+- Frontend: `npm ci`, `npm run build`, `npm run test`
+- Backend: `cargo test --locked` in `backend/`
+
+Node **24** matches `package.json` `engines`.
+
+<br />
+
+## Contributing
 
 We love contributions!
 

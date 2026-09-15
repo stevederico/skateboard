@@ -175,7 +175,8 @@ describe('dynamicManifestPlugin', () => {
     assert.equal(manifest.description, 'Try Something New');
     assert.equal(manifest.start_url, '/app');
     assert.deepEqual(manifest.icons, [
-      { src: '/icons/icon.png', sizes: '600x600', type: 'image/png', purpose: 'any maskable' }
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
     ]);
     assert.equal(manifest.display, 'standalone');
   });

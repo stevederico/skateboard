@@ -5,7 +5,13 @@ Two ways to bring an existing app up to the latest skateboard template:
 1. **Interactive** — from the app root: `node scripts/update-skateboard.js` (3-way merge, prompts per file).
 2. **Agent-driven** — paste the prompt below into Claude Code from the app root and let it run the whole upgrade, including conflict resolution and verification.
 
-**4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x--50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
+**4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
+
+**5.4.0.** Pin `@stevederico/skateboard-ui@5.1.0`. Move legal bodies out of
+`constants.json` into `src/legal.json` and pass `loadLegal: () => import('./legal.json')`
+to `createSkateboardApp`, with `hasTermsOfService` / `hasPrivacyPolicy` / `hasEULA` /
+`hasSubscriptionDetails` flags so footer links stay. New `SECURITY.md` and
+`npm run test:docs`. PWA icons under `public/icons/` are small SVG/PNG + `og.png`.
 
 **5.3.0.** Auth routes (`/api/signup`, `/api/signin`) now enforce a per-IP sliding
 window (20 / 15 min). Set `TRUST_PROXY=1` only when a trusted reverse proxy sets

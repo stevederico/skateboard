@@ -80,5 +80,7 @@ createSkateboardApp({
   constants,
   appRoutes,
   defaultRoute: 'home',
-  overrides: { layout: AppLayout }
+  overrides: { layout: AppLayout },
+  // Legal bodies stay out of the main chunk; routes load src/legal.json on demand.
+  loadLegal: () => import('./legal.json'),
 });
