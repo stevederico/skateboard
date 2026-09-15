@@ -1,4 +1,3 @@
-/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import type { ESBuildOptions } from 'vite';
 import react from '@vitejs/plugin-react-swc';
@@ -100,12 +99,5 @@ export default defineConfig({
       ignored: ['**/node_modules/**', '**/.git/**']
     }
   },
-  logLevel: 'error',
-  // @ts-expect-error Vitest extends Vite UserConfig with a test key
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.js'],
-    include: ['src/**/*.test.{js,jsx}'],
-  }
+  logLevel: 'error'
 });

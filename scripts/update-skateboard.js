@@ -78,7 +78,6 @@ const ALLOWLIST = [
   'vite.config.ts',
   'vite.plugins.ts',
   'vite.plugins.test.js',
-  'src/test/setup.js',
   'AGENTS.md',
   'Dockerfile',
   '.dockerignore',
@@ -105,6 +104,8 @@ const SYMLINKS = { 'CLAUDE.md': 'AGENTS.md' };
 const REMOVED = [
   'backend/ambient.d.ts',
   'src/skateboard-ui.d.ts',
+  'src/test/setup.js',
+  'src/test/dom.js',
   'backend/package.json',
   'backend/tsconfig.json',
   'backend/types.ts',

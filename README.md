@@ -177,13 +177,13 @@ Skateboard is intentionally lean — current footprint (counting what ships at r
 | | Frontend runtime | Frontend dev | Backend crates |
 |---|---|---|---|
 | Before (v2.x) | 12 | 4 | 7 |
-| **Now** | **4** | **10** | **0** |
+| **Now** | **4** | **8** | **0** |
 
 The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, leftover bcrypt hashes still verify then rehash. SQLite via system `libsqlite3`. Stripe via system `libcurl`. Do not `cargo add`.
 
 The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). That package has **zero runtime dependencies**. Peers are `react`, `react-dom`, and `react-router` — pinned in this app so the version cannot float. Apps navigate with `useSafeNavigate()` from skateboard-ui.
 
-Frontend dev deps include `typescript` + `@types/*` for the strict typecheck plus `vitest` + `jsdom` for component tests (local `src/test/dom.js` helpers — no `@testing-library/*`) — all dev-only, zero runtime additions. There's still no build step for types: Node 24 strips them natively and Vite compiles `.tsx` directly.
+Frontend dev deps are the Vite/Tailwind toolchain plus `typescript` + `@types/*` for the typecheck gate. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` directly.
 
 <br />
 
