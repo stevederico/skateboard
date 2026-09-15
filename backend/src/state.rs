@@ -5,8 +5,9 @@ use std::path::{Path, PathBuf};
 use crate::config::{self, BackendConfig, Logger};
 use crate::db::Pool;
 use crate::http;
-use crate::stores::{CsrfStore, LockoutStore};
+use crate::stores::{CsrfStore, LockoutStore, RateLimitStore};
 use crate::stripe::StripeClient;
+use crate::stripe_worker::StripeWorker;
 
 /// Everything a request handler needs, shared across worker threads.
 ///
@@ -23,8 +24,10 @@ pub struct AppState {
     pub csrf: CsrfStore,
     /// Failed-sign-in counters.
     pub lockout: LockoutStore,
-    /// Stripe client, or `None` when `STRIPE_KEY` is unset (routes 503).
-    pub stripe: Option<StripeClient>,
+    /// Per-IP sliding window on signup/signin.
+    pub auth_rate: RateLimitStore,
+    /// Stripe worker handle, or `None` when `STRIPE_KEY` is unset (routes 503).
+    pub stripe: Option<StripeWorker>,
     /// Webhook signing secret, or `None` when unset (webhook 503s).
     pub stripe_endpoint_secret: Option<String>,
     /// JWT signing secret, or `None` when unset (auth routes 503).
@@ -157,7 +160,10 @@ impl AppState {
             pool,
             csrf: CsrfStore::new(),
             lockout: LockoutStore::new(),
-            stripe: config::env_nonempty("STRIPE_KEY").map(StripeClient::new),
+            auth_rate: RateLimitStore::new(),
+            stripe: config::env_nonempty("STRIPE_KEY")
+                .map(StripeClient::new)
+                .map(StripeWorker::spawn),
             stripe_endpoint_secret: config::env_nonempty("STRIPE_ENDPOINT_SECRET"),
             jwt_secret: config::env_nonempty("JWT_SECRET"),
             cors_origins: AppState::resolve_cors_origins(),

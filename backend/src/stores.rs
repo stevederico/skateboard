@@ -333,6 +333,98 @@ impl LockoutStore {
     }
 }
 
+/// Auth endpoint sliding-window size (15 minutes).
+pub const AUTH_RATE_WINDOW_MS: i64 = 15 * 60 * 1000;
+/// Max `/api/signup` + `/api/signin` requests per IP inside the window.
+pub const AUTH_RATE_LIMIT: usize = 20;
+/// Capacity at which the oldest IP windows are evicted.
+pub const AUTH_RATE_MAX_ENTRIES: usize = 50_000;
+
+/// Outcome of recording one auth request against the per-IP window.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RateLimitStatus {
+    /// Whether this request must be refused.
+    pub limited: bool,
+    /// Seconds until the oldest request in the window ages out (0 when allowed).
+    pub retry_after_secs: i64,
+}
+
+/// Per-IP sliding window for `/api/signup` and `/api/signin`.
+///
+/// Complements [`LockoutStore`]: lockouts stop guessing against one account,
+/// this stops one address from flooding many accounts or the signup path.
+#[derive(Default)]
+pub struct RateLimitStore {
+    /// IP → request timestamps (epoch ms) inside the current window.
+    inner: Mutex<HashMap<String, Vec<i64>>>,
+}
+
+impl RateLimitStore {
+    /// Create an empty store.
+    pub fn new() -> RateLimitStore {
+        RateLimitStore {
+            inner: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Record a request for `ip` at `now_ms`.
+    ///
+    /// When the window already holds [`AUTH_RATE_LIMIT`] timestamps, the new
+    /// request is refused and is **not** appended (so a flood cannot push the
+    /// retry-after further out forever).
+    pub fn check_and_record(&self, ip: &str, now_ms: i64) -> RateLimitStatus {
+        let mut map = self.lock();
+        let window_start = now_ms - AUTH_RATE_WINDOW_MS;
+        if !map.contains_key(ip) && map.len() >= AUTH_RATE_MAX_ENTRIES {
+            evict_oldest_entries(&mut map, AUTH_RATE_MAX_ENTRIES.saturating_sub(1), |times| {
+                times.first().copied().unwrap_or(0)
+            });
+        }
+        let times = map.entry(ip.to_string()).or_default();
+        times.retain(|&t| t > window_start);
+        if times.len() >= AUTH_RATE_LIMIT {
+            let oldest = times.first().copied().unwrap_or(now_ms);
+            let retry_after_secs = ((oldest + AUTH_RATE_WINDOW_MS) - now_ms + 999) / 1000;
+            return RateLimitStatus {
+                limited: true,
+                retry_after_secs: retry_after_secs.max(1),
+            };
+        }
+        times.push(now_ms);
+        RateLimitStatus {
+            limited: false,
+            retry_after_secs: 0,
+        }
+    }
+
+    /// Drop empty and fully-expired windows.
+    pub fn cleanup(&self, now_ms: i64) -> usize {
+        let mut map = self.lock();
+        let before = map.len();
+        let window_start = now_ms - AUTH_RATE_WINDOW_MS;
+        map.retain(|_, times| {
+            times.retain(|&t| t > window_start);
+            !times.is_empty()
+        });
+        let cleaned = before - map.len();
+        if map.len() > AUTH_RATE_MAX_ENTRIES {
+            evict_oldest_entries(&mut map, AUTH_RATE_MAX_ENTRIES, |times| {
+                times.first().copied().unwrap_or(0)
+            });
+        }
+        cleaned
+    }
+
+    /// Number of tracked IPs.
+    pub fn len(&self) -> usize {
+        self.lock().len()
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Vec<i64>>> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -490,5 +582,45 @@ mod tests {
             map.contains_key(&("locked@b.co".to_string(), IP.to_string())),
             "flooding the map must not be a way to clear a lockout"
         );
+    }
+
+    #[test]
+    fn auth_rate_limit_allows_under_the_cap() {
+        let s = RateLimitStore::new();
+        for i in 0..AUTH_RATE_LIMIT {
+            let st = s.check_and_record(IP, i as i64);
+            assert!(!st.limited, "request {i} should be allowed");
+        }
+    }
+
+    #[test]
+    fn auth_rate_limit_trips_at_the_cap() {
+        let s = RateLimitStore::new();
+        for i in 0..AUTH_RATE_LIMIT {
+            assert!(!s.check_and_record(IP, i as i64).limited);
+        }
+        let st = s.check_and_record(IP, AUTH_RATE_LIMIT as i64);
+        assert!(st.limited);
+        assert!(st.retry_after_secs >= 1);
+    }
+
+    #[test]
+    fn auth_rate_limit_window_expiry_frees_a_slot() {
+        let s = RateLimitStore::new();
+        for i in 0..AUTH_RATE_LIMIT {
+            assert!(!s.check_and_record(IP, i as i64).limited);
+        }
+        assert!(s.check_and_record(IP, AUTH_RATE_LIMIT as i64).limited);
+        // Advance past the oldest timestamp's window.
+        let later = AUTH_RATE_WINDOW_MS + 1;
+        assert!(!s.check_and_record(IP, later).limited);
+    }
+
+    #[test]
+    fn auth_rate_limit_cleanup_drops_empty_windows() {
+        let s = RateLimitStore::new();
+        s.check_and_record(IP, 0);
+        assert_eq!(s.cleanup(AUTH_RATE_WINDOW_MS + 1), 1);
+        assert_eq!(s.len(), 0);
     }
 }
