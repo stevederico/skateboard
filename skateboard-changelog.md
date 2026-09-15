@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.21.0
+
+  Route via skateboard-ui
+
 4.20.1
 
   Lockout keyed per IP

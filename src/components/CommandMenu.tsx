@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router';
 import { getState } from '@stevederico/skateboard-ui/Context';
+import { useSafeNavigate } from '@stevederico/skateboard-ui/Utilities';
 import {
   Command,
   CommandDialog,
@@ -39,7 +39,7 @@ interface PageEntry {
  */
 export default function CommandMenu() {
   const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
+  const navigate = useSafeNavigate();
   const { state } = getState();
   const pages: PageEntry[] = state.constants?.pages || [];
 
