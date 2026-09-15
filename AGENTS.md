@@ -474,7 +474,7 @@ Apps own their `vite.config.ts` directly. See [reference implementation](https:/
 **Import path:** `@stevederico/skateboard-ui/shadcn/ui/<component>`
 
 **Available components:**
-`accordion`, `alert`, `alert-dialog`, `aspect-ratio`, `avatar`, `badge`, `breadcrumb`, `button`, `button-group`, `calendar`, `card`, `carousel`, `chart`, `checkbox`, `collapsible`, `command`, `context-menu`, `dialog`, `drawer`, `dropdown-menu`, `empty`, `field`, `hover-card`, `input`, `input-group`, `item`, `kbd`, `label`, `menubar`, `navigation-menu`, `pagination`, `popover`, `progress`, `radio-group`, `resizable`, `scroll-area`, `select`, `separator`, `sheet`, `sidebar`, `skeleton`, `slider`, `sonner`, `spinner`, `switch`, `table`, `tabs`, `textarea`, `toggle`, `toggle-group`, `tooltip`
+`accordion`, `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `calendar`, `card`, `checkbox`, `collapsible`, `command`, `dialog`, `drawer`, `dropdown-menu`, `empty`, `field`, `input`, `kbd`, `label`, `pagination`, `popover`, `progress`, `radio-group`, `scroll-area`, `select`, `separator`, `sheet`, `sidebar`, `skeleton`, `slider`, `spinner`, `switch`, `table`, `tabs`, `textarea`, `toggle`, `toggle-group`, `tooltip`
 
 **Rules:**
 - Prefer shadcn components over custom HTML elements (e.g., use `<Button>` not `<button>`, `<Card>` not `<div className="card">`)
@@ -623,7 +623,7 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@4.24.0
+- skateboard@4.25.0
 - skateboard-ui@4.15.0
 
 ## Updating from Skateboard Boilerplate
