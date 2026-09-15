@@ -15,6 +15,16 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.4.0
+
+  Pin skateboard-ui 5.1
+  Lazy loadLegal split
+  Add legal.json
+  Ship small PWA icons
+  Add SECURITY.md
+  Add test:docs
+  Trim README architecture
+
 5.3.0
 
   Stripe worker threads

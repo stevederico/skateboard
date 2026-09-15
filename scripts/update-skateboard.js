@@ -91,7 +91,9 @@ const ALLOWLIST = [
   'scripts/verify-ui-version.mjs',
   'scripts/verify-ui-version.ts',
   'scripts/verify-ui-version.test.js',
-  'scripts/version-consistency.test.js'
+  'scripts/version-consistency.test.js',
+  'scripts/test-docs.mjs',
+  'SECURITY.md'
 ];
 
 // Template-owned symlinks: link path → target path (both relative to app root).
