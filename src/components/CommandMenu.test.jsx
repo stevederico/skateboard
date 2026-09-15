@@ -9,8 +9,8 @@ const pages = [
 ];
 let contextState = { constants: { pages } };
 
-vi.mock('react-router', () => ({
-  useNavigate: () => navigate
+vi.mock('@stevederico/skateboard-ui/Utilities', () => ({
+  useSafeNavigate: () => navigate
 }));
 
 vi.mock('@stevederico/skateboard-ui/Context', () => ({

@@ -421,7 +421,7 @@ skateboard/
 **Result:** ~550 lines of boilerplate → ~26 lines
 
 ### Frontend Stack
-- React, Vite, react-router-dom (latest versions)
+- React, Vite, skateboard-ui (routing via `useSafeNavigate`)
 - TypeScript (`strict`, no-build-step typecheck), ES modules only
 - Tailwind CSS v4+ with @tailwindcss/vite plugin
 
@@ -623,7 +623,7 @@ When working with these libraries, consult the provided documentation before mak
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@4.20.1
+- skateboard@4.21.0
 - skateboard-ui@4.14.0
 
 ## Updating from Skateboard Boilerplate
