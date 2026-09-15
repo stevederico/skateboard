@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.22.0
+
+  Pin react-router 7.15.0
+
 4.21.0
 
   Route via skateboard-ui
