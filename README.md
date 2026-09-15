@@ -177,11 +177,11 @@ Skateboard is intentionally lean — current footprint (counting what ships at r
 | | Frontend runtime | Frontend dev | Backend crates |
 |---|---|---|---|
 | Before (v2.x) | 12 | 4 | 7 |
-| **Now** | **4** | **8** | **0** |
+| **Now** | **3** | **8** | **0** |
 
 The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, leftover bcrypt hashes still verify then rehash. SQLite via system `libsqlite3`. Stripe via system `libcurl`. Do not `cargo add`.
 
-The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). That package has **zero runtime dependencies**. Peers are `react`, `react-dom`, and `react-router` — pinned in this app so the version cannot float. Apps navigate with `useSafeNavigate()` from skateboard-ui.
+The frontend pulls all its UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). That package depends on `react-router` (pinned); peers are `react` and `react-dom`. Apps do not declare `react-router`. Navigate with `useSafeNavigate()`.
 
 Frontend dev deps are the Vite/Tailwind toolchain plus `typescript` + `@types/*` for the typecheck gate. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` directly.
 
@@ -194,7 +194,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard-ui** | v4.14.0 | Application Shell, Components, Theming |
+| **skateboard-ui** | v4.15.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (Oxc/Rolldown) |
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.15+ | Routing |

@@ -8,8 +8,8 @@ description: >
   running update-skateboard.js, fixing template drift, or the user says skateboard /
   skateboard-ui.
 metadata:
-  version: "4.15.0"
-  skateboard-ui: "4.14.0"
+  version: "4.24.0"
+  skateboard-ui: "4.15.0"
   sources:
     - https://github.com/stevederico/skateboard
     - https://github.com/stevederico/skateboard-ui
@@ -21,8 +21,8 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **4.15.0** | App scaffold (copied into new repos) |
-| **@stevederico/skateboard-ui** | **4.14.0** | Shell + components (npm package — pin exact) |
+| **skateboard** (boilerplate) | **4.24.0** | App scaffold (copied into new repos) |
+| **@stevederico/skateboard-ui** | **4.15.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
 
@@ -243,7 +243,7 @@ FRONTEND_URL=               # Stripe redirects
 | Confirm | `<AlertDialog>` | `window.confirm` |
 | Field group | `<Field>` | freeform label/input/error |
 
-~47 shadcn components under `shadcn/ui/` in skateboard-ui 4.14.
+~47 shadcn components under `shadcn/ui/` in skateboard-ui 4.15.
 
 ## Header
 
@@ -304,10 +304,10 @@ node scripts/update-skateboard.js --yes
 #    Schema lives in backend/src/db.rs (ensure_schema). DIFF before taking canonical.
 
 # 4) Bump UI to the version pin in canonical package.json (exact)
-npm install @stevederico/skateboard-ui@4.14.0 --save-exact
+npm install @stevederico/skateboard-ui@4.15.0 --save-exact
 # If your registry enforces a min-release-age and the package is <7 days old,
-# use a *scoped* bypass only for this zero-dep package, e.g.:
-#   bun add @stevederico/skateboard-ui@4.14.0 --exact --minimum-release-age 0
+# use a *scoped* bypass only for this package, e.g.:
+#   bun add @stevederico/skateboard-ui@4.15.0 --exact --minimum-release-age 0
 # Never bare --min-release-age=0 / --minimum-release-age 0 on a full tree install.
 
 # 5) Lockfile: commit package-lock.json (source of truth). If you use Bun for install:
