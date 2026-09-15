@@ -93,6 +93,8 @@ Default stroke width is `2`. Use `strokeWidth={1.5}` for a lighter feel in dense
 
 ## Don't
 
+- Don't import from `@stevederico/skateboard-ui/icons` — gone in skateboard-ui 4.18+; use `lucide-react`
+- Don't use public `DynamicIcon` — gone in 4.17+; named-import icons in app code
 - Don't use emoji as icons in UI (`🔐` → `Lock`)
 - Don't use Tabler, Heroicons, or Font Awesome — Lucide only
 - Don't mix icon libraries in the same project
