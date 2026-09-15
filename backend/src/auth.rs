@@ -11,6 +11,10 @@ use crate::json::{self, Json};
 /// Default JWT lifetime in days.
 pub const TOKEN_EXPIRATION_DAYS: i64 = 30;
 
+/// Largest `exp` accepted, as seconds. Beyond 2^53 a JSON number cannot even
+/// represent whole seconds exactly, so such a claim is treated as malformed.
+const MAX_SAFE_EXP: f64 = 9_007_199_254_740_992.0;
+
 /// Decoded JWT body.
 #[derive(Debug, Clone, PartialEq)]
 pub struct JwtPayload {
@@ -96,7 +100,9 @@ pub fn jwt_verify(token: &str, secret: &str) -> Result<JwtPayload, JwtError> {
     let user_id = decoded.get_str("userID").ok_or(JwtError::Malformed)?.to_string();
     let exp = match decoded.get("exp") {
         None | Some(Json::Null) => None,
-        Some(Json::Num(v)) => Some(*v as i64),
+        // A fractional or out-of-range `exp` is rejected rather than cast: `as i64`
+        // saturates, so a claim like `1e30` would otherwise become i64::MAX and never expire.
+        Some(Json::Num(v)) if v.abs() < MAX_SAFE_EXP && v.fract() == 0.0 => Some(*v as i64),
         // A non-numeric `exp` fails the Node guard outright.
         Some(_) => return Err(JwtError::Malformed),
     };
@@ -160,6 +166,27 @@ mod tests {
         let input = format!("{head}.{body}");
         let sig = base64url_encode(&hmac_sha256(SECRET.as_bytes(), input.as_bytes()));
         assert_eq!(jwt_verify(&format!("{input}.{sig}"), SECRET), Err(JwtError::Malformed));
+    }
+
+    /// Build a signed token around an arbitrary payload JSON body.
+    fn signed_with_body(body_json: &str) -> String {
+        let head = base64url_encode(br#"{"alg":"HS256","typ":"JWT"}"#);
+        let body = base64url_encode(body_json.as_bytes());
+        let input = format!("{head}.{body}");
+        let sig = base64url_encode(&hmac_sha256(SECRET.as_bytes(), input.as_bytes()));
+        format!("{input}.{sig}")
+    }
+
+    #[test]
+    fn rejects_exp_beyond_the_safe_integer_range() {
+        let token = signed_with_body(r#"{"userID":"u","exp":1e30}"#);
+        assert_eq!(jwt_verify(&token, SECRET), Err(JwtError::Malformed));
+    }
+
+    #[test]
+    fn rejects_fractional_exp() {
+        let token = signed_with_body(r#"{"userID":"u","exp":1.5}"#);
+        assert_eq!(jwt_verify(&token, SECRET), Err(JwtError::Malformed));
     }
 
     #[test]

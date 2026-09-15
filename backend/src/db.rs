@@ -1446,6 +1446,34 @@ impl Pool {
             Ok(())
         })
     }
+
+    /// Drop processed webhook records older than `cutoff_ms`.
+    ///
+    /// The table exists only to make Stripe redeliveries idempotent, and Stripe
+    /// stops retrying long before the retention window, so old rows are dead
+    /// weight that would otherwise grow without bound.
+    ///
+    /// @param cutoff_ms - Unix epoch milliseconds; rows processed before this are deleted
+    /// @returns Number of rows removed
+    pub fn prune_webhook_events(&self, cutoff_ms: i64) -> Result<i64, DbError> {
+        self.with(|db| {
+            let changes = db.run(
+                "DELETE FROM WebhookEvents WHERE processed_at < ?",
+                &[Value::Int(cutoff_ms)],
+            )?;
+            Ok(changes.changes)
+        })
+    }
+
+    /// Verify the pool can serve a query, for the health endpoint.
+    ///
+    /// @returns `Ok(())` when a trivial `SELECT` round-trips
+    pub fn ping(&self) -> Result<(), DbError> {
+        self.with(|db| {
+            db.query("SELECT 1", &[])?;
+            Ok(())
+        })
+    }
 }
 
 #[cfg(test)]

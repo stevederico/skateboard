@@ -76,7 +76,7 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 │  │   ]                                              │
 │  │                                                   │
 │  ├── components/                                     │
-│  │   ├── HomeView.jsx                               │
+│  │   ├── HomeView.tsx                               │
 │  │   └── CustomView.jsx                             │
 │  │                                                   │
 │  └── constants.json (configuration)                 │
@@ -110,7 +110,7 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 #### 2. Content (your app)
 
 **Files**:
-- `src/main.jsx` (~16 lines) - Route definitions
+- `src/main.tsx` (~16 lines) - Route definitions
 - `src/components/*.jsx` - Your views/components
 - `src/assets/styles.css` (~7 lines) - Brand color override
 
@@ -157,16 +157,16 @@ Skateboard uses an **Application Shell Architecture** (also known as **Inversion
 ```
 my-app/
 ├── package.json
-├── vite.config.js (227 lines - custom plugins)
+├── vite.config.ts (227 lines - custom plugins)
 ├── index.html
 └── src/
-    ├── main.jsx (82 lines - manual setup)
+    ├── main.tsx (82 lines - manual setup)
     ├── context.jsx (56 lines - state management)
     ├── constants.json
     ├── assets/
     │   └── styles.css (182 lines - full theme)
     └── components/
-        ├── HomeView.jsx
+        ├── HomeView.tsx
         └── ProfileView.jsx
 
 Total boilerplate: ~550 lines
@@ -177,15 +177,15 @@ Total boilerplate: ~550 lines
 ```
 my-app/
 ├── package.json
-├── vite.config.js (3 lines - uses utility)
+├── vite.config.ts (3 lines - uses utility)
 ├── index.html
 └── src/
-    ├── main.jsx (16 lines - route definitions only)
+    ├── main.tsx (16 lines - route definitions only)
     ├── constants.json
     ├── assets/
     │   └── styles.css (7 lines - brand color only)
     └── components/
-        ├── HomeView.jsx
+        ├── HomeView.tsx
         └── ProfileView.jsx
 
 Total boilerplate: ~26 lines (95% reduction)
@@ -193,14 +193,14 @@ Total boilerplate: ~26 lines (95% reduction)
 
 ### How It Works
 
-#### 1. Entry Point (main.jsx)
+#### 1. Entry Point (main.tsx)
 
 **What you write** (~16 lines):
 ```javascript
 import './assets/styles.css';
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
 import constants from './constants.json';
-import HomeView from './components/HomeView.jsx';
+import HomeView from './components/HomeView.tsx';
 import ProfileView from './components/ProfileView.jsx';
 
 const appRoutes = [
@@ -371,13 +371,13 @@ function MyComponent() {
 
 #### 4. Build Configuration
 
-Apps own their `vite.config.js` directly. skateboard-ui is a pure component library.
+Apps own their `vite.config.ts` directly. skateboard-ui is a pure component library.
 
 **Why?** TailwindCSS v4 uses native Rust bindings that cannot be bundled. Separating build config from runtime code keeps things clean.
 
-**App owns vite.config.js**:
+**App owns vite.config.ts**:
 ```javascript
-// vite.config.js
+// vite.config.ts
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -390,9 +390,11 @@ export default defineConfig({
 
 See the reference implementation for full config with SEO plugins: [skateboard/vite.config.ts](https://github.com/stevederico/skateboard/blob/master/vite.config.ts)
 
-JSX is handled by Vite's esbuild transform (`esbuild.jsx: 'automatic'`). There is no `@vitejs/plugin-react-swc`. Do not use `vite --force` or `optimizeDeps.force: true` for everyday dev.
+JSX comes from `tsconfig.json` (`"jsx": "react-jsx"`) via Vite's own transform. There is no
+`@vitejs/plugin-react-swc`, so component edits trigger a full reload rather than Fast Refresh.
+Do not use `vite --force` or `optimizeDeps.force: true` for everyday dev.
 
-### API Reference
+### Shell API
 
 #### createSkateboardApp(config)
 
@@ -435,9 +437,9 @@ createSkateboardApp({
 
 #### Vite Configuration
 
-Apps own their `vite.config.js`. Copy from the reference implementation and customize as needed.
+Apps own their `vite.config.ts`. Copy from the reference implementation and customize as needed.
 
-See: [skateboard/vite.config.js](https://github.com/stevederico/skateboard/blob/master/vite.config.js)
+See: [skateboard/vite.config.ts](https://github.com/stevederico/skateboard/blob/master/vite.config.ts)
 
 #### Context API
 
@@ -566,7 +568,7 @@ Every part of the shell can be overridden:
 
 #### 1. Vite Configuration
 
-Apps own their `vite.config.js` - customize directly:
+Apps own their `vite.config.ts` - customize directly:
 
 ```javascript
 import { defineConfig } from 'vite';
@@ -724,7 +726,7 @@ import { getState } from '@stevederico/skateboard-ui/Context';
 import { getState } from '../context.jsx';
 ```
 
-#### 4. Keep main.jsx Minimal
+#### 4. Keep main.tsx Minimal
 
 **Good** (just routes):
 ```javascript
@@ -735,7 +737,7 @@ const appRoutes = [
 createSkateboardApp({ constants, appRoutes });
 ```
 
-**Avoid** (complex logic in main.jsx):
+**Avoid** (complex logic in main.tsx):
 ```javascript
 // Don't add business logic, API calls, or complex state here
 ```
@@ -858,11 +860,11 @@ const { myState } = useContext(MyContext);         // Your state
 #### Minimal App
 
 ```javascript
-// main.jsx
+// main.tsx
 import './assets/styles.css';
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
 import constants from './constants.json';
-import HomeView from './components/HomeView.jsx';
+import HomeView from './components/HomeView.tsx';
 
 createSkateboardApp({
   constants,
@@ -872,7 +874,7 @@ createSkateboardApp({
 ```
 
 ```javascript
-// components/HomeView.jsx
+// components/HomeView.tsx
 import { getState } from '@stevederico/skateboard-ui/Context';
 import { useListData } from '@stevederico/skateboard-ui/Utilities';
 
@@ -887,7 +889,7 @@ export default function HomeView() {
 #### Complex App with Overrides
 
 ```javascript
-// vite.config.js
+// vite.config.ts
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
@@ -934,10 +936,8 @@ For production deployments, override the default config using environment variab
 #### Environment Variables
 
 ```bash
-## Database (overrides config.json database settings)
-DATABASE_URL=postgresql://user:pass@host:5432/prod_db
-## or
-MONGODB_URL=mongodb+srv://user:pass@cluster.mongodb.net/prod_db
+## Database: SQLite only, configured in backend/config.json (no DB env vars).
+## Point database.connectionString at a path on a persistent volume.
 
 ## CORS - Comma-separated list of allowed origins
 CORS_ORIGINS=https://yourapp.com,https://www.yourapp.com
@@ -985,7 +985,7 @@ Skateboard's Application Shell Architecture transforms React apps from 500+ line
 
 **Architecture:**
 - **skateboard-ui** - Pure component and utility library (no build tools)
-- **Your app** - Owns vite.config.js, main.jsx, constants.json
+- **Your app** - Owns vite.config.ts, main.tsx, constants.json
 - **Separation of concerns** - Build config ≠ Runtime library
 
 **Key Principles**:
@@ -1015,11 +1015,9 @@ See the [Migration](#migration) section below for the full upgrade prompt to han
 
 #### Single Instance (Default)
 
-The default configuration uses in-memory stores:
-
-```javascript
-const csrfTokenStore = new Map();  // CSRF tokens
-```
+The Rust backend keeps two bounded in-memory stores (`backend/src/stores.rs`): issued CSRF
+tokens and sign-in lockout counters. SQLite holds everything durable. One process serves
+requests on a fixed thread pool.
 
 **Works great for:**
 - Single server deployments
@@ -1028,43 +1026,32 @@ const csrfTokenStore = new Map();  // CSRF tokens
 
 #### Horizontal Scaling (Multiple Instances)
 
-For multiple server instances behind a load balancer:
+Both in-memory stores are per-process, so a CSRF token is only known to the instance that
+issued it. Two supported options:
 
-**Option 1: Redis (Recommended)**
-```javascript
-// Replace in-memory stores with Redis
-import Redis from 'ioredis';
-const redis = new Redis(process.env.REDIS_URL);
+**Option 1: Sticky sessions (recommended)**
+- Enable session affinity on the load balancer
+- Stores work as-is; no code change
 
-// Rate limiting
-await redis.incr(`ratelimit:${ip}`);
-await redis.expire(`ratelimit:${ip}`, 900); // 15 min
+**Option 2: Accept the retry**
+- A CSRF miss answers 403 *and* issues a fresh token the client can immediately retry with
+- Costs one extra round-trip whenever a client switches instance
 
-// CSRF tokens
-await redis.set(`csrf:${userID}`, token, 'EX', 86400); // 24 hours
-```
+Sharing state through Redis is not supported: it would mean adding a crate, and the backend is
+zero-crate by design. SQLite is also single-writer, so scale vertically first, or move the
+database file onto a shared server before adding instances.
 
-**Option 2: Sticky Sessions**
-- Configure load balancer for session affinity
-- Users always hit the same server
-- In-memory stores work as-is
+#### Cleanup Cadence
 
-**Option 3: Database Storage**
-- Store CSRF tokens in user table
-- Use database for rate limiting (slower)
-
-#### Current Limits
-
-| Store | Max Entries | Cleanup |
-|-------|-------------|---------|
-| Rate Limit | 10,000 IPs | Hourly LRU |
-| CSRF Tokens | 50,000 users | Hourly expiry |
-
-These limits handle significant traffic on a single instance.
+| Store | Backing | Cleanup |
+|-------|---------|---------|
+| CSRF tokens | Memory, bounded with oldest-first eviction | Hourly sweep of expired entries |
+| Sign-in lockouts | Memory, bounded, keyed per email + IP | Every 15 minutes |
+| Processed webhook ids | SQLite `WebhookEvents` | Hourly; rows older than 30 days deleted |
 
 ---
 
-For migration instructions, see `MIGRATION.md`
+For migration and upgrade instructions, see [UPGRADE.md](UPGRADE.md)
 
 For the reference implementation, see [github.com/stevederico/skateboard](https://github.com/stevederico/skateboard)
 
@@ -1083,7 +1070,8 @@ Authentication uses JWT tokens stored in HttpOnly cookies with CSRF protection.
 
 #### Headers
 
-State-changing requests (POST, PUT, DELETE) require a CSRF token:
+State-changing requests (POST, PUT, DELETE) require a CSRF token, except `/api/signup`,
+`/api/signin`, and the Stripe-signed `/api/payment` webhook:
 ```
 X-CSRF-Token: <csrf_token>
 ```
@@ -1115,21 +1103,25 @@ Create a new user account.
 - `email`: Valid email, max 254 characters
 - `password`: 6-72 characters
 
-**Response (200):**
+**Response (201):**
 ```json
 {
-  "_id": "uuid",
+  "id": "uuid",
   "email": "john@example.com",
   "name": "John Doe",
-  "created_at": 1704067200,
-  "subscription": null,
-  "usage": { "count": 0, "reset_at": null }
+  "tokenExpires": 1791936000
 }
 ```
+
+`tokenExpires` is Unix **seconds** (it mirrors the JWT `exp` claim); every other timestamp in
+this API is milliseconds. Call `GET /api/me` for the full user record.
 
 **Cookies Set:**
 - `token`: JWT token (HttpOnly, 30 days)
 - `<appname>_csrf`: CSRF token (24 hours)
+
+CSRF is **not** required on `/api/signup` or `/api/signin` — no session exists yet. Every other
+state-changing route requires the `x-csrf-token` header.
 
 ---
 
@@ -1150,7 +1142,7 @@ Sign in to existing account.
   "_id": "uuid",
   "email": "john@example.com",
   "name": "John Doe",
-  "created_at": 1704067200,
+  "created_at": 1789344000000,
   "subscription": {
     "stripeID": "cus_xxx",
     "status": "active",
@@ -1164,7 +1156,7 @@ Sign in to existing account.
 ---
 
 ##### POST /api/signout
-Sign out current user.
+Sign out current user. **Requires** the auth cookie and an `x-csrf-token` header.
 
 **Response (200):**
 ```json
@@ -1186,9 +1178,9 @@ Get current authenticated user.
   "_id": "uuid",
   "email": "john@example.com",
   "name": "John Doe",
-  "created_at": 1704067200,
+  "created_at": 1789344000000,
   "subscription": { ... },
-  "usage": { "count": 5, "reset_at": 1706745600 }
+  "usage": { "count": 5, "reset_at": 1791936000000 }
 }
 ```
 
@@ -1218,17 +1210,10 @@ Update current user profile.
 
 #### Subscription
 
-##### GET /api/isSubscriber
-Check if current user has active subscription.
+There is no standalone subscription endpoint. Subscription state reaches the client two ways:
 
-**Response (200):**
-```json
-{ "isSubscriber": true }
-```
-or
-```json
-{ "isSubscriber": false }
-```
+- `GET /api/me` returns the nested `subscription` object when the user has a Stripe customer id.
+- `POST /api/usage` returns `isSubscriber` alongside the usage counters (see below).
 
 ---
 
@@ -1289,7 +1274,8 @@ or
 #### Payments (Stripe)
 
 ##### POST /api/checkout
-Create Stripe checkout session.
+Create Stripe checkout session. **Requires** auth + `x-csrf-token`; answers 503 when
+`STRIPE_KEY` is unset.
 
 **Request Body:**
 ```json
@@ -1311,7 +1297,8 @@ Create Stripe checkout session.
 ---
 
 ##### POST /api/portal
-Create Stripe billing portal session.
+Create Stripe billing portal session. **Requires** auth + `x-csrf-token`; answers 503 when
+`STRIPE_KEY` is unset.
 
 **Request Body:**
 ```json
@@ -1345,28 +1332,35 @@ Stripe webhook endpoint. Handles subscription events.
 ##### GET /api/health
 Health check endpoint.
 
+Runs a `SELECT 1` against SQLite, so the container healthcheck fails when the process
+is up but the database is not.
+
 **Response (200):**
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2025-01-01T00:00:00.000Z",
-  "database": "connected"
+  "status": "ok",
+  "database": "connected",
+  "timestamp": 1789344000000
 }
 ```
 
+**Response (503)** — same shape with `"status": "degraded"` and `"database": "unavailable"`.
+
+`timestamp` is Unix epoch **milliseconds** (as is every timestamp this API returns).
+
 ---
 
-### Rate Limiting
+### Abuse Controls
 
-| Route Type | Limit | Window |
-|------------|-------|--------|
-| Auth routes (`/signin`, `/signup`) | 10 requests | 15 minutes |
-| Payment routes (`/checkout`, `/portal`) | 5 requests | 15 minutes |
-| All other routes | 300 requests | 15 minutes |
+There is no global per-route request quota. Two targeted protections exist:
 
-Rate limit headers:
-- `X-RateLimit-Remaining`: Requests remaining
-- `Retry-After`: Seconds until limit resets (on 429)
+| Control | Scope | Behavior |
+|---------|-------|----------|
+| Sign-in lockout | Per email + client IP | Failed attempts accumulate in a 15-minute window; the pair locks out after the threshold and decays automatically |
+| Usage limit | Per user, non-subscribers | `POST /api/usage` answers 429 once `FREE_USAGE_LIMIT` operations are consumed in the month |
+
+Neither emits `X-RateLimit-*` headers. Put a reverse proxy or edge WAF in front of the
+server if you need blanket per-IP quotas.
 
 ---
 
@@ -1386,9 +1380,9 @@ All errors return JSON with an `error` field:
 | 401 | Unauthorized - Not authenticated |
 | 403 | Forbidden - Invalid CSRF or permission denied |
 | 404 | Not Found - Resource doesn't exist |
-| 429 | Too Many Requests - Rate limited |
+| 429 | Too Many Requests - Sign-in lockout or free usage limit reached |
 | 500 | Internal Server Error |
-| 503 | Service Unavailable - Auth disabled |
+| 503 | Service Unavailable - `JWT_SECRET` or Stripe configuration missing, or the database probe failed |
 
 ---
 
@@ -1421,10 +1415,9 @@ Password reset functionality is not yet implemented. Users who forget their pass
 
 ### Overview
 
-Skateboard supports three database types through a unified adapter pattern:
-- **SQLite** (default) - File-based, zero configuration
-- **PostgreSQL** - Production-ready relational database
-- **MongoDB** - Document-based NoSQL database
+Skateboard is **SQLite only**. The backend links the system `libsqlite3` through FFI and keeps
+`[dependencies]` empty, so Postgres and MongoDB are not supported — `database.dbType` in
+`backend/config.json` must be `sqlite` or the server refuses to start.
 
 ### Tables/Collections
 
@@ -1457,7 +1450,7 @@ CREATE UNIQUE INDEX idx_users_email ON Users(email);
   _id: String,           // UUID
   email: String,         // Unique
   name: String,
-  created_at: Number,    // Unix timestamp
+  created_at: Number,    // Unix epoch milliseconds
   subscription: {
     stripeID: String,    // Stripe customer ID
     expires: Number,     // Unix timestamp
@@ -1465,7 +1458,7 @@ CREATE UNIQUE INDEX idx_users_email ON Users(email);
   },
   usage: {
     count: Number,       // Usage count this period
-    reset_at: Number     // When usage resets (Unix timestamp)
+    reset_at: Number     // When usage resets (Unix epoch milliseconds)
   }
 }
 ```
@@ -1493,7 +1486,7 @@ CREATE TABLE Auths (
 ```javascript
 {
   email: String,    // Primary key
-  password: String, // bcrypt hash
+  password: String, // scrypt hash (legacy bcrypt still verifies, rehashed on next signin)
   userID: String    // Reference to Users._id
 }
 ```
@@ -1509,19 +1502,19 @@ CREATE TABLE Auths (
 | `_id` | String (UUID) | Unique identifier |
 | `email` | String | User's email (unique) |
 | `name` | String | Display name |
-| `created_at` | Unix timestamp | Account creation time |
+| `created_at` | Unix ms | Account creation time |
 | `subscription.stripeID` | String | Stripe customer ID |
 | `subscription.expires` | Unix timestamp | When subscription ends |
 | `subscription.status` | String | Stripe subscription status |
 | `usage.count` | Integer | Actions used this period |
-| `usage.reset_at` | Unix timestamp | When usage counter resets |
+| `usage.reset_at` | Unix ms | When usage counter resets |
 
 #### Auths Table
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `email` | String | User's email (primary key) |
-| `password` | String | bcrypt hash (10 rounds) |
+| `password` | String | scrypt hash (legacy bcrypt verified, then rehashed) |
 | `userID` | String | Reference to Users._id |
 
 ---
@@ -1675,7 +1668,7 @@ For all platforms, configure your Stripe webhook:
 
 ```bash
 cd backend && cargo run   # terminal 1
-./scripts/stripe-cli-replay.sh   # terminal 2 (requires stripe CLI)
+./backend/scripts/stripe-cli-replay.sh   # terminal 2 (requires stripe CLI)
 # or: stripe listen --forward-to localhost:8000/api/payment
 #     stripe trigger checkout.session.completed
 ```
@@ -1710,11 +1703,11 @@ Separate services for frontend (Static Site) and backend (Web Service).
 3. Configure:
    - Name: `skateboard-backend`
    - Root Directory: `backend`
-   - Runtime: Node
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-4. Add environment variables
-5. Deploy and copy the backend URL
+   - Runtime: Docker, using the repo-root `Dockerfile` (the backend is Rust, not Node)
+   - Health Check Path: `/api/health`
+4. Add environment variables (`JWT_SECRET` is mandatory in production; the server refuses to start without a 32+ character value)
+5. Attach a persistent disk mounted where `database.connectionString` points, or SQLite data is lost on every deploy
+6. Deploy and copy the backend URL
 
 #### 2. Deploy Frontend
 
@@ -1733,12 +1726,10 @@ Update `src/constants.json`:
 { "backendURL": "https://skateboard-backend.onrender.com" }
 ```
 
-Update `backend/config.json`:
-```json
-{
-  "client": "https://skateboard-frontend.onrender.com",
-  "database": { ... }
-}
+Set the backend's environment (there is no `client` field in `backend/config.json`):
+```bash
+CORS_ORIGINS=https://skateboard-frontend.onrender.com
+FRONTEND_URL=https://skateboard-frontend.onrender.com
 ```
 
 ---
@@ -1773,12 +1764,10 @@ Update `src/constants.json`:
 { "backendURL": "https://yourapp.up.railway.app" }
 ```
 
-Update `backend/config.json`:
-```json
-{
-  "client": "https://random-name.netlify.app",
-  "database": { ... }
-}
+Set the backend's environment on Railway (there is no `client` field in `backend/config.json`):
+```bash
+CORS_ORIGINS=https://random-name.netlify.app
+FRONTEND_URL=https://random-name.netlify.app
 ```
 
 ---
@@ -1792,7 +1781,7 @@ docker build -t skateboard .
 docker run -p 8000:8000 --env-file .env skateboard
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md#production-configuration) for environment configuration.
+See [Production Configuration](#production-configuration) above for environment configuration.
 
 ---
 

@@ -2,16 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport"  content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+    <!-- Zoom stays enabled (WCAG 2.1 AA 1.4.4); viewport-fit covers notched devices. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{{APP_NAME}}</title>
+    <meta name="description" content="{{TAGLINE}}" />
     <link rel="icon" type="image/png" href="/icons/icon.png" />
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="/icons/icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
     <meta name="mobile-web-app-capable" content="yes">
-    
+
     <!-- OpenGraph Meta Data -->
     <meta property="og:title" content="{{APP_NAME}}">
     <meta property="og:description" content="{{TAGLINE}}">
-    <meta property="og:image" content="/icons/icon.png">
+    <meta property="og:image" content="https://{{COMPANY_WEBSITE}}/icons/icon.png">
     <meta property="og:url" content="https://{{COMPANY_WEBSITE}}">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="{{APP_NAME}}">
@@ -20,7 +24,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{APP_NAME}}">
     <meta name="twitter:description" content="{{TAGLINE}}">
-    <meta name="twitter:image" content="/icons/icon.png">
+    <meta name="twitter:image" content="https://{{COMPANY_WEBSITE}}/icons/icon.png">
 
     <!-- Prevent dark mode flash -->
     <script>
@@ -35,15 +39,16 @@
       })();
     </script>
 
+    <!-- Paint the theme background before the stylesheet resolves; no opacity gate, so a
+         failed CSS load degrades to unstyled content instead of a blank page. -->
     <style>
-      body { background: oklch(0.985 0 0); }
+      body { background: oklch(0.985 0 0); height: 100%; overscroll-behavior: none; }
       .dark body { background: oklch(0.05 0 0); }
-      #root { opacity: 0; }
     </style>
 
-    <script defer type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </head>
-  <body style="height: 100%; overscroll-behavior: none;">
+  <body>
     <div id="root"></div>
   </body>
 </html>

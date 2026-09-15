@@ -331,13 +331,39 @@ pub fn validate_environment(config: &BackendConfig, log: &Logger) -> bool {
             (
                 "hint",
                 Json::Str(
-                    "Set DATABASE_URL, MONGODB_URL, POSTGRES_URL, STRIPE_KEY, JWT_SECRET for full functionality"
+                    "See backend/.env.example; STRIPE_KEY and JWT_SECRET are needed for payments and auth"
                         .into(),
                 ),
             ),
         ],
     );
     false
+}
+
+/// Shortest `JWT_SECRET` accepted in production (HMAC-SHA256 block size).
+pub const MIN_JWT_SECRET_LEN: usize = 32;
+
+/// Reject a production boot that cannot mint trustworthy sessions.
+///
+/// Development keeps the warn-and-continue behaviour so the template runs
+/// before any secret exists, but a deployed server with a missing or guessable
+/// `JWT_SECRET` would silently serve unauthenticated traffic, so it must not start.
+///
+/// @param secret - Value read from `JWT_SECRET`, if any
+/// @returns `Err` with an operator-facing reason when the secret is unusable
+pub fn check_prod_jwt_secret(secret: Option<&str>) -> Result<(), String> {
+    match secret {
+        None => Err("JWT_SECRET is not set - refusing to start in production".into()),
+        Some(value) if value.len() < MIN_JWT_SECRET_LEN => Err(format!(
+            "JWT_SECRET must be at least {MIN_JWT_SECRET_LEN} characters in production (got {})",
+            value.len()
+        )),
+        // The published template value must never reach production.
+        Some(value) if value.starts_with("your_super_secure_jwt_secret") => {
+            Err("JWT_SECRET is still the .env.example placeholder - refusing to start".into())
+        }
+        Some(_) => Ok(()),
+    }
 }
 
 /// Resolve the directory holding `config.json`, `.env`, and `databases/`.
@@ -522,6 +548,27 @@ mod tests {
 
     fn log() -> Logger {
         Logger::new(true)
+    }
+
+    #[test]
+    fn prod_jwt_secret_accepts_a_long_random_value() {
+        assert!(check_prod_jwt_secret(Some(&"a".repeat(MIN_JWT_SECRET_LEN))).is_ok());
+    }
+
+    #[test]
+    fn prod_jwt_secret_rejects_a_missing_value() {
+        assert!(check_prod_jwt_secret(None).is_err());
+    }
+
+    #[test]
+    fn prod_jwt_secret_rejects_a_short_value() {
+        assert!(check_prod_jwt_secret(Some("too-short")).is_err());
+    }
+
+    #[test]
+    fn prod_jwt_secret_rejects_the_example_placeholder() {
+        let placeholder = "your_super_secure_jwt_secret_here_make_it_long_and_random";
+        assert!(check_prod_jwt_secret(Some(placeholder)).is_err());
     }
 
     #[test]

@@ -21,11 +21,13 @@ import { lazy, Suspense } from 'react';
 import { createSkateboardApp } from '@stevederico/skateboard-ui/App';
 import type { AppRoute } from '@stevederico/skateboard-ui/App';
 import Layout from '@stevederico/skateboard-ui/Layout';
-import CommandMenu from './components/CommandMenu';
 import HomeViewSkeleton from './components/HomeViewSkeleton';
 import constants from './constants.json';
+
+// Route-level code splitting: the command palette and each view leave the entry chunk.
+const CommandMenu = lazy(() => import('./components/CommandMenu'));
 const HomeView = lazy(() => import('./components/HomeView'));
-import BlankView from './components/BlankView';
+const BlankView = lazy(() => import('./components/BlankView'));
 
 /**
  * App layout with global command menu overlay.
@@ -38,7 +40,9 @@ import BlankView from './components/BlankView';
 export function AppLayout() {
   return (
     <>
-      <CommandMenu />
+      <Suspense fallback={null}>
+        <CommandMenu />
+      </Suspense>
       <Layout />
     </>
   );
@@ -52,9 +56,9 @@ export function AppLayout() {
  */
 export const appRoutes: AppRoute[] = [
   { path: 'home', element: <Suspense fallback={<HomeViewSkeleton />}><HomeView /></Suspense> },
-  { path: 'analytics', element: <BlankView title="Analytics" description="Analytics will appear here once you have activity." buttonTitle="View Reports" /> },
-  { path: 'projects', element: <BlankView title="Projects" description="Create your first project to get started." buttonTitle="Create Project" /> },
-  { path: 'team', element: <BlankView title="Team" description="Invite your first team member to start collaborating." buttonTitle="Invite Member" /> }
+  { path: 'analytics', element: <Suspense fallback={null}><BlankView title="Analytics" description="Analytics will appear here once you have activity." /></Suspense> },
+  { path: 'projects', element: <Suspense fallback={null}><BlankView title="Projects" description="Create your first project to get started." /></Suspense> },
+  { path: 'team', element: <Suspense fallback={null}><BlankView title="Team" description="Invite your first team member to start collaborating." /></Suspense> }
 ];
 
 /**
@@ -78,6 +82,3 @@ createSkateboardApp({
   defaultRoute: 'home',
   overrides: { layout: AppLayout }
 });
-
-/** Preload HomeView chunk after initial render for instant navigation */
-setTimeout(() => import('./components/HomeView'), 2000);

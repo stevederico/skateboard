@@ -124,6 +124,11 @@ impl AppState {
         if config::validate_environment(&cfg, &log) {
             log.info("Environment variables validated successfully", &[]);
         }
+        // Development tolerates a missing secret (auth routes answer 503); production
+        // must not start, or it would serve sessions nobody can trust.
+        if prod {
+            config::check_prod_jwt_secret(config::env_nonempty("JWT_SECRET").as_deref())?;
+        }
         if cfg.database.db_type != "sqlite" {
             return Err(format!(
                 "sqlite-only backend; database.dbType is '{}'",

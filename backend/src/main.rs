@@ -88,29 +88,35 @@ extern "C" {
 }
 
 fn spawn_cleanup(state: Arc<AppState>) {
-    let a = Arc::clone(&state);
-    thread::Builder::new()
-        .name("csrf-cleanup".into())
+    spawn_periodic(&state, "csrf-cleanup", 60 * 60, routes::run_csrf_cleanup);
+    spawn_periodic(&state, "lockout-cleanup", 15 * 60, routes::run_lockout_cleanup);
+    spawn_periodic(&state, "webhook-cleanup", 60 * 60, routes::run_webhook_cleanup);
+}
+
+/// Run `task` against shared state forever, every `period_secs`.
+///
+/// A failed spawn is logged rather than dropped silently — losing a janitor
+/// thread means a store grows unbounded, which is worth an operator's attention.
+fn spawn_periodic(
+    state: &Arc<AppState>,
+    name: &str,
+    period_secs: u64,
+    task: fn(&AppState),
+) {
+    let state_for_thread = Arc::clone(state);
+    let spawned = thread::Builder::new()
+        .name(name.to_string())
         .spawn(move || loop {
-            thread::sleep(Duration::from_secs(60 * 60));
-            routes::run_csrf_cleanup(&a);
-        })
-        .ok();
-    let b = Arc::clone(&state);
-    thread::Builder::new()
-        .name("lockout-cleanup".into())
-        .spawn(move || loop {
-            thread::sleep(Duration::from_secs(15 * 60));
-            routes::run_lockout_cleanup(&b);
-        })
-        .ok();
-    if state.prod {
-        thread::Builder::new()
-            .name("hourly".into())
-            .spawn(move || loop {
-                thread::sleep(Duration::from_secs(60 * 60));
-                state.log.debug("Hourly task completed", &[]);
-            })
-            .ok();
+            thread::sleep(Duration::from_secs(period_secs));
+            task(&state_for_thread);
+        });
+    if let Err(e) = spawned {
+        state.log.error(
+            "Failed to start cleanup thread",
+            &[
+                ("thread", Json::Str(name.to_string())),
+                ("error", Json::Str(e.to_string())),
+            ],
+        );
     }
 }

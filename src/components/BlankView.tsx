@@ -10,9 +10,9 @@ interface BlankViewProps {
   title?: string;
   /** Empty state description text */
   description?: string;
-  /** CTA button text (e.g. "Create Project") */
+  /** CTA button text (e.g. "Create Project") — requires {@link BlankViewProps.onButtonClick} */
   buttonTitle?: string;
-  /** CTA button click handler */
+  /** CTA button click handler — without it the button is omitted rather than rendered dead */
   onButtonClick?: () => void;
   /** Custom icon element for empty state */
   icon?: ReactNode;
@@ -38,16 +38,16 @@ export default function BlankView({ title = "Blank", description, buttonTitle, o
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  {icon || <LayoutDashboard size={24} />}
+                  {icon || <LayoutDashboard size={24} aria-hidden="true" />}
                 </EmptyMedia>
                 <EmptyTitle>No {title.toLowerCase()} yet</EmptyTitle>
                 <EmptyDescription>
                   {description || `${title} will appear here once you get started.`}
                 </EmptyDescription>
               </EmptyHeader>
-              {buttonTitle ? (
+              {buttonTitle && onButtonClick ? (
                 <Button onClick={onButtonClick}>
-                  <Plus size={18} />
+                  <Plus size={18} aria-hidden="true" />
                   {buttonTitle}
                 </Button>
               ) : null}

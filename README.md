@@ -42,7 +42,7 @@ Everything you need to ship a production-ready app:
 - **95% less boilerplate** - Focus on features, not infrastructure
 - **Shell + Content + Config** - Framework provides structure, you provide content
 - **Update once, fix everywhere** - All apps inherit improvements from skateboard-ui
-- **16-line main.tsx** - Just define your routes
+- **Routes-only `main.tsx`** - Define routes, pass `constants.json`, done
 - **Convention over configuration** - Sensible defaults with escape hatches everywhere
 
 ### 🔐 **Authentication & User Management**
@@ -150,10 +150,13 @@ To enable payments, configure your Stripe products:
    - Go to **stripe.com** → **Developers** (lower left) → **Webhooks**
    - Click **Add Endpoint**
    - Add your endpoint URL: `https://yourdomain.com/api/payment`
-   - Select these events:
+   - Select these events (every one the backend handles):
+     - `checkout.session.completed` - Links the Stripe customer to the user after first purchase
      - `customer.subscription.created` - Customer signed up for new plan
-     - `customer.subscription.deleted` - Customer's subscription ends
      - `customer.subscription.updated` - Subscription changes (plan switch, trial to active, etc.)
+     - `customer.subscription.deleted` - Customer's subscription ends
+     - `invoice.paid` - Renewal succeeded; extends the paid-through date
+     - `invoice.payment_failed` - Renewal failed; marks the subscription past due
    - Copy the **Signing Secret** to your environment:
    ```bash
    STRIPE_ENDPOINT_SECRET=whsec_your_webhook_secret
@@ -195,7 +198,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.1.0 | Boilerplate (this repo) |
+| **skateboard** | v5.2.0 | Boilerplate (this repo) |
 | **skateboard-ui** | v5.0.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (esbuild JSX) |
 | **Tailwind CSS** | v4.3+ | Styling |
@@ -254,7 +257,7 @@ node scripts/update-skateboard.js --yes    # apply all without prompts
 
 Updates only files in the safe allowlist (`backend/src/*`, `vite.config.ts`, `Dockerfile`, etc.) and merges new deps into your `package.json`. Never touches your `constants.json`, `src/components/*`, `backend/config.json`, or `.env`.
 
-See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. **5.0.0** is a breaking major — see [AGENTS.md → Migrating 4.x → 5.0](AGENTS.md). 4.17.0 replaced the Node/Hono backend with zero-crate Rust. Backend commands are `cargo run` / `cargo test`, not npm. skateboard-ui **5.0** drops `@stevederico/skateboard-ui/icons` and public DynamicIcon — apps named-import from `lucide-react`; `shadcn/ui/*` imports still work (package exports remap to `ui/`).
+See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide. **5.0.0** is a breaking major — see [AGENTS.md → Migrating 4.x → 5.0](AGENTS.md#migrating-4x--50-exact-checklist). 4.17.0 replaced the Node/Hono backend with zero-crate Rust. Backend commands are `cargo run` / `cargo test`, not npm. skateboard-ui **5.0** drops `@stevederico/skateboard-ui/icons` and public DynamicIcon — apps named-import from `lucide-react`; `shadcn/ui/*` imports still work (package exports remap to `ui/`).
 
 <br />
 
