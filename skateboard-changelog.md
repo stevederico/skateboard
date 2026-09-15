@@ -15,6 +15,12 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+4.23.0
+
+  Drop demo ChatView
+  Drop CalendarTestView
+  Drop frontend vitest
+
 4.22.0
 
   Pin react-router 7.15.0

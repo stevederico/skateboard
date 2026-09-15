@@ -25,9 +25,7 @@ import CommandMenu from './components/CommandMenu';
 import HomeViewSkeleton from './components/HomeViewSkeleton';
 import constants from './constants.json';
 const HomeView = lazy(() => import('./components/HomeView'));
-import ChatView from './components/ChatView';
 import BlankView from './components/BlankView';
-import CalendarTestView from './components/CalendarTestView';
 
 /**
  * App layout with global command menu overlay.
@@ -54,11 +52,9 @@ export function AppLayout() {
  */
 export const appRoutes: AppRoute[] = [
   { path: 'home', element: <Suspense fallback={<HomeViewSkeleton />}><HomeView /></Suspense> },
-  { path: 'chat', element: <ChatView /> },
   { path: 'analytics', element: <BlankView title="Analytics" description="Analytics will appear here once you have activity." buttonTitle="View Reports" /> },
   { path: 'projects', element: <BlankView title="Projects" description="Create your first project to get started." buttonTitle="Create Project" /> },
-  { path: 'team', element: <BlankView title="Team" description="Invite your first team member to start collaborating." buttonTitle="Invite Member" /> },
-  { path: 'calendar-test', element: <CalendarTestView /> }
+  { path: 'team', element: <BlankView title="Team" description="Invite your first team member to start collaborating." buttonTitle="Invite Member" /> }
 ];
 
 /**

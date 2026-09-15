@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, symlinkSync, lstatSync, readlinkSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { ALLOWLIST, SYMLINKS, RENAMES, ensureSymlink } from './update-skateboard.js';
+import { ALLOWLIST, REMOVED, SYMLINKS, RENAMES, ensureSymlink } from './update-skateboard.js';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 function walkRepo(dir, out = []) {
@@ -48,10 +48,13 @@ describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
     assert.deepEqual(missing, [], `backend boilerplate missing from ALLOWLIST: ${missing.join(', ')}`);
   });
 
-  it('allowlists the build/test infra new in 4.5.0', () => {
-    for (const f of ['vite.plugins.ts', 'src/test/setup.js']) {
-      assert.ok(ALLOWLIST.includes(f), `${f} must be synced or apps fail to build/test`);
-    }
+  it('allowlists the build infra new in 4.5.0', () => {
+    assert.ok(ALLOWLIST.includes('vite.plugins.ts'), 'vite.plugins.ts must be synced');
+  });
+
+  it('drops the old vitest harness from apps', () => {
+    assert.ok(REMOVED.includes('src/test/setup.js'));
+    assert.ok(REMOVED.includes('src/test/dom.js'));
   });
 });
 

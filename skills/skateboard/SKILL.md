@@ -365,7 +365,7 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 | Updater `.js` conflict missed | `git grep` conflict markers in **all** extensions |
 | Empty `STRIPE_ENDPOINT_SECRET=` in `.env.example` | Can poison tests that load example into `process.env` |
 | `serveStatic` 404s assets | Pass **relative** `config.staticDir` (`../dist`), not absolute path |
-| Testless frontend fails vitest | `vitest run --passWithNoTests` — don't copy canonical `main.test.jsx` into customized apps |
+| Testless frontend | Canonical has no `src/**/*.test.jsx`; do not add vitest |
 | Deno-era `node_modules/.deno` | Remove; use npm/bun + `package-lock.json` |
 
 ### After upgrade checklist
