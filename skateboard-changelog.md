@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.8.0
+
+  Pin skateboard-ui 5.4.0
+
 5.7.2
 
   Pin skateboard-ui 5.2.3
