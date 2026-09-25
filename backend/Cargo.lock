@@ -4,4 +4,4 @@ version = 4
 
 [[package]]
 name = "skateboard-backend"
-version = "5.7.1"
+version = "5.7.2"
