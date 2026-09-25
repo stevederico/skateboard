@@ -1015,8 +1015,9 @@ See the [Migration](#migration) section below for the full upgrade prompt to han
 
 #### Single Instance (Default)
 
-The Rust backend keeps two bounded in-memory stores (`backend/src/stores.rs`): issued CSRF
-tokens and sign-in lockout counters. SQLite holds everything durable. One process serves
+The Rust backend keeps bounded in-memory stores (`backend/src/stores.rs`) for sign-in lockout
+counters and the auth rate limiter. CSRF tokens are signed with `JWT_SECRET` rather than
+stored, so they survive restarts and deploys. SQLite holds everything durable. One process serves
 requests on a fixed thread pool.
 
 **Works great for:**
@@ -1026,16 +1027,15 @@ requests on a fixed thread pool.
 
 #### Horizontal Scaling (Multiple Instances)
 
-Both in-memory stores are per-process, so a CSRF token is only known to the instance that
-issued it. Two supported options:
+CSRF tokens are signed, so every instance that shares `JWT_SECRET` accepts them. The lockout
+and rate-limit stores are per-process, so each instance counts separately. Two supported options:
 
 **Option 1: Sticky sessions (recommended)**
 - Enable session affinity on the load balancer
 - Stores work as-is; no code change
 
-**Option 2: Accept the retry**
-- A CSRF miss answers 403 *and* issues a fresh token the client can immediately retry with
-- Costs one extra round-trip whenever a client switches instance
+**Option 2: Accept per-instance counts**
+- The effective auth rate limit is the per-instance limit times the instance count
 
 Sharing state through Redis is not supported: it would mean adding a crate, and the backend is
 zero-crate by design. SQLite is also single-writer, so scale vertically first, or move the
@@ -1045,7 +1045,7 @@ database file onto a shared server before adding instances.
 
 | Store | Backing | Cleanup |
 |-------|---------|---------|
-| CSRF tokens | Memory, bounded with oldest-first eviction | Hourly sweep of expired entries |
+| CSRF tokens | Not stored; HMAC-signed with a 24-hour expiry | None needed |
 | Sign-in lockouts | Memory, bounded, keyed per email + IP | Every 15 minutes |
 | Processed webhook ids | SQLite `WebhookEvents` | Hourly; rows older than 30 days deleted |
 

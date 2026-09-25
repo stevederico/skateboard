@@ -135,10 +135,49 @@ fn parse_json_body(req: &Request) -> Result<Json, Response> {
     json::parse(&req.body).map_err(|_| err_json(400, "Invalid request body"))
 }
 
-fn generate_csrf_token() -> Result<String, Response> {
-    crypto::random_bytes(32)
-        .map(|b| crypto::hex_encode(&b))
-        .map_err(|_| err_json(500, "Server error"))
+/// Mint a CSRF token for `user_id`: `<issued ms>.<hex HMAC-SHA256>`.
+///
+/// The token is signed with `JWT_SECRET` instead of kept in server memory, so
+/// it survives restarts and deploys and every replica accepts it.
+fn generate_csrf_token(state: &AppState, user_id: &str) -> Result<String, Response> {
+    let Some(secret) = state.jwt_secret.as_deref() else {
+        return Err(err_json(500, "Server error"));
+    };
+    let issued = config::now_ms();
+    Ok(format!("{issued}.{}", csrf_mac(secret, user_id, issued)))
+}
+
+/// HMAC over the user and issue time. The `csrf:` prefix keeps these apart
+/// from JWT signatures made with the same secret.
+fn csrf_mac(secret: &str, user_id: &str, issued: i64) -> String {
+    let msg = format!("csrf:{user_id}:{issued}");
+    crypto::hex_encode(&crypto::hmac_sha256(secret.as_bytes(), msg.as_bytes()))
+}
+
+/// Result of checking a presented CSRF token.
+#[derive(Debug, PartialEq)]
+enum CsrfCheck {
+    Valid,
+    Expired,
+    Invalid,
+}
+
+fn check_csrf_token(secret: &str, user_id: &str, token: &str, now_ms: i64) -> CsrfCheck {
+    let Some((issued, mac)) = token.split_once('.') else {
+        return CsrfCheck::Invalid;
+    };
+    let Ok(issued) = issued.parse::<i64>() else {
+        return CsrfCheck::Invalid;
+    };
+    let expected = csrf_mac(secret, user_id, issued);
+    if mac.len() != expected.len() || !ct_eq(mac.as_bytes(), expected.as_bytes()) {
+        return CsrfCheck::Invalid;
+    }
+    // A minute of slack for clock skew between replicas.
+    if now_ms - issued > CSRF_TOKEN_EXPIRY_MS || issued - now_ms > 60_000 {
+        return CsrfCheck::Expired;
+    }
+    CsrfCheck::Valid
 }
 
 fn generate_uuid() -> Result<String, Response> {
@@ -187,14 +226,10 @@ fn require_auth(state: &AppState, req: &Request) -> Result<String, Response> {
 
 /// CSRF check for a state-changing request.
 ///
-/// A token that is missing, mismatched, unknown to the store, or expired is
+/// A token that is missing, forged, signed for another user, or expired is
 /// refused with 403. The refusal carries a freshly minted token as a cookie
-/// whenever the caller's identity is known, so a client whose token was lost —
-/// the in-memory store does not survive a restart — can retry once and succeed.
-///
-/// Deliberately *not* done here: accepting the request and regenerating the
-/// token on a store miss. That turns every post-restart request into a free
-/// pass, because the stored token is what the header is checked against.
+/// whenever the caller's identity is known, so a client holding a stale token
+/// can retry once and succeed. The refusal itself never accepts the request.
 ///
 /// # Errors
 /// A 403 [`Response`], ready to return, with a replacement cookie when one
@@ -216,40 +251,31 @@ fn require_csrf(state: &AppState, req: &Request, user_id: &str) -> Result<(), Re
         return Err(err_json(403, "Invalid CSRF token"));
     }
     let csrf_header = csrf_header.unwrap_or("");
-    let Some(stored) = state.csrf.get(user_id) else {
-        state.log.info(
-            "CSRF validation failed - no token on record for this user",
-            &[
-                ("userID", json::s(user_id)),
-                ("path", json::s(req.path.clone())),
-            ],
-        );
-        return Err(csrf_retry(state, user_id, "CSRF token expired"));
-    };
-    if csrf_header.len() != stored.token.len()
-        || !ct_eq(csrf_header.as_bytes(), stored.token.as_bytes())
-    {
-        state.log.info(
-            "CSRF validation failed - token mismatch",
-            &[
-                ("userID", json::s(user_id)),
-                ("path", json::s(req.path.clone())),
-            ],
-        );
+    let Some(secret) = state.jwt_secret.as_deref() else {
         return Err(err_json(403, "Invalid CSRF token"));
-    }
-    if config::now_ms() - stored.timestamp > CSRF_TOKEN_EXPIRY_MS {
-        state.log.info(
-            "CSRF validation failed - token expired",
-            &[
-                ("userID", json::s(user_id)),
-                (
-                    "age",
-                    json::s(format!("{}s", (config::now_ms() - stored.timestamp) / 1000)),
-                ),
-            ],
-        );
-        return Err(csrf_retry(state, user_id, "CSRF token expired"));
+    };
+    match check_csrf_token(secret, user_id, csrf_header, config::now_ms()) {
+        CsrfCheck::Valid => {}
+        CsrfCheck::Invalid => {
+            state.log.info(
+                "CSRF validation failed - token mismatch",
+                &[
+                    ("userID", json::s(user_id)),
+                    ("path", json::s(req.path.clone())),
+                ],
+            );
+            return Err(csrf_retry(state, user_id, "Invalid CSRF token"));
+        }
+        CsrfCheck::Expired => {
+            state.log.info(
+                "CSRF validation failed - token expired",
+                &[
+                    ("userID", json::s(user_id)),
+                    ("path", json::s(req.path.clone())),
+                ],
+            );
+            return Err(csrf_retry(state, user_id, "CSRF token expired"));
+        }
     }
     state.log.debug("CSRF validation passed", &[("userID", json::s(user_id))]);
     Ok(())
@@ -257,18 +283,11 @@ fn require_csrf(state: &AppState, req: &Request, user_id: &str) -> Result<(), Re
 
 /// Build a 403 that also hands the caller a usable token for one retry.
 ///
-/// Falls back to a plain 403 when a token cannot be minted, so a failure of the
-/// random source can never turn into an accepted request.
+/// Falls back to a plain 403 when a token cannot be minted.
 fn csrf_retry(state: &AppState, user_id: &str, message: &str) -> Response {
-    match generate_csrf_token() {
-        Ok(token) => {
-            state.csrf.set(user_id, token.clone(), config::now_ms());
-            err_json(403, message).cookie(&csrf_cookie(state, &token))
-        }
-        Err(_) => {
-            state.csrf.remove(user_id);
-            err_json(403, message)
-        }
+    match generate_csrf_token(state, user_id) {
+        Ok(token) => err_json(403, message).cookie(&csrf_cookie(state, &token)),
+        Err(_) => err_json(403, message),
     }
 }
 
@@ -309,8 +328,7 @@ fn delete_csrf_cookie(state: &AppState) -> Cookie {
 }
 
 fn set_auth_cookies(state: &AppState, res: Response, user_id: &str, jwt: &str) -> Result<Response, Response> {
-    let csrf = generate_csrf_token()?;
-    state.csrf.set(user_id, csrf.clone(), config::now_ms());
+    let csrf = generate_csrf_token(state, user_id)?;
     Ok(res.cookie(&token_cookie(state, jwt)).cookie(&csrf_cookie(state, &csrf)))
 }
 
@@ -546,7 +564,6 @@ fn signout(state: &AppState, req: &Request) -> Response {
     if let Err(res) = require_csrf(state, req, &user_id) {
         return res;
     }
-    state.csrf.remove(&user_id);
     state.log.info("Signout success", &[]);
     json_res(200, &json::obj([("message", json::s("Signed out successfully"))]))
         .cookie(&delete_token_cookie(state))
@@ -559,8 +576,21 @@ fn me_get(state: &AppState, req: &Request) -> Response {
         Err(r) => return r,
     };
     state.log.debug("/me checking for user", &[]);
-    match state.pool.find_user(&UserQuery::Id(user_id)) {
-        Ok(Some(u)) => json_res(200, &user_json(&u)),
+    match state.pool.find_user(&UserQuery::Id(user_id.clone())) {
+        Ok(Some(u)) => {
+            let res = json_res(200, &user_json(&u));
+            // Re-mint when the client's token is missing, expired, or from an
+            // older scheme, so its next POST succeeds without a 403.
+            let current = req.cookie("csrf_token").unwrap_or_default();
+            let secret = state.jwt_secret.as_deref().unwrap_or_default();
+            if check_csrf_token(secret, &user_id, &current, config::now_ms()) == CsrfCheck::Valid {
+                return res;
+            }
+            match generate_csrf_token(state, &user_id) {
+                Ok(token) => res.cookie(&csrf_cookie(state, &token)),
+                Err(err) => err,
+            }
+        }
         Ok(None) => err_json(404, "User not found"),
         Err(e) => db_err(state, "Unhandled error occurred", &e),
     }
@@ -1260,17 +1290,6 @@ fn spa_fallback(state: &AppState) -> Response {
     }
 }
 
-/// Drop expired CSRF tokens. Called from the hourly cleanup thread.
-pub fn run_csrf_cleanup(state: &AppState) {
-    let cleaned = state.csrf.cleanup(config::now_ms());
-    if cleaned > 0 {
-        state.log.debug(
-            "CSRF cleanup completed",
-            &[("removedTokens", json::i(cleaned as i64))],
-        );
-    }
-}
-
 /// Days a processed Stripe webhook id is remembered for replay protection.
 /// Stripe stops retrying an event after ~3 days, so 30 is generous.
 const WEBHOOK_RETENTION_DAYS: i64 = 30;
@@ -1572,8 +1591,93 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// A response that only sets a CSRF cookie, standing in for a token the
+    /// client kept from before a restart or from the old random-token scheme.
+    fn stale_csrf(token: &str) -> Response {
+        Response::text(200, "").header("Set-Cookie", &format!("csrf_token={token}; Path=/"))
+    }
+
+    const OLD_SCHEME_TOKEN: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
     #[test]
-    fn csrf_store_miss_is_refused_not_auto_accepted() {
+    fn csrf_token_round_trips_and_rejects_tampering() {
+        let secret = "s";
+        let issued = 1_000_000;
+        let token = format!("{issued}.{}", csrf_mac(secret, "u1", issued));
+        assert_eq!(check_csrf_token(secret, "u1", &token, issued), CsrfCheck::Valid);
+        assert_eq!(check_csrf_token(secret, "u2", &token, issued), CsrfCheck::Invalid);
+        assert_eq!(check_csrf_token("other", "u1", &token, issued), CsrfCheck::Invalid);
+        assert_eq!(check_csrf_token(secret, "u1", OLD_SCHEME_TOKEN, issued), CsrfCheck::Invalid);
+        assert_eq!(check_csrf_token(secret, "u1", "", issued), CsrfCheck::Invalid);
+        let moved = format!("{}.{}", issued + 1, csrf_mac(secret, "u1", issued));
+        assert_eq!(check_csrf_token(secret, "u1", &moved, issued), CsrfCheck::Invalid);
+        assert_eq!(
+            check_csrf_token(secret, "u1", &token, issued + CSRF_TOKEN_EXPIRY_MS + 1),
+            CsrfCheck::Expired
+        );
+        assert_eq!(check_csrf_token(secret, "u1", &token, issued - 120_000), CsrfCheck::Expired);
+    }
+
+    #[test]
+    fn csrf_token_survives_a_restart() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "restart@example.com");
+        drop(state);
+        // Same dir and JWT_SECRET, fresh process state.
+        let restarted = {
+            let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            AppState::open_in(&dir, 2, Logger::new(true)).expect("reopen")
+        };
+        let mut req = Request::for_test("POST", "/api/usage");
+        replay_cookies(&mut req, &[&signup], true);
+        req.set_test_body(br#"{"operation":"check"}"#.to_vec());
+        let res = handle(&restarted, req);
+        assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn me_replaces_a_stale_csrf_token() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "restore@example.com");
+        let stale = stale_csrf(OLD_SCHEME_TOKEN);
+
+        let mut me = Request::for_test("GET", "/api/me");
+        replay_cookies(&mut me, &[&signup, &stale], false);
+        let me_res = handle(&state, me);
+        assert_eq!(me_res.status, 200, "{}", String::from_utf8_lossy(&me_res.body));
+        assert!(
+            me_res.headers.iter().any(|(k, v)| {
+                k.eq_ignore_ascii_case("Set-Cookie") && v.starts_with("csrf_token=")
+            }),
+            "a stale token on GET /me must get a replacement cookie"
+        );
+
+        let mut usage = Request::for_test("POST", "/api/usage");
+        replay_cookies(&mut usage, &[&signup, &stale, &me_res], true);
+        usage.set_test_body(br#"{"operation":"check"}"#.to_vec());
+        let res = handle(&state, usage);
+        assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn me_keeps_a_valid_csrf_token() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "keep@example.com");
+        let mut me = Request::for_test("GET", "/api/me");
+        replay_cookies(&mut me, &[&signup], false);
+        let me_res = handle(&state, me);
+        assert_eq!(me_res.status, 200);
+        assert!(!me_res
+            .headers
+            .iter()
+            .any(|(k, v)| k.eq_ignore_ascii_case("Set-Cookie") && v.starts_with("csrf_token=")));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn csrf_stale_token_is_refused_not_auto_accepted() {
         let (state, dir) = test_state();
         let signup = signed_up(&state, "miss@example.com");
         let user_id = state
@@ -1582,16 +1686,15 @@ mod tests {
             .expect("query")
             .expect("user")
             .id;
-        // Simulates a restart: the cookie and header survive, the store does not.
-        state.csrf.remove(&user_id);
+        let stale = stale_csrf(OLD_SCHEME_TOKEN);
 
         let mut req = Request::for_test("PUT", "/api/me");
-        replay_cookies(&mut req, &[&signup], true);
+        replay_cookies(&mut req, &[&signup, &stale], true);
         req.set_test_body(br#"{"name":"Renamed"}"#.to_vec());
         let res = handle(&state, req);
         assert_eq!(
             res.status, 403,
-            "a store miss must not accept the request: {}",
+            "a stale token must not accept the request: {}",
             String::from_utf8_lossy(&res.body)
         );
         // The name must be unchanged, proving the mutation did not run.
@@ -1608,23 +1711,17 @@ mod tests {
     fn csrf_refusal_issues_a_token_usable_on_retry() {
         let (state, dir) = test_state();
         let signup = signed_up(&state, "retry@example.com");
-        let user_id = state
-            .pool
-            .find_user(&UserQuery::Email("retry@example.com".into()))
-            .expect("query")
-            .expect("user")
-            .id;
-        state.csrf.remove(&user_id);
+        let stale = stale_csrf(OLD_SCHEME_TOKEN);
 
         let mut first = Request::for_test("PUT", "/api/me");
-        replay_cookies(&mut first, &[&signup], true);
+        replay_cookies(&mut first, &[&signup, &stale], true);
         first.set_test_body(br#"{"name":"Renamed"}"#.to_vec());
         let refused = handle(&state, first);
         assert_eq!(refused.status, 403);
 
         // Retry with the replacement token the refusal set.
         let mut second = Request::for_test("PUT", "/api/me");
-        replay_cookies(&mut second, &[&signup, &refused], true);
+        replay_cookies(&mut second, &[&signup, &stale, &refused], true);
         second.set_test_body(br#"{"name":"Renamed"}"#.to_vec());
         let res = handle(&state, second);
         assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));

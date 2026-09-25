@@ -7,6 +7,14 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.9.0 — CSRF survives restarts.** CSRF tokens are now
+`<issued ms>.<HMAC>` signed with `JWT_SECRET` instead of kept in an in-memory
+store, so a deploy or restart no longer makes the first write after it fail
+with 403, and every replica accepts the same token. `GET /api/me` re-mints the
+cookie when it is missing, expired, or from the old scheme. `CsrfStore`,
+`AppState.csrf` and the hourly `csrf-cleanup` job are gone; drop any app code
+that touched them.
+
 **5.7.1 — skateboard-ui 5.2.2.** `useListData(url, sort, { live: true })`
 refetches quietly every minute while the page is visible; a page opened
 before a deploy reloads once instead of failing to import a chunk; dark mode

@@ -15,6 +15,12 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.9.0
+
+  Sign CSRF tokens
+  Survive deploy restarts
+  Remove CSRF store
+
 5.8.0
 
   Pin skateboard-ui 5.4.0
