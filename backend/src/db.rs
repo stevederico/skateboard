@@ -47,6 +47,8 @@ mod ffi {
     >;
 
     /// Success.
+    /// SQL error or missing database.
+    pub const SQLITE_ERROR: c_int = 1;
     pub const SQLITE_OK: c_int = 0;
     /// `sqlite3_step` produced a row.
     pub const SQLITE_ROW: c_int = 100;
@@ -158,9 +160,18 @@ impl std::error::Error for DbError {}
 
 impl DbError {
     /// Build a local (non-driver) error, e.g. a bad path or a closed pool.
-    fn local(message: impl Into<String>) -> DbError {
+    pub(crate) fn local(message: impl Into<String>) -> DbError {
         DbError {
             code: ffi::SQLITE_MISUSE,
+            message: message.into(),
+        }
+    }
+
+    /// Build an error from a remote Hrana response. `code` stays
+    /// [`ffi::SQLITE_ERROR`] so callers still match on `message`.
+    pub(crate) fn remote(message: impl Into<String>) -> DbError {
+        DbError {
+            code: ffi::SQLITE_ERROR,
             message: message.into(),
         }
     }
@@ -193,6 +204,11 @@ pub struct Row {
 }
 
 impl Row {
+    /// Assemble a row from a remote result. Column order follows the server.
+    pub(crate) fn from_cells(cells: Vec<(String, Value)>) -> Row {
+        Row { cells }
+    }
+
     /// Borrow a column's value by name, or `None` when the column is absent.
     ///
     /// A column that exists but holds SQL NULL returns `Some(&Value::Null)` —
@@ -238,8 +254,14 @@ pub struct Changes {
 /// hands a connection to a worker. The pool still gives each caller exclusive
 /// use, so the serialization mutex is never actually contended; FULLMUTEX buys
 /// a sound `Send` impl rather than throughput.
+/// Where a connection's SQL goes: the local file, or a libSQL server over HTTP.
+enum Store {
+    Local(*mut ffi::Sqlite3),
+    Remote(crate::hrana::Session),
+}
+
 pub struct Db {
-    handle: *mut ffi::Sqlite3,
+    store: Store,
 }
 
 // SAFETY: the handle is opened with SQLITE_OPEN_FULLMUTEX, so libsqlite3
@@ -254,8 +276,11 @@ impl Drop for Db {
         // been closed before (Drop runs once). sqlite3_close_v2 tolerates
         // outstanding statements, and this type finalizes every statement it
         // prepares before returning, so none are outstanding.
-        unsafe {
-            ffi::sqlite3_close_v2(self.handle);
+        // A remote session closes its Hrana baton in Session's Drop.
+        if let Store::Local(handle) = &self.store {
+            unsafe {
+                ffi::sqlite3_close_v2(*handle);
+            }
         }
     }
 }
@@ -305,7 +330,9 @@ impl Db {
                 message: format!("sqlite3_open_v2 could not allocate a handle for {path}"),
             });
         }
-        let db = Db { handle };
+        let db = Db {
+            store: Store::Local(handle),
+        };
         if rc != ffi::SQLITE_OK {
             // Read the message off the handle before `db` drops and closes it.
             return Err(db.last_error(rc));
@@ -313,9 +340,25 @@ impl Db {
 
         // SAFETY: `handle` is a live connection just returned by open_v2.
         unsafe {
-            ffi::sqlite3_busy_timeout(db.handle, BUSY_TIMEOUT_MS);
+            ffi::sqlite3_busy_timeout(db.local_handle(), BUSY_TIMEOUT_MS);
         }
         Ok(db)
+    }
+
+    /// Open a Hrana session against `base_url` and namespace `namespace`.
+    pub fn open_remote(base_url: &str, namespace: &str) -> Db {
+        Db {
+            store: Store::Remote(crate::hrana::Session::open(base_url, namespace)),
+        }
+    }
+
+    fn local_handle(&self) -> *mut ffi::Sqlite3 {
+        match self.store {
+            Store::Local(handle) => handle,
+            Store::Remote(_) => {
+                panic!("local sqlite handle used on a remote connection")
+            }
+        }
     }
 
     /// Run one or more statements with no parameters and no result rows.
@@ -323,6 +366,9 @@ impl Db {
     /// # Errors
     /// Returns [`DbError`] carrying the driver message on failure.
     pub fn exec(&self, sql: &str) -> Result<(), DbError> {
+        if let Store::Remote(session) = &self.store {
+            return session.exec(sql);
+        }
         let text =
             CString::new(sql).map_err(|_| DbError::local("SQL contains an interior NUL byte"))?;
 
@@ -331,7 +377,7 @@ impl Db {
         // nothing for us to free — the message is read from the handle instead.
         let rc = unsafe {
             ffi::sqlite3_exec(
-                self.handle,
+                self.local_handle(),
                 text.as_ptr(),
                 None,
                 std::ptr::null_mut(),
@@ -350,6 +396,9 @@ impl Db {
     /// # Errors
     /// Returns [`DbError`] when the statement fails to prepare, bind, or step.
     pub fn query(&self, sql: &str, params: &[Value]) -> Result<Vec<Row>, DbError> {
+        if let Store::Remote(session) = &self.store {
+            return session.query(sql, params);
+        }
         let stmt = self.prepare(sql)?;
         self.bind(&stmt, params)?;
 
@@ -385,6 +434,9 @@ impl Db {
     /// Returns [`DbError`] carrying the driver message — including
     /// `"UNIQUE constraint failed: ..."`, which the signup route matches on.
     pub fn run(&self, sql: &str, params: &[Value]) -> Result<Changes, DbError> {
+        if let Store::Remote(session) = &self.store {
+            return session.run(sql, params);
+        }
         let stmt = self.prepare(sql)?;
         self.bind(&stmt, params)?;
         loop {
@@ -402,8 +454,8 @@ impl Db {
         // SAFETY: `handle` is live; both calls only read counters off it.
         let changes = unsafe {
             Changes {
-                changes: i64::from(ffi::sqlite3_changes(self.handle)),
-                last_insert_rowid: ffi::sqlite3_last_insert_rowid(self.handle),
+                changes: i64::from(ffi::sqlite3_changes(self.local_handle())),
+                last_insert_rowid: ffi::sqlite3_last_insert_rowid(self.local_handle()),
             }
         };
         Ok(changes)
@@ -424,7 +476,7 @@ impl Db {
         // compiled.
         let rc = unsafe {
             ffi::sqlite3_prepare_v2(
-                self.handle,
+                self.local_handle(),
                 bytes.as_ptr().cast::<c_char>(),
                 len,
                 &mut ptr,
@@ -492,8 +544,8 @@ impl Db {
         // UTF-8 string owned by SQLite and valid until the next call on this
         // handle; it is copied into an owned String before returning.
         unsafe {
-            let extended = ffi::sqlite3_extended_errcode(self.handle);
-            let msg = ffi::sqlite3_errmsg(self.handle);
+            let extended = ffi::sqlite3_extended_errcode(self.local_handle());
+            let msg = ffi::sqlite3_errmsg(self.local_handle());
             let message = if msg.is_null() {
                 String::new()
             } else {
@@ -639,6 +691,30 @@ impl Pool {
             idle.push(db);
         }
 
+        Ok(Pool {
+            state: Mutex::new(PoolState {
+                idle,
+                closed: false,
+            }),
+            available: Condvar::new(),
+        })
+    }
+
+    /// Open `size` Hrana sessions to a libSQL server. The schema is created on
+    /// the first session. Journal pragmas are skipped: the server owns those.
+    ///
+    /// # Errors
+    /// Returns [`DbError`] when the schema cannot be created.
+    pub fn open_remote(base_url: &str, namespace: &str, size: usize) -> Result<Pool, DbError> {
+        let count = size.max(1);
+        let mut idle = Vec::with_capacity(count);
+        for index in 0..count {
+            let db = Db::open_remote(base_url, namespace);
+            if index == 0 {
+                ensure_schema_remote(&db)?;
+            }
+            idle.push(db);
+        }
         Ok(Pool {
             state: Mutex::new(PoolState {
                 idle,
@@ -862,6 +938,26 @@ fn apply_pragmas(db: &Db) -> Result<(), DbError> {
 /// query referencing a newer column fails at runtime. After the creates, each
 /// table is compared against its expected columns via `PRAGMA table_info` and
 /// the missing ones are added.
+/// Same as [`ensure_schema`], but a unique index that existing rows already
+/// violate (common in data imported from another store) is skipped instead of
+/// failing startup.
+fn ensure_schema_remote(db: &Db) -> Result<(), DbError> {
+    for statement in SCHEMA {
+        db.exec(statement)?;
+    }
+    add_missing_columns(db, "Users", USERS_COLUMNS)?;
+    add_missing_columns(db, "Auths", AUTHS_COLUMNS)?;
+    add_missing_columns(db, "WebhookEvents", WEBHOOK_COLUMNS)?;
+    for statement in INDEXES {
+        if let Err(e) = db.exec(statement) {
+            if !e.message.contains("UNIQUE constraint failed") {
+                return Err(e);
+            }
+        }
+    }
+    Ok(())
+}
+
 fn ensure_schema(db: &Db) -> Result<(), DbError> {
     for statement in SCHEMA {
         db.exec(statement)?;

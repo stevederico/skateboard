@@ -141,14 +141,27 @@ impl AppState {
             ));
         }
 
-        let conn = PathBuf::from(&cfg.database.connection_string);
-        let db_path = if conn.is_absolute() {
-            conn
+        // LIBSQL_URL points at a shared libSQL (sqld) server; the namespace is
+        // config.json's database.db. Unset, the app uses its local file.
+        let pool = if let Some(url) = config::env_nonempty("LIBSQL_URL") {
+            let namespace = cfg.database.db.clone();
+            log.info(
+                "Opening shared libSQL namespace",
+                &[("namespace", crate::json::Json::Str(namespace.clone()))],
+            );
+            Pool::open_remote(&url, &namespace, pool_size).map_err(|e| {
+                format!("failed to open libsql namespace {namespace} at {url}: {e}")
+            })?
         } else {
-            dir.join(conn)
+            let conn = PathBuf::from(&cfg.database.connection_string);
+            let db_path = if conn.is_absolute() {
+                conn
+            } else {
+                dir.join(conn)
+            };
+            Pool::open(&db_path.to_string_lossy(), pool_size)
+                .map_err(|e| format!("failed to open sqlite at {}: {e}", db_path.display()))?
         };
-        let pool = Pool::open(&db_path.to_string_lossy(), pool_size)
-            .map_err(|e| format!("failed to open sqlite at {}: {e}", db_path.display()))?;
 
         if config::env_nonempty("STRIPE_KEY").is_none() {
             log.warn("STRIPE_KEY not set - Stripe functionality disabled", &[]);

@@ -7,6 +7,7 @@ pub mod auth;
 pub mod config;
 pub mod crypto;
 pub mod db;
+pub mod hrana;
 pub mod http;
 pub mod json;
 pub mod kdf;

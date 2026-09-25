@@ -7,6 +7,14 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.7.0 — shared libSQL, theme fix.** Set `LIBSQL_URL` to run against a
+shared libSQL (`sqld`) server over Hrana HTTP instead of the local SQLite
+file; the namespace is `config.json` `database.db`. The Hrana client replaces
+its stream baton after every response, including errors, so a failed
+statement inside a transaction cannot leave a pooled connection sending a
+spent baton. `public/theme-init.js` now treats a saved `system` theme as the
+system setting instead of light.
+
 **5.6.0 — security, upgrade promptly.** Parser panics no longer kill HTTP
 workers (`catch_unwind` around `handle_connection` plus a live-count drop
 guard). Request reads have a 15s wall-clock budget and keep-alive idles 30s,

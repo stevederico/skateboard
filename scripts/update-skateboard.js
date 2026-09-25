@@ -66,6 +66,7 @@ const ALLOWLIST = [
   'backend/src/config.rs',
   'backend/src/crypto.rs',
   'backend/src/db.rs',
+  'backend/src/hrana.rs',
   'backend/src/http.rs',
   'backend/src/json.rs',
   'backend/src/kdf.rs',
