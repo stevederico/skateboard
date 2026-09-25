@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.7.1
+
+  Pin skateboard-ui 5.2.2
+
 5.7.0
 
   Add libSQL support
