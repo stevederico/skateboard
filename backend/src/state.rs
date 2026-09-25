@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::config::{self, BackendConfig, Logger};
 use crate::db::Pool;
 use crate::http;
-use crate::stores::{CsrfStore, LockoutStore, RateLimitStore};
+use crate::stores::{LockoutStore, RateLimitStore};
 use crate::stripe::StripeClient;
 use crate::stripe_worker::StripeWorker;
 
@@ -20,8 +20,6 @@ pub struct AppState {
     pub log: Logger,
     /// SQLite connection pool.
     pub pool: Pool,
-    /// Per-user CSRF tokens.
-    pub csrf: CsrfStore,
     /// Failed-sign-in counters.
     pub lockout: LockoutStore,
     /// Per-IP sliding window on signup/signin.
@@ -173,7 +171,6 @@ impl AppState {
             cfg,
             log,
             pool,
-            csrf: CsrfStore::new(),
             lockout: LockoutStore::new(),
             auth_rate: RateLimitStore::new(),
             stripe: config::env_nonempty("STRIPE_KEY")

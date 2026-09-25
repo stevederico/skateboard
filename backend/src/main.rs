@@ -88,7 +88,6 @@ extern "C" {
 }
 
 fn spawn_cleanup(state: Arc<AppState>) {
-    spawn_periodic(&state, "csrf-cleanup", 60 * 60, routes::run_csrf_cleanup);
     spawn_periodic(&state, "lockout-cleanup", 15 * 60, routes::run_lockout_cleanup);
     spawn_periodic(&state, "webhook-cleanup", 60 * 60, routes::run_webhook_cleanup);
 }

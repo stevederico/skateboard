@@ -1,4 +1,4 @@
-//! In-memory CSRF and account-lockout stores with bounded capacity.
+//! CSRF token lifetime and in-memory account-lockout stores with bounded capacity.
 //!
 //! Zero-crate port of the `csrfTokenStore` / `loginAttemptStore` maps and
 //! `lib/store.ts`'s `evictOldestEntries`. The Node versions live on a
@@ -10,8 +10,6 @@ use std::sync::Mutex;
 
 /// CSRF token lifetime in milliseconds (24 hours).
 pub const CSRF_TOKEN_EXPIRY_MS: i64 = 24 * 60 * 60 * 1000;
-/// Capacity at which the oldest CSRF entries are evicted.
-pub const CSRF_MAX_ENTRIES: usize = 50_000;
 /// Failed sign-ins before an account is locked.
 pub const LOCKOUT_THRESHOLD: u32 = 5;
 /// Lockout duration in milliseconds (15 minutes).
@@ -90,72 +88,6 @@ fn sift_down<K>(heap: &mut [(K, i64)], start: usize) {
         }
         heap.swap(largest, i);
         i = largest;
-    }
-}
-
-/// A CSRF token and the epoch-milliseconds it was issued.
-#[derive(Debug, Clone, PartialEq)]
-pub struct CsrfEntry {
-    /// The 64-character hex token.
-    pub token: String,
-    /// Issue time in epoch milliseconds.
-    pub timestamp: i64,
-}
-
-/// Per-user CSRF token store.
-#[derive(Default)]
-pub struct CsrfStore {
-    inner: Mutex<HashMap<String, CsrfEntry>>,
-}
-
-impl CsrfStore {
-    /// Create an empty store.
-    pub fn new() -> CsrfStore {
-        CsrfStore { inner: Mutex::new(HashMap::new()) }
-    }
-
-    /// Read the entry for a user, if any.
-    pub fn get(&self, user_id: &str) -> Option<CsrfEntry> {
-        self.lock().get(user_id).cloned()
-    }
-
-    /// Store (or replace) a user's token, stamped `now_ms`.
-    pub fn set(&self, user_id: &str, token: String, now_ms: i64) {
-        self.lock().insert(user_id.to_string(), CsrfEntry { token, timestamp: now_ms });
-    }
-
-    /// Forget a user's token (sign-out).
-    pub fn remove(&self, user_id: &str) {
-        self.lock().remove(user_id);
-    }
-
-    /// Number of stored tokens.
-    pub fn len(&self) -> usize {
-        self.lock().len()
-    }
-
-    /// Whether the store holds no tokens.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Drop expired tokens, then evict down to [`CSRF_MAX_ENTRIES`].
-    ///
-    /// Returns how many were dropped for expiry.
-    pub fn cleanup(&self, now_ms: i64) -> usize {
-        let mut map = self.lock();
-        let before = map.len();
-        map.retain(|_, e| now_ms - e.timestamp <= CSRF_TOKEN_EXPIRY_MS);
-        let cleaned = before - map.len();
-        evict_oldest_entries(&mut map, CSRF_MAX_ENTRIES, |e| e.timestamp);
-        cleaned
-    }
-
-    /// Recover from a poisoned mutex rather than propagating a panic: a
-    /// half-updated token map is still safe to use, and losing the CSRF store
-    /// would sign every user out.
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, CsrfEntry>> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -326,8 +258,7 @@ impl LockoutStore {
         });
     }
 
-    /// See [`CsrfStore::lock`] for why poisoning is recovered rather than
-    /// propagated.
+    /// A poisoned mutex is recovered rather than propagated.
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<(String, String), LoginAttempt>> {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -448,17 +379,6 @@ mod tests {
         let mut m: HashMap<i32, i64> = (0..3).map(|k| (k, i64::from(k))).collect();
         evict_oldest_entries(&mut m, 10, |v| *v);
         assert_eq!(m.len(), 3);
-    }
-
-    #[test]
-    fn csrf_cleanup_drops_expired_only() {
-        let s = CsrfStore::new();
-        s.set("old", "a".into(), 0);
-        s.set("new", "b".into(), CSRF_TOKEN_EXPIRY_MS);
-        let cleaned = s.cleanup(CSRF_TOKEN_EXPIRY_MS + 1);
-        assert_eq!(cleaned, 1);
-        assert!(s.get("old").is_none());
-        assert!(s.get("new").is_some());
     }
 
     const IP: &str = "203.0.113.7";
