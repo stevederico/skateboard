@@ -7,6 +7,12 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.7.1 — skateboard-ui 5.2.2.** `useListData(url, sort, { live: true })`
+refetches quietly every minute while the page is visible; a page opened
+before a deploy reloads once instead of failing to import a chunk; dark mode
+has stronger card, border and muted-text contrast; Header titles are larger
+and bolder.
+
 **5.7.0 — shared libSQL, theme fix.** Set `LIBSQL_URL` to run against a
 shared libSQL (`sqld`) server over Hrana HTTP instead of the local SQLite
 file; the namespace is `config.json` `database.db`. The Hrana client replaces
