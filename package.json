@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "5.7.2",
-  "skateboardVersion": "5.7.2",
+  "version": "5.8.0",
+  "skateboardVersion": "5.8.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -21,7 +21,7 @@
     "test:docs": "node scripts/test-docs.mjs"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "5.2.3",
+    "@stevederico/skateboard-ui": "5.4.0",
     "lucide-react": "0.546.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
