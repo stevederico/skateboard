@@ -6,9 +6,15 @@
  * without 'unsafe-inline'.
  */
 (function () {
-  var savedTheme = localStorage.getItem('theme');
+  var savedTheme = null;
+  try {
+    savedTheme = localStorage.getItem('theme');
+  } catch (e) {
+    // Storage can be off in the iOS web view; follow the system.
+  }
   var systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  var isDark = savedTheme ? savedTheme === 'dark' : systemPrefersDark;
+  // No choice, or "system", follows the phone. Only an explicit pick overrides it.
+  var isDark = savedTheme === 'dark' || ((!savedTheme || savedTheme === 'system') && systemPrefersDark);
   if (isDark) {
     document.documentElement.classList.add('dark');
   }
