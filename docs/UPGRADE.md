@@ -7,6 +7,12 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.10.0 — libSQL startup retry.** With `LIBSQL_URL` set, startup keeps
+retrying the shared server for up to 3 minutes (1s doubling to 15s) instead of
+exiting on the first failure. When a whole project restarts at once, the
+database's private hostname can resolve late, and exiting used up the restart
+policy and left the app down.
+
 **5.9.0 — CSRF survives restarts.** CSRF tokens are now
 `<issued ms>.<HMAC>` signed with `JWT_SECRET` instead of kept in an in-memory
 store, so a deploy or restart no longer makes the first write after it fail

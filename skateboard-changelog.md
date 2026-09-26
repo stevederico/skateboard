@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.10.0
+
+  Retry libSQL at startup
+
 5.9.0
 
   Sign CSRF tokens
