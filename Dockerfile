@@ -32,6 +32,8 @@ WORKDIR /app
 COPY --from=frontend /app/dist ./dist
 COPY --from=backend /build/target/release/skateboard-backend /usr/local/bin/skateboard-backend
 COPY backend/config.json ./backend/config.json
+# Checkout and the webhook read the plan list (stripeProducts) from here.
+COPY src/constants.json ./src/constants.json
 
 RUN mkdir -p /app/backend/databases \
     && chown -R skateboard:skateboard /app
