@@ -200,8 +200,8 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.12.0 | Boilerplate (this repo) |
-| **skateboard-ui** | v5.1.0 | Application Shell, Components, Theming |
+| **skateboard** | v5.13.0 | Boilerplate (this repo) |
+| **skateboard-ui** | v5.11.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (esbuild JSX) |
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.18+ | Routing (via skateboard-ui) |
