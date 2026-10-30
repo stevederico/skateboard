@@ -7,6 +7,14 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.13.0 — skateboard-ui 5.11.0.** Tab bar items, the theme toggle and
+Settings Sign Out have 44px tap targets; Sheet content scrolls on touch and
+Sheet takes an optional `onUserClose`; the auth overlay opens on Sign Up
+unless this device signed in before; Sign Up shows the server's error message
+and suggests a fix for a mistyped mail domain. Sign Up also asks
+`GET /signup/options` for an optional Cloudflare Turnstile site key; the
+template backend has no such route, so the 404 is ignored and no widget shows.
+
 **5.12.0 — Stripe webhook fixes, upgrade promptly.** `customer.subscription.*`
 events re-fetch the subscription from Stripe instead of trusting the event
 snapshot, so a late `created` (status `incomplete`) no longer re-locks a user

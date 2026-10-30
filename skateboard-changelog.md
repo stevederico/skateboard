@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.13.0
+
+  Pin skateboard-ui 5.11.0
+
 5.12.0
 
   Refetch subscription events
