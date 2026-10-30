@@ -15,6 +15,13 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.12.0
+
+  Refetch subscription events
+  Ignore superseded subscriptions
+  Retry webhook DB errors
+  Store subscription ID
+
 5.11.0
 
   Ship plan list

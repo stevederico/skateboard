@@ -1325,6 +1325,22 @@ Stripe webhook endpoint. Handles subscription events.
 - `customer.subscription.created`
 - `customer.subscription.updated`
 - `customer.subscription.deleted`
+- `checkout.session.completed`
+- `invoice.paid`
+- `invoice.payment_failed` (logged only)
+
+**Behavior:**
+- Every event re-fetches the subscription from Stripe and stores its current
+  status and period end. The event's own snapshot is never trusted, because
+  Stripe does not order deliveries and a late `created` (status `incomplete`)
+  would otherwise demote a user who already paid
+- The user's current subscription ID is stored in `subscription_id`. An event
+  for a different subscription only replaces it when that subscription is
+  `active` or `trialing`, so an old plan's `deleted` or an abandoned
+  checkout's `incomplete_expired` cannot re-lock a user who resubscribed
+- A Stripe or database error answers 500 and the event is not recorded as
+  processed, so Stripe retries it. A subscription event without an `id`
+  answers 400
 
 ---
 
@@ -1439,6 +1455,7 @@ CREATE TABLE Users (
   subscription_stripeID TEXT,
   subscription_expires BIGINT,
   subscription_status TEXT,
+  subscription_id TEXT,
   usage_count INTEGER DEFAULT 0,
   usage_reset_at BIGINT
 );
