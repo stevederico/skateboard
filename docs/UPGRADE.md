@@ -7,6 +7,10 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.13.2 — skateboard-ui 5.11.3.** No runtime change: skateboard-ui's
+publish workflow pins its actions and npm, and its harness adds nested submenu
+and closed-menu Escape tests. Apps only bump the pin.
+
 **5.13.1 — skateboard-ui 5.11.2.** A `trialing` subscription counts as paid
 (new `isPaidStatus(status)` export), so trial users no longer see the upgrade
 sheet or show as Free; DropdownMenu closes on an Escape pressed right after
