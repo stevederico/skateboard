@@ -7,6 +7,13 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.14.0 — trialing counts as paid on the backend.** `is_subscriber` in
+`backend/src/routes.rs` now accepts `PAID_STATUSES = ["active", "trialing"]`
+(the period-end check is unchanged), so `/api/usage` treats a Stripe trial as
+unlimited, matching skateboard-ui's `isPaidStatus` from 5.13.1. Before this, a
+trial user saw the paid UI but hit the free-tier 429. Apps with their own
+`is_subscriber` copy should make the same one-line change.
+
 **5.13.2 — skateboard-ui 5.11.3.** No runtime change: skateboard-ui's
 publish workflow pins its actions and npm, and its harness adds nested submenu
 and closed-menu Escape tests. Apps only bump the pin.

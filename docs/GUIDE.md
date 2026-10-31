@@ -1549,6 +1549,8 @@ CREATE TABLE Auths (
 | `unpaid` | Payment failed, access revoked |
 | `trialing` | In trial period |
 
+`active` and `trialing` count as paid (`PAID_STATUSES` in `backend/src/routes.rs`), as long as the period end has not passed. Every other status is on the free tier.
+
 ---
 
 ### Usage Tracking
