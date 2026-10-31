@@ -660,8 +660,14 @@ fn resolve_usage(user: &User) -> Usage {
     })
 }
 
+/// Subscription statuses that count as paid. A Stripe trial (`trialing`) gets
+/// the full plan, exactly like `active`; `past_due`, `canceled`, `incomplete`,
+/// `incomplete_expired`, `unpaid` and `paused` do not.
+const PAID_STATUSES: &[&str] = &["active", "trialing"];
+
 fn is_subscriber(sub: &Subscription) -> bool {
-    sub.status == "active" && sub.expires.map(|e| e > config::now_secs()).unwrap_or(true)
+    PAID_STATUSES.contains(&sub.status.as_str())
+        && sub.expires.map(|e| e > config::now_secs()).unwrap_or(true)
 }
 
 fn sub_expires_iso(sub: &Subscription) -> Json {
@@ -2520,6 +2526,82 @@ mod tests {
         let res = handle(&state, req);
         assert_eq!(res.status, 403);
         assert_eq!(json_body(&res).get_str("error"), Some("Email mismatch"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn set_subscription_status(state: &AppState, email: &str, status: &str) {
+        let id = state
+            .pool
+            .find_user(&UserQuery::Email(email.into()))
+            .expect("query")
+            .expect("user")
+            .id;
+        let sub = Subscription {
+            stripe_id: "cus_trial_test".into(),
+            expires: Some(config::now_secs() + 86_400),
+            status: status.into(),
+            subscription_id: Some("sub_trial_test".into()),
+        };
+        state
+            .pool
+            .update_user_subscription(&id, &sub)
+            .expect("subscribe");
+    }
+
+    /// `POST /api/usage` `check` for the signed-up caller `who`.
+    fn usage_check_body(state: &AppState, who: &Response) -> Json {
+        let mut req = Request::for_test("POST", "/api/usage");
+        cookie_header(&mut req, who);
+        req.set_test_body(br#"{"operation":"check"}"#.to_vec());
+        let res = handle(state, req);
+        assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
+        json_body(&res)
+    }
+
+    #[test]
+    fn trialing_counts_as_paid_and_lapsed_statuses_do_not() {
+        let sub = |status: &str, expires: Option<i64>| Subscription {
+            stripe_id: "cus_t".into(),
+            expires,
+            status: status.into(),
+            subscription_id: Some("sub_t".into()),
+        };
+        let later = Some(config::now_secs() + 3600);
+        assert!(is_subscriber(&sub("active", later)));
+        assert!(is_subscriber(&sub("trialing", later)));
+        assert!(is_subscriber(&sub("trialing", None)));
+        assert!(
+            !is_subscriber(&sub("trialing", Some(config::now_secs() - 1))),
+            "an expired trial is not paid"
+        );
+        for status in [
+            "past_due",
+            "canceled",
+            "incomplete",
+            "incomplete_expired",
+            "unpaid",
+            "paused",
+            "",
+        ] {
+            assert!(!is_subscriber(&sub(status, later)), "{status:?}");
+        }
+    }
+
+    #[test]
+    fn usage_reports_a_trialing_user_as_a_subscriber() {
+        let (state, dir) = test_state();
+        let trial = signed_up(&state, "trial-usage@example.com");
+        set_subscription_status(&state, "trial-usage@example.com", "trialing");
+        let body = usage_check_body(&state, &trial);
+        assert_eq!(body.get("isSubscriber"), Some(&Json::Bool(true)));
+        assert_eq!(body.get_i64("remaining"), Some(-1));
+        for status in ["past_due", "canceled", "incomplete"] {
+            let email = format!("{status}-usage@example.com");
+            let who = signed_up(&state, &email);
+            set_subscription_status(&state, &email, status);
+            let body = usage_check_body(&state, &who);
+            assert_eq!(body.get("isSubscriber"), Some(&Json::Bool(false)), "{status}");
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 }
