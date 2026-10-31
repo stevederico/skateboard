@@ -7,6 +7,12 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.13.1 — skateboard-ui 5.11.2.** A `trialing` subscription counts as paid
+(new `isPaidStatus(status)` export), so trial users no longer see the upgrade
+sheet or show as Free; DropdownMenu closes on an Escape pressed right after
+opening; skateboard-ui's `styles.css` scans only its own `dist` for Tailwind
+classes.
+
 **5.13.0 — skateboard-ui 5.11.0.** Tab bar items, the theme toggle and
 Settings Sign Out have 44px tap targets; Sheet content scrolls on touch and
 Sheet takes an optional `onUserClose`; the auth overlay opens on Sign Up
