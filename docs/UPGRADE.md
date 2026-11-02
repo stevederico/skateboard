@@ -7,6 +7,11 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.14.2 — CI actions on v5.** No runtime change: `.github/workflows/ci.yml`
+pins `actions/checkout` v5.1.0 and `actions/setup-node` v5.0.0 (Node 24
+runtime) by commit SHA. Apps with a copy of this workflow can make the same
+edits.
+
 **5.14.1 — CI hardening.** No runtime change: `.github/workflows/ci.yml` pins
 every action to a commit SHA, sets `permissions: contents: read` and checks out
 with `persist-credentials: false`. Apps with a copy of this workflow can make
