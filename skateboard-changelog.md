@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.14.1
+
+  Harden CI workflow
+
 5.14.0
 
   Count trialing as paid
