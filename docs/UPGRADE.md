@@ -7,6 +7,11 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.14.4 — base images pinned by digest.** No runtime change: the
+`Dockerfile` pins node, rust and debian by multi-arch digest (each at least
+7 days old) and sets `ENV RUSTUP_TOOLCHAIN=1.99.1`. Apps can copy the `FROM`
+lines and the toolchain line.
+
 **5.14.3 — skateboard-ui 5.11.4.** `isSubscriber()` now reads
 `POST /usage` `{"operation":"check"}` (the template backend has no
 `GET /isSubscriber` route, so it always returned false). Apps only bump the pin.
