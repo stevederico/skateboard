@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.14.3
+
+  Pin skateboard-ui 5.11.4
+
 5.14.2
 
   CI actions to v5

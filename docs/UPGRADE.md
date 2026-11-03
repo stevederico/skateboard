@@ -7,6 +7,10 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.14.3 — skateboard-ui 5.11.4.** `isSubscriber()` now reads
+`POST /usage` `{"operation":"check"}` (the template backend has no
+`GET /isSubscriber` route, so it always returned false). Apps only bump the pin.
+
 **5.14.2 — CI actions on v5.** No runtime change: `.github/workflows/ci.yml`
 pins `actions/checkout` v5.1.0 and `actions/setup-node` v5.0.0 (Node 24
 runtime) by commit SHA. Apps with a copy of this workflow can make the same
