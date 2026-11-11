@@ -691,6 +691,10 @@ useEffect(() => {
 }, []);
 ```
 
+`npm run lint` rejects this (`skateboard/no-fetch-in-effect`): fetching in an effect races,
+double-fires under StrictMode, and skips loading/error states. Mutations call `apiRequest`
+from an event handler instead.
+
 #### 2. Use apiRequest for All API Calls
 
 **Good**:
@@ -1850,6 +1854,7 @@ Then install, sync the version label, and validate:
 ```bash
 npm install                                # root deps + lockfile
 npm run typecheck && npm run test
+npm run guardrails:install && npm run lint # guardrails; messages name each fix
 cd backend && cargo test --locked
 ```
 

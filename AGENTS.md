@@ -26,6 +26,13 @@ npm run test           # Frontend typecheck + script tests (no vitest)
 cd backend && cargo test --locked
 ```
 
+**Guardrails (lint):**
+```bash
+npm run guardrails:install   # once: ESLint + TS parser into guardrails/
+npm run lint                 # local guardrails plugin (see Guardrails)
+npm run test:guardrails      # rule tests
+```
+
 ## Code Standards
 
 ### Documentation Requirements
@@ -130,8 +137,43 @@ All of these silence the compiler instead of proving correctness:
 - Never add a database driver package — the backend is SQLite through system `libsqlite3` FFI
 - Never use axios, got, or similar — native `fetch` only
 - Never use PostCSS, autoprefixer, or `tailwind.config.js`
-- Never use ESLint or the `globals` package
+- ESLint is used only to run the local guardrails plugin (`guardrails/eslint-plugin`, see **Guardrails** below) — never add third-party rule packs or shareable configs, and never the `globals` package
 - Minimize external packages — use built-in/native solutions when possible
+
+### Guardrails
+
+Every written "never / don't" rule an agent keeps breaking becomes a machine check whose error message teaches the root cause and the fix. The rules in this file are the spec; `npm run lint` enforces the ones a single file's AST or filename can prove.
+
+```bash
+npm run guardrails:install   # once: installs ESLint + the TS parser into guardrails/ (nested, pinned)
+npm run lint                 # run all guardrails over src/, scripts/, vite.*, guardrails/
+npm run test:guardrails      # RuleTester suites for every rule (node --test)
+```
+
+- **Where:** `guardrails/eslint-plugin/` — zero-dependency ES modules, one file per rule in `rules/` with a `<rule>.test.js` next to it. `eslint.config.js` at the root wires `skateboard/base` (every file) and `skateboard/app` (React/UI rules, `src/` only).
+- **Why nested:** the root keeps TypeScript 7 (no JS API); ESLint and `@typescript-eslint/parser` (TypeScript 5) live in `guardrails/package.json`. Do not add them to the root.
+- **Adding a rule:** when you write a new "never" rule here or in `skills/skateboard/rules/*.md`, add a lint rule for it if it is checkable from one file. Every message must say what was found, `Why:` the repo forbids it, and `Fix:` with the exact skateboard-ui export or pattern (the test harness asserts this). Register it in `guardrails/eslint-plugin/index.js` and the updater ALLOWLIST (`scripts/update-skateboard.js` `GUARDRAIL_RULES`).
+- **Disabling:** only with `// eslint-disable-next-line skateboard/<rule> -- <reason>`; unused disables fail lint.
+- **Layers:** `guardrails/eslint-plugin/layers.js` is the layer table (`ui` = src/components, `app` = rest of src/, `server` = backend/, `tooling` = scripts/, `build` = vite.*, `guardrails`) and the allowed import edges. `skateboard/layer-boundaries` enforces it; any future dependency-cruiser config mirrors that table.
+
+**Written rules that are NOT linted (and why):**
+
+| Rule | Why not linted |
+|---|---|
+| Never disable/loosen `strict` in tsconfig; `@types` dev-only; `vite --force` in scripts; dependency pins in docs; version/`skateboardVersion` sync | Not JS/TS source (JSON, Markdown). `npm run typecheck` and `scripts/version-consistency.test.js` cover the version parts |
+| Backend rules (zero crates, no `cargo add`, never hand-roll TLS, scrypt/JWT) | Rust — `cargo test`, review |
+| Optional chaining / nullish coalescing, prefer destructuring, array methods over loops, default params | "Prefer" style calls; the useful versions need type information |
+| Boolean names prefixed `is`/`has`/`should` | Needs type information to know a value is boolean |
+| ~50 lines per function, ~150 lines per component, single responsibility, no magic numbers | Judgment calls with explicit "~" budgets |
+| Max 3 levels of component nesting, prop drilling beyond 2 levels, colocate state | Cross-file component tree |
+| Exactly one `<main>` per page, heading hierarchy, semantic HTML choice | Need the rendered page across shell + view files |
+| Contrast ratios, touch targets ≥ 44px, focus-indicator contrast, color not the only signal | Need computed styles at runtime |
+| Escape closes modals, focus trap/restore, arrow keys in composite widgets | Runtime behavior (provided by skateboard-ui primitives) |
+| Every list has an empty state, every error is visible, partial success, loading > 200 ms | UI behavior across states; `use-list-data-states` and `no-empty-catch` cover the mechanical parts |
+| External API rate limits, backoff, circuit breaker, no batch endpoint in a loop | Runtime policy per API |
+| Never mock the module under test, one assertion per `it`, prefer real implementations | Test-design judgment |
+| Margin between siblings, 3-5 colors per view, max 2 font families, no decorative shapes, AlertDialog for destructive actions | Design judgment (raw colors, `space-*`, arbitrary values, and `dark:` are linted) |
+| Keep credentials out of logs | Data-flow analysis (hard-coded connection strings are linted) |
 
 ## Error Handling (MANDATORY)
 
@@ -208,11 +250,14 @@ All of these silence the compiler instead of proving correctness:
 
 ### Icons
 
-- Default library: Lucide React (`lucide-react`) — runtime dep of skateboard-ui **5.0** (hoisted); apps should declare it too
-- **Always named-import from `lucide-react`:** `import { Plus, Trash2 } from 'lucide-react'`
+- Default library: Lucide React (`lucide-react`) — runtime dep of skateboard-ui **5.0** (hoisted); apps should declare it too (the boilerplate does)
+- **One icon funnel:** `src/icons.ts` is the only module that imports `lucide-react`. It re-exports an explicit, named list (no `export *`) of every icon the app uses
+- **Components import from the funnel:** `import { Plus, Trash2 } from '../icons'`. To use a new icon, add its Lucide name to `src/icons.ts` first
+- Why: one list keeps the icon set auditable and tree-shakeable, and lets the app swap an icon for a vendored SVG in one place (rename to `icons.tsx` when it holds JSX)
+- **Never** import `lucide-react` anywhere else, and never deep paths (`lucide-react/dist/...`, `lucide-react/icons/...`, anything through `node_modules/`, `@stevederico/skateboard-ui/dist/...`) — lint enforces both
 - **Never** import from `@stevederico/skateboard-ui/icons` or `@stevederico/skateboard-ui/icons/*` — removed in 5.0 (was 4.18)
 - **Never** use public DynamicIcon — removed in 5.0 (was 4.17); shell-only `constantsIcon` resolves `constants.json` icon strings
-- When migrating from 4.x: rewrite every `skateboard-ui/icons` and `DynamicIcon` import to a named `lucide-react` import (see **Migrating 4.x → 5.0**)
+- When migrating from 4.x: rewrite every `skateboard-ui/icons` and `DynamicIcon` import to a named import from the `src/icons.ts` funnel (see **Migrating 4.x → 5.0**)
 - Never use emoji as UI icons — use proper icon components (exception: `constants.json` feature icons where the shell renders unknown/legacy values as text)
 - Icon-only buttons must have `aria-label`
 - Standard sizes: 16px inline, 18px buttons, 24px cards, 48px empty states
@@ -406,12 +451,17 @@ skateboard/
 │   ├── assets/
 │   │   └── styles.css   # Brand color override (7 lines)
 │   ├── main.tsx         # Route definitions + lazy view imports
+│   ├── icons.ts         # Icon funnel: the only lucide-react import
 │   └── constants.json   # All your app config
 ├── backend/
 │   ├── src/             # Zero-crate Rust server
 │   ├── Cargo.toml       # Empty [dependencies]
 │   ├── databases/       # SQLite database files
 │   └── config.json      # Backend config with database settings
+├── guardrails/
+│   ├── eslint-plugin/   # Local lint rules (one per written "never" rule)
+│   └── package.json     # Nested: ESLint + TS parser (not root deps)
+├── eslint.config.js     # Wires the guardrails plugin
 ├── package.json         # Dependencies (includes skateboard-ui)
 ├── tsconfig.json        # Frontend TypeScript config (strict)
 └── vite.config.ts       # Vite configuration (app-owned)
@@ -565,7 +615,7 @@ import { useListData } from '@stevederico/skateboard-ui/Utilities';
 import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert } from '../icons'; // add CircleAlert to src/icons.ts first
 
 function DealsView() {
   const { data, loading, error, refetch } = useListData('/deals');
@@ -641,9 +691,10 @@ This repo ships **`skills/skateboard/SKILL.md`** — the Cursor/Claude skill for
 **What agents must do:**
 1. Read `skills/skateboard/SKILL.md` first (and `skills/skateboard/rules/*` for icons/forms/styling/views as needed).
 2. Prefer shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui/*` over raw HTML.
-3. Named-import icons from `lucide-react` only (see Icons below).
+3. Import icons by name from the `src/icons.ts` funnel; only that file imports `lucide-react` (see Icons below).
 4. Treat `skateboardVersion` as a label — verify the tree (especially `backend/`) matches the template before claiming an upgrade is done.
 5. For upgrades, follow **Migrating 4.x → 5.0** below (and `docs/UPGRADE.md`).
+6. Run `npm run lint` (after `npm run guardrails:install`) and fix what it reports; each message names the fix (see **Guardrails**).
 
 Canonical pins live in this repo’s `package.json` (`version` / `skateboardVersion` / `@stevederico/skateboard-ui`). Refresh the skill metadata when those move.
 
@@ -652,7 +703,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.14.4
+- skateboard@5.15.0
 - skateboard-ui@5.11.4
 
 ## Migrating 4.x → 5.0 (exact checklist)
@@ -691,8 +742,8 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
     # Find call sites
     rg -n "skateboard-ui/icons|DynamicIcon" src
     ```
-    - Replace `import { X } from '@stevederico/skateboard-ui/icons'` (and `/icons/X`) with `import { X } from 'lucide-react'`.
-    - Delete every `import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon'` — use a named Lucide icon in app code. Shell still resolves `constants.json` `icon` strings privately (`constantsIcon`); apps do not get a public dynamic resolver.
+    - Replace `import { X } from '@stevederico/skateboard-ui/icons'` (and `/icons/X`) with `import { X } from '../icons'`, and add `X` to the explicit `export { ... } from 'lucide-react'` list in `src/icons.ts` (the only file that imports `lucide-react`; see **Icons**).
+    - Delete every `import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon'` — use a named Lucide icon from the `src/icons.ts` funnel in app code. Shell still resolves `constants.json` `icon` strings privately (`constantsIcon`); apps do not get a public dynamic resolver.
     - Ensure `lucide-react` is listed in app `dependencies` (boilerplate ships it; ui 5.0 also depends on it).
 
 11. **Keep shadcn import paths**
@@ -773,10 +824,12 @@ a version in `package.json`:
 - `backend/src/*` - Rust server
 - `vite.config.ts` - Build configuration
 - `src/assets/styles.css` - Theme variables (merge carefully)
+- `eslint.config.js`, `guardrails/` - Lint guardrails (template-owned)
 
 ### Never Auto-Update (app-specific)
 - `constants.json` - App configuration
 - `src/components/*` - Custom components
+- `src/icons.ts` - The app's icon list
 - `backend/config.json` - Database/environment config
 
 ### Important

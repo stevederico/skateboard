@@ -78,7 +78,8 @@ Everything you need to ship a production-ready app:
 - **Typecheck gates** - `npm run typecheck` for the frontend; `cargo test` for the backend
 - **Built-in hooks** - `useListData` for list fetching
 - **API utilities** - apiRequest with automatic auth and error handling
-- **Icons** - named imports from `lucide-react` (no `@stevederico/skateboard-ui/icons`)
+- **Icons** - named `lucide-react` icons through one funnel, `src/icons.ts` (no `@stevederico/skateboard-ui/icons`)
+- **Guardrails** - `npm run lint` runs a local ESLint plugin whose rules mirror AGENTS.md and teach the fix in every message
 
 <br />
 
@@ -187,9 +188,11 @@ Skateboard is intentionally lean — current footprint (counting what ships at r
 
 The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, leftover bcrypt hashes still verify then rehash. SQLite via system `libsqlite3`. Stripe via system `libcurl`. Do not `cargo add`.
 
-The frontend pulls UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). That package depends on `react-router` and (from 4.18+) `lucide-react` (pinned); peers are `react` and `react-dom`. Apps do not declare `react-router`. Navigate with `useSafeNavigate()`. Named-import icons from `lucide-react` (boilerplate also lists it). There is no `@stevederico/skateboard-ui/icons` path.
+The frontend pulls UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). That package depends on `react-router` and (from 4.18+) `lucide-react` (pinned); peers are `react` and `react-dom`. Apps do not declare `react-router`. Navigate with `useSafeNavigate()`. Icons come from `lucide-react` (boilerplate also lists it) through one funnel, `src/icons.ts`: it re-exports a named list, and components import from it (`import { Plus } from '../icons'`). There is no `@stevederico/skateboard-ui/icons` path.
 
 Frontend dev deps are Vite + Tailwind (`@tailwindcss/vite`) plus `typescript` + `@types/*` for the typecheck gate. No `@vitejs/plugin-react-swc`. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` via esbuild.
+
+Lint is a local guardrails plugin (`guardrails/eslint-plugin`): each rule enforces a written "never" rule from AGENTS.md and its message explains why and how to fix it. ESLint and its TypeScript parser live in the nested `guardrails/` package, not in the root dependencies (`npm run guardrails:install`, then `npm run lint`).
 
 <br />
 
@@ -200,12 +203,12 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.14.4 | Boilerplate (this repo) |
+| **skateboard** | v5.15.0 | Boilerplate (this repo) |
 | **skateboard-ui** | v5.11.4 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (esbuild JSX) |
 | **Tailwind CSS** | v4.3+ | Styling |
 | **React Router** | v7.18+ | Routing (via skateboard-ui) |
-| **lucide-react** | v0.546+ | Icons (named imports) |
+| **lucide-react** | v0.546+ | Icons (named, via `src/icons.ts`) |
 | **Rust** | 1.95 | Zero-crate backend |
 | **TypeScript** | v7 | Frontend types (strict, no build step) |
 | **Node.js** | v24+ | Frontend toolchain |
@@ -281,6 +284,12 @@ cd skateboard
 npm install
 npm run start                 # frontend :5173
 cd backend && cargo run       # backend :8000
+
+# Before opening a PR:
+npm run test                  # typecheck + script tests + doc links
+npm run guardrails:install    # once: ESLint + TS parser into guardrails/
+npm run lint                  # guardrails (rules from AGENTS.md)
+npm run test:guardrails       # rule tests
 ```
 
 <br />

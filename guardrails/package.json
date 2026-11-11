@@ -1,0 +1,11 @@
+{
+  "name": "skateboard-guardrails",
+  "private": true,
+  "type": "module",
+  "description": "Lint and boundary tooling for the skateboard template. Kept out of the root package so the app keeps TypeScript 7 while the ESLint parser gets the TypeScript 5 API it needs.",
+  "devDependencies": {
+    "@typescript-eslint/parser": "8.72.1",
+    "eslint": "10.14.0",
+    "typescript": "5.9.3"
+  }
+}

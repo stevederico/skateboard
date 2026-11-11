@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import Header from '@stevederico/skateboard-ui/Header';
 import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
-import { LayoutDashboard, Plus } from 'lucide-react';
+import { LayoutDashboard, Plus } from '../icons';
 
 /** Props for the BlankView starter template. */
 interface BlankViewProps {

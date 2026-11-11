@@ -52,6 +52,27 @@ const TMP_DIR = join(tmpdir(), `skateboard-update-${process.pid}`);
 const REPO = process.env.SKATEBOARD_REPO || 'https://github.com/stevederico/skateboard.git';
 const BRANCH = process.env.SKATEBOARD_BRANCH || '';
 
+// Guardrails lint plugin rules (AGENTS.md > Guardrails). Each rule ships with its
+// RuleTester file; scripts/update-skateboard.test.js fails if a rule file is missing here.
+const GUARDRAIL_RULES = [
+  'ban-ts-comment', 'clickable-element-needs-keyboard', 'compound-component-structure',
+  'filename-convention', 'handler-naming', 'heading-text-wrap', 'icon-button-requires-label',
+  'icon-requires-size', 'icons-through-funnel', 'img-requires-alt', 'import-order',
+  'input-requires-label', 'layer-boundaries', 'motion-safe-animations',
+  'no-arbitrary-spacing-radius', 'no-aria-hidden-on-focusable', 'no-banned-build-tooling',
+  'no-browser-dialogs', 'no-class-components', 'no-classname-template-ternary',
+  'no-dark-variant', 'no-database-drivers', 'no-deep-package-imports', 'no-direct-react-router',
+  'no-dotenv', 'no-emoji-icons', 'no-empty-catch', 'no-explicit-any', 'no-fetch-in-effect',
+  'no-focused-or-skipped-tests', 'no-foreign-test-frameworks', 'no-globals-package',
+  'no-hardcoded-connection-strings', 'no-inline-svg', 'no-loading-text-in-button',
+  'no-loose-types', 'no-non-null-assertion', 'no-other-icon-libraries',
+  'no-outline-none-without-focus-ring', 'no-promise-then', 'no-raw-color-classes',
+  'no-raw-form-elements', 'no-removed-skateboard-ui-imports', 'no-require',
+  'no-space-utilities', 'no-third-party-http-clients', 'no-transition-all',
+  'no-type-assertion', 'prefer-size-utility', 'require-jsdoc-on-exports',
+  'suspense-skeleton-fallback', 'test-file-naming', 'use-list-data-states'
+];
+
 // Template-owned files (current names at HEAD). App-owned files (constants.json,
 // components, config.json, .env, main.jsx) are never touched — see SKIP_NOTE.
 const ALLOWLIST = [
@@ -94,7 +115,25 @@ const ALLOWLIST = [
   'scripts/verify-ui-version.test.js',
   'scripts/version-consistency.test.js',
   'scripts/test-docs.mjs',
-  'SECURITY.md'
+  'SECURITY.md',
+  // Guardrails: root ESLint config + the zero-dependency local plugin and its nested
+  // package (ESLint + TS parser pinned by guardrails/package-lock.json).
+  'eslint.config.js',
+  'guardrails/package.json',
+  'guardrails/package-lock.json',
+  'guardrails/eslint-plugin/index.js',
+  'guardrails/eslint-plugin/index.test.js',
+  'guardrails/eslint-plugin/layers.js',
+  'guardrails/eslint-plugin/lib/bannedImports.js',
+  'guardrails/eslint-plugin/lib/classStrings.js',
+  'guardrails/eslint-plugin/lib/jsx.js',
+  'guardrails/eslint-plugin/lib/moduleSources.js',
+  'guardrails/eslint-plugin/lib/paths.js',
+  'guardrails/eslint-plugin/lib/ruleTester.js',
+  ...GUARDRAIL_RULES.flatMap((rule) => [
+    `guardrails/eslint-plugin/rules/${rule}.js`,
+    `guardrails/eslint-plugin/rules/${rule}.test.js`
+  ])
 ];
 
 // Template-owned symlinks: link path → target path (both relative to app root).
@@ -167,6 +206,7 @@ Files NOT updated (app-owned — port manually if needed):
   - src/constants.json
   - src/main.jsx           (your routes — stays .jsx; Vite handles mixed JS/TS)
   - src/components/*       (your components)
+  - src/icons.ts           (your icon funnel; create it if npm run lint asks)
   - src/assets/styles.css  (your theme overrides)
   - backend/config.json
   - backend/.env*
@@ -191,7 +231,7 @@ function readJSON(path) {
 }
 
 function writeJSON(path, data) {
-  writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+  writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
 async function confirm(prompt) {
@@ -231,8 +271,10 @@ function showDiff(curContent, incomingContent, label) {
   writeFileSync(b, incomingContent);
   try {
     execSync(`diff -u "${a}" "${b}" | head -60`, { stdio: 'inherit' });
-  } catch {
-    // diff exits 1 when files differ — expected
+  } catch (err) {
+    // diff exits 1 when the files differ, which is the expected case. Anything else (no
+    // `diff` binary, unreadable temp file) is surfaced but must not abort the update.
+    if (err?.status !== 1) console.error(`[warn] could not show diff for ${label}: ${err?.message ?? err}`);
   }
   rmSync(a, { force: true });
   rmSync(b, { force: true });
@@ -508,8 +550,8 @@ async function ensureSymlink(linkRel, targetRel, { root = APP_ROOT, confirmFn = 
     console.log(`[skip] ${linkRel} symlink — target ${targetRel} not present`);
     return 'ok';
   }
-  let stat = null;
-  try { stat = lstatSync(linkPath); } catch { /* absent */ }
+  // Absent link → undefined (the common case). Real failures such as EACCES still throw.
+  const stat = lstatSync(linkPath, { throwIfNoEntry: false });
 
   if (stat?.isSymbolicLink()) {
     if (readlinkSync(linkPath) === targetRel) {
@@ -747,6 +789,7 @@ async function main() {
   console.log('  1. npm install');
   console.log('  2. npm run typecheck — your custom code merged into .ts files may need annotations');
   console.log('  3. See docs/UPGRADE.md for the agent prompt that automates conflict + type fixes.');
+  console.log('  4. npm run guardrails:install && npm run lint — each message names the fix (e.g. move lucide-react imports into src/icons.ts)');
 
   // tsc already installed → offer to run the typecheck right here.
   if (existsSync(join(APP_ROOT, 'node_modules', '.bin', 'tsc'))) {

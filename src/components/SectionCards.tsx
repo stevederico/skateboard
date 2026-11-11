@@ -1,5 +1,3 @@
-import { TrendingDown, TrendingUp } from "lucide-react"
-
 import { Badge } from "@stevederico/skateboard-ui/shadcn/ui/badge"
 import {
   Card,
@@ -9,7 +7,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@stevederico/skateboard-ui/shadcn/ui/card"
+import { TrendingDown, TrendingUp } from "../icons"
 
+/**
+ * Dashboard metric cards (sample data) rendered by HomeView.
+ *
+ * Badge icons pass `size={12}` to match the `[&>svg]:size-3` Badge applies.
+ *
+ * @component
+ * @returns Responsive grid of four metric cards
+ */
 export function SectionCards() {
   return (
     <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
@@ -21,7 +28,7 @@ export function SectionCards() {
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <TrendingUp aria-hidden="true" />
+              <TrendingUp size={12} aria-hidden="true" />
               +12.5%
             </Badge>
           </CardAction>
@@ -43,7 +50,7 @@ export function SectionCards() {
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <TrendingDown aria-hidden="true" />
+              <TrendingDown size={12} aria-hidden="true" />
               -20%
             </Badge>
           </CardAction>
@@ -65,7 +72,7 @@ export function SectionCards() {
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <TrendingUp aria-hidden="true" />
+              <TrendingUp size={12} aria-hidden="true" />
               +12.5%
             </Badge>
           </CardAction>
@@ -85,7 +92,7 @@ export function SectionCards() {
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <TrendingUp aria-hidden="true" />
+              <TrendingUp size={12} aria-hidden="true" />
               +4.5%
             </Badge>
           </CardAction>

@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "5.14.4",
-  "skateboardVersion": "5.14.4",
+  "version": "5.15.0",
+  "skateboardVersion": "5.15.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -18,7 +18,10 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "npm run typecheck && npm run test:build && npm run test:docs",
     "test:build": "node --experimental-test-module-mocks --test vite.plugins.test.js scripts/verify-ui-version.test.js scripts/update-skateboard.test.js scripts/version-consistency.test.js",
-    "test:docs": "node scripts/test-docs.mjs"
+    "test:docs": "node scripts/test-docs.mjs",
+    "guardrails:install": "npm ci --prefix guardrails --no-audit --no-fund",
+    "lint": "node guardrails/node_modules/eslint/bin/eslint.js .",
+    "test:guardrails": "node --test \"guardrails/eslint-plugin/**/*.test.js\""
   },
   "dependencies": {
     "@stevederico/skateboard-ui": "5.11.4",

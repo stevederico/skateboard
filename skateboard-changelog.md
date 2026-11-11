@@ -15,6 +15,16 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.15.0
+
+  Add guardrails lint
+  Add 53 rules
+  Ban fetch effects
+  Add icon funnel
+  Enforce layer boundaries
+  Sync guardrails updater
+  Surface swallowed errors
+
 5.14.4
 
   Pin base images
