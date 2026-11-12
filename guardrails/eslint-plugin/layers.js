@@ -1,9 +1,11 @@
 /**
  * Architectural layers of the skateboard template and the import edges allowed between
- * them. This table is the single source for the `skateboard/layer-boundaries` lint rule;
- * a dependency-cruiser config (or any other boundary checker) should mirror it 1:1:
- * one `forbidden` entry per pair that is NOT in ALLOWED_EDGES, plus the three special
- * cases below (entry module, Node builtins in src/, paths out of src/ or the repo).
+ * them. This table is the single source for both boundary checkers: the
+ * `skateboard/layer-boundaries` lint rule (one file at a time) and the root
+ * `.dependency-cruiser.js` (whole graph), which generates one `forbidden` rule per pair
+ * that is NOT in ALLOWED_EDGES plus the special cases below (entry module, Node builtins
+ * in src/, paths out of src/). Patterns must stay safe-regex clean (no nested
+ * quantifiers) or dependency-cruiser refuses the config.
  *
  * Paths are repo-relative with forward slashes. The first matching layer wins, so the
  * more specific `ui` pattern must stay above `app`.
@@ -27,7 +29,11 @@ export const LAYERS = [
   { name: 'server', pattern: /^backend\//, description: 'backend/: zero-crate Rust server' },
   { name: 'tooling', pattern: /^scripts\//, description: 'scripts/: Node maintenance tools (updater, verifiers, doc tests)' },
   { name: 'build', pattern: /^vite\.[^/]+$/, description: 'vite.*: build config and plugins, run by Node at build time' },
-  { name: 'guardrails', pattern: /^(?:guardrails\/|eslint\.config\.js$)/, description: 'guardrails/ + eslint.config.js: lint tooling' },
+  {
+    name: 'guardrails',
+    pattern: /^(?:guardrails\/|eslint\.config\.js$|\.dependency-cruiser\.js$)/,
+    description: 'guardrails/ + eslint.config.js + .dependency-cruiser.js: lint, boundary, and runtime-verify tooling',
+  },
 ];
 
 /**
@@ -49,7 +55,7 @@ export const ALLOWED_EDGES = {
 };
 
 /** The app entry. It bootstraps the app on import, so no module may import it. */
-export const ENTRY_MODULE = /^src\/main(?:\.tsx?)?$/;
+export const ENTRY_MODULE = /^src\/main(?:|\.ts|\.tsx)$/;
 
 /** Layers that are bundled for the browser: no Node builtins, no paths outside src/. */
 export const BROWSER_LAYERS = new Set(['ui', 'app']);

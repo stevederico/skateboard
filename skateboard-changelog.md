@@ -15,6 +15,16 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.16.0
+
+  Add dependency-cruiser boundaries
+  Generate layer rules
+  Ban cycles, orphans
+  Add Playwright verify
+  Add verify workflow
+  Add guardrails CI
+  Fix stale JSX docs
+
 5.15.0
 
   Add guardrails lint

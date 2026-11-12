@@ -26,11 +26,13 @@ npm run test           # Frontend typecheck + script tests (no vitest)
 cd backend && cargo test --locked
 ```
 
-**Guardrails (lint):**
+**Guardrails (lint, boundaries, runtime verify):**
 ```bash
-npm run guardrails:install   # once: ESLint + TS parser into guardrails/
+npm run guardrails:install   # once: ESLint, TS parser, dependency-cruiser, Playwright into guardrails/
 npm run lint                 # local guardrails plugin (see Guardrails)
 npm run test:guardrails      # rule tests
+npm run depcruise            # whole-graph import boundaries (.dependency-cruiser.js)
+npm run verify               # boots frontend + backend, clicks through the app in Chromium
 ```
 
 ## Code Standards
@@ -148,13 +150,18 @@ Every written "never / don't" rule an agent keeps breaking becomes a machine che
 npm run guardrails:install   # once: installs ESLint + the TS parser into guardrails/ (nested, pinned)
 npm run lint                 # run all guardrails over src/, scripts/, vite.*, guardrails/
 npm run test:guardrails      # RuleTester suites for every rule (node --test)
+npm run depcruise            # dependency-cruiser over the whole import graph
+npm run verify               # Playwright flows against the running app, screenshots to verify-artifacts/
 ```
 
 - **Where:** `guardrails/eslint-plugin/` — zero-dependency ES modules, one file per rule in `rules/` with a `<rule>.test.js` next to it. `eslint.config.js` at the root wires `skateboard/base` (every file) and `skateboard/app` (React/UI rules, `src/` only).
-- **Why nested:** the root keeps TypeScript 7 (no JS API); ESLint and `@typescript-eslint/parser` (TypeScript 5) live in `guardrails/package.json`. Do not add them to the root.
+- **Why nested:** the root keeps TypeScript 7 (no JS API); ESLint, `@typescript-eslint/parser` (TypeScript 5), dependency-cruiser and `@playwright/test` live in `guardrails/package.json`. Do not add them to the root.
 - **Adding a rule:** when you write a new "never" rule here or in `skills/skateboard/rules/*.md`, add a lint rule for it if it is checkable from one file. Every message must say what was found, `Why:` the repo forbids it, and `Fix:` with the exact skateboard-ui export or pattern (the test harness asserts this). Register it in `guardrails/eslint-plugin/index.js` and the updater ALLOWLIST (`scripts/update-skateboard.js` `GUARDRAIL_RULES`).
 - **Disabling:** only with `// eslint-disable-next-line skateboard/<rule> -- <reason>`; unused disables fail lint.
-- **Layers:** `guardrails/eslint-plugin/layers.js` is the layer table (`ui` = src/components, `app` = rest of src/, `server` = backend/, `tooling` = scripts/, `build` = vite.*, `guardrails`) and the allowed import edges. `skateboard/layer-boundaries` enforces it; any future dependency-cruiser config mirrors that table.
+- **Layers:** `guardrails/eslint-plugin/layers.js` is the layer table (`ui` = src/components, `app` = rest of src/, `server` = backend/, `tooling` = scripts/, `build` = vite.*, `guardrails`) and the allowed import edges. `skateboard/layer-boundaries` enforces it per file, and `.dependency-cruiser.js` generates its layer rules from the same table (never hand-copy a layer into either).
+- **Boundaries (`npm run depcruise`):** dependency-cruiser resolves every import on disk, so it proves what one file cannot: the layer table across the graph, no circular dependencies, no orphan modules, no devDependencies or Node builtins in `src/`, no packages missing from `package.json`, no unresolvable imports (including deep paths a package's `exports` map does not expose), no relative paths into `node_modules/`, no imports of test files. Each rule's `comment` states the root cause and the fix. Needs `npm ci` and `npm run guardrails:install` first.
+- **Runtime verify (`npm run verify`):** `guardrails/verify/verify.e2e.js` drives Chromium through landing, guest entry, sign up, the main view, sidebar, command menu, settings, sign out, sign in, a legal page and the 404, against the real Vite dev server (:5173) and the real Rust backend (`cargo run` on :8000, throwaway SQLite under `verify-artifacts/`; nothing is mocked). It fails on uncaught exceptions and unexpected console errors and saves full-page screenshots to `verify-artifacts/screenshots/` (gitignored). First run: `cd guardrails && npx --no-install playwright install chromium`. Ports 5173 and 8000 must be free. Playwright is the browser driver for these flows only; unit tests stay on `node --test`, so flow files are named `*.e2e.js`, never `*.test.js` / `*.spec.js`. When you change a view the flows assert, update the flow in the same change.
+- **CI:** `.github/workflows/ci.yml` job `guardrails` runs lint, rule tests and depcruise; `.github/workflows/verify.yml` runs the flows on every pull request, uploads the screenshots, and keeps one PR comment linking them.
 
 **Written rules that are NOT linted (and why):**
 
@@ -165,7 +172,7 @@ npm run test:guardrails      # RuleTester suites for every rule (node --test)
 | Optional chaining / nullish coalescing, prefer destructuring, array methods over loops, default params | "Prefer" style calls; the useful versions need type information |
 | Boolean names prefixed `is`/`has`/`should` | Needs type information to know a value is boolean |
 | ~50 lines per function, ~150 lines per component, single responsibility, no magic numbers | Judgment calls with explicit "~" budgets |
-| Max 3 levels of component nesting, prop drilling beyond 2 levels, colocate state | Cross-file component tree |
+| Max 3 levels of component nesting, prop drilling beyond 2 levels, colocate state | Cross-file component tree (dependency-cruiser sees imports, not JSX nesting or props) |
 | Exactly one `<main>` per page, heading hierarchy, semantic HTML choice | Need the rendered page across shell + view files |
 | Contrast ratios, touch targets ≥ 44px, focus-indicator contrast, color not the only signal | Need computed styles at runtime |
 | Escape closes modals, focus trap/restore, arrow keys in composite widgets | Runtime behavior (provided by skateboard-ui primitives) |
@@ -460,8 +467,10 @@ skateboard/
 │   └── config.json      # Backend config with database settings
 ├── guardrails/
 │   ├── eslint-plugin/   # Local lint rules (one per written "never" rule)
-│   └── package.json     # Nested: ESLint + TS parser (not root deps)
+│   ├── verify/          # Playwright flows for `npm run verify`
+│   └── package.json     # Nested: ESLint, TS parser, dependency-cruiser, Playwright (not root deps)
 ├── eslint.config.js     # Wires the guardrails plugin
+├── .dependency-cruiser.js  # Import-graph boundaries, generated from the layer table
 ├── package.json         # Dependencies (includes skateboard-ui)
 ├── tsconfig.json        # Frontend TypeScript config (strict)
 └── vite.config.ts       # Vite configuration (app-owned)
@@ -509,7 +518,7 @@ skateboard/
 **Vite Configuration** (v1.1+ app-owned):
 Apps own their `vite.config.ts` directly. See [reference implementation](https://github.com/stevederico/skateboard/blob/master/vite.config.ts).
 
-- JSX via Vite's built-in esbuild (`jsx: 'automatic'`) — no `@vitejs/plugin-react-swc`
+- JSX comes from `tsconfig.json` (`"jsx": "react-jsx"`) via Vite's own transform — no `esbuild` block in `vite.config.ts`, no `@vitejs/plugin-react-swc`
 - Do **not** pass `vite --force` or set `optimizeDeps.force: true` in normal dev (causes full dep re-bundle every start)
 - Dev edits full-reload the page (no React Fast Refresh plugin)
 
@@ -530,8 +539,6 @@ Apps own their `vite.config.ts` directly. See [reference implementation](https:/
 **Always use the shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui` when building views.** The goal is the standard shadcn design look and feel — clean, consistent, and composable.
 
 **Import path:** `@stevederico/skateboard-ui/shadcn/ui/<component>`
-
-(From skateboard-ui **5.0**, that path is a package `exports` remap onto `ui/` — there are no linker shim files. Same import string for apps.)
 
 **Available components:**
 `accordion`, `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `calendar`, `card`, `checkbox`, `collapsible`, `command`, `dialog`, `drawer`, `dropdown-menu`, `empty`, `field`, `input`, `kbd`, `label`, `pagination`, `popover`, `progress`, `radio-group`, `scroll-area`, `select`, `separator`, `sheet`, `sidebar`, `skeleton`, `slider`, `spinner`, `switch`, `table`, `tabs`, `textarea`, `toggle`, `toggle-group`, `tooltip`
@@ -694,7 +701,7 @@ This repo ships **`skills/skateboard/SKILL.md`** — the Cursor/Claude skill for
 3. Import icons by name from the `src/icons.ts` funnel; only that file imports `lucide-react` (see Icons below).
 4. Treat `skateboardVersion` as a label — verify the tree (especially `backend/`) matches the template before claiming an upgrade is done.
 5. For upgrades, follow **Migrating 4.x → 5.0** below (and `docs/UPGRADE.md`).
-6. Run `npm run lint` (after `npm run guardrails:install`) and fix what it reports; each message names the fix (see **Guardrails**).
+6. Run `npm run lint` and `npm run depcruise` (after `npm run guardrails:install`) and fix what they report; each message names the fix. Run `npm run verify` after any UI or auth change (see **Guardrails**).
 
 Canonical pins live in this repo’s `package.json` (`version` / `skateboardVersion` / `@stevederico/skateboard-ui`). Refresh the skill metadata when those move.
 
@@ -703,7 +710,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.15.0
+- skateboard@5.16.0
 - skateboard-ui@5.11.4
 
 ## Migrating 4.x → 5.0 (exact checklist)
@@ -761,7 +768,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 
 14. **Drop `@vitejs/plugin-react-swc`**
     - Remove from `package.json` `devDependencies` and from `vite.config.ts` plugins.
-    - Keep Vite esbuild JSX: `esbuild: { jsx: 'automatic', jsxImportSource: 'react' }`.
+    - JSX comes from `tsconfig.json` (`"jsx": "react-jsx"`); `vite.config.ts` needs no `esbuild` block.
     - Expect **full page reload** on edit (no React Fast Refresh plugin).
 
 15. **Drop forced dep re-optimize**
@@ -824,7 +831,7 @@ a version in `package.json`:
 - `backend/src/*` - Rust server
 - `vite.config.ts` - Build configuration
 - `src/assets/styles.css` - Theme variables (merge carefully)
-- `eslint.config.js`, `guardrails/` - Lint guardrails (template-owned)
+- `eslint.config.js`, `.dependency-cruiser.js`, `guardrails/` - Lint, boundary and runtime-verify guardrails (template-owned; `guardrails/verify/verify.e2e.js` asserts the template's views, so expect to merge it with your app's flows)
 
 ### Never Auto-Update (app-specific)
 - `constants.json` - App configuration

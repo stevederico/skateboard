@@ -33,6 +33,7 @@ dist/
 build/
 backend/coverage/
 backend/target/
+verify-artifacts/
 
 # Local data — never bake into railway up images
 backend/databases/

@@ -116,9 +116,14 @@ const ALLOWLIST = [
   'scripts/version-consistency.test.js',
   'scripts/test-docs.mjs',
   'SECURITY.md',
-  // Guardrails: root ESLint config + the zero-dependency local plugin and its nested
-  // package (ESLint + TS parser pinned by guardrails/package-lock.json).
+  // Guardrails: root ESLint + dependency-cruiser configs, the zero-dependency local
+  // plugin, the Playwright runtime-verify flows, and the nested package that pins the
+  // tools (guardrails/package-lock.json).
   'eslint.config.js',
+  '.dependency-cruiser.js',
+  'guardrails/verify/paths.js',
+  'guardrails/verify/playwright.config.js',
+  'guardrails/verify/verify.e2e.js',
   'guardrails/package.json',
   'guardrails/package-lock.json',
   'guardrails/eslint-plugin/index.js',

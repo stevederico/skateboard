@@ -13,7 +13,7 @@ import plugin, { parser } from './guardrails/eslint-plugin/index.js';
 export default [
   {
     name: 'skateboard/ignores',
-    ignores: ['**/node_modules/**', 'dist/**', 'backend/**', 'guardrails/node_modules/**', 'public/**'],
+    ignores: ['**/node_modules/**', 'dist/**', 'backend/**', 'guardrails/node_modules/**', 'public/**', 'verify-artifacts/**'],
   },
   {
     name: 'skateboard/parser',
@@ -34,7 +34,9 @@ export default [
       'vite.*.ts',
       'vite.*.js',
       'eslint.config.js',
+      '.dependency-cruiser.js',
       'guardrails/eslint-plugin/**/*.js',
+      'guardrails/verify/**/*.js',
       // Banned toolchain config files are linted only so their existence is reported.
       '**/{tailwind,postcss}.config.{js,cjs,mjs,ts}',
     ],

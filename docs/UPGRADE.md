@@ -7,6 +7,21 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.16.0 — boundary analyzer + runtime verify.** No runtime change. The
+updater now syncs `.dependency-cruiser.js` and `guardrails/verify/`, the nested
+`guardrails/package.json` gains dependency-cruiser and `@playwright/test`
+(re-run `npm run guardrails:install`), and two scripts are added. `npm run
+depcruise` checks the whole import graph against the same layer table as the
+lint rule, plus cycles, orphans, dev-only and undeclared packages; each message
+names the fix. `npm run verify` boots the Vite frontend and the Rust backend
+and clicks through the app in Chromium (first run:
+`cd guardrails && npx --no-install playwright install chromium`); its flows
+assert the template's views and `src/constants.json` names, so merge
+`guardrails/verify/verify.e2e.js` with your app's own pages. Add
+`verify-artifacts/` to `.gitignore` if the updater did not. The workflows
+(`.github/workflows/ci.yml` job `guardrails`, `verify.yml`) are not synced;
+copy them from the reference repo.
+
 **5.15.0 — guardrails lint + icon funnel.** No runtime change. The
 updater now syncs `eslint.config.js` and `guardrails/` (a local ESLint plugin
 whose rules mirror AGENTS.md; ESLint and its TypeScript parser live in the
