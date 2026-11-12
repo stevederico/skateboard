@@ -6,6 +6,8 @@ deno.jsonc
 
 # Node
 node_modules/
+# Nested installs (guardrails/node_modules holds ESLint; the image never runs lint)
+**/node_modules/
 npm-debug.log*
 
 # Git
@@ -31,6 +33,7 @@ dist/
 build/
 backend/coverage/
 backend/target/
+verify-artifacts/
 
 # Local data — never bake into railway up images
 backend/databases/

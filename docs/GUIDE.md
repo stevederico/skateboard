@@ -383,7 +383,6 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [tailwindcss()],
-  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   server: { port: 5173 }
 });
 ```
@@ -576,7 +575,6 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [tailwindcss()],
-  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   server: {
     port: 3000,
     proxy: { '/api': 'http://localhost:8080' }
@@ -691,6 +689,10 @@ useEffect(() => {
 }, []);
 ```
 
+`npm run lint` rejects this (`skateboard/no-fetch-in-effect`): fetching in an effect races,
+double-fires under StrictMode, and skips loading/error states. Mutations call `apiRequest`
+from an event handler instead.
+
 #### 2. Use apiRequest for All API Calls
 
 **Good**:
@@ -752,14 +754,13 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [tailwindcss() /* … */],
-  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   server: { port: 3000 }
 });
 ```
 
 **Avoid** (copy a giant unrelated config, or reintroduce `@vitejs/plugin-react-swc` / `vite --force` without a reason):
 ```javascript
-// Prefer small, intentional overrides — JSX already works via esbuild
+// Prefer small, intentional overrides — JSX already works via tsconfig ("jsx": "react-jsx")
 ```
 
 ### Extension Points
@@ -907,7 +908,6 @@ export default defineConfig({
     htmlReplacePlugin(),
     myAnalyticsPlugin()
   ],
-  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
   server: {
     port: 3000,
     proxy: { '/api': 'http://backend:8080' }
@@ -1850,6 +1850,8 @@ Then install, sync the version label, and validate:
 ```bash
 npm install                                # root deps + lockfile
 npm run typecheck && npm run test
+npm run guardrails:install && npm run lint && npm run depcruise # guardrails; messages name each fix
+npm run verify # click through the running app in Chromium (ports 5173 + 8000 free)
 cd backend && cargo test --locked
 ```
 

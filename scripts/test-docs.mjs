@@ -105,7 +105,8 @@ for (const file of files) {
 }
 
 if (errors.length) {
-  console.error(`test:docs failed (${errors.length} broken link(s), ${checked} local links checked):\n` + errors.map((e) => `  - ${e}`).join('\n'));
+  const list = errors.map((e) => `  - ${e}`).join('\n');
+  console.error(`test:docs failed (${errors.length} broken link(s), ${checked} local links checked):\n${list}`);
   process.exit(1);
 }
 console.log(`test:docs ok (${checked} local links across ${files.length} markdown files)`);

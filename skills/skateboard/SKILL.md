@@ -8,7 +8,7 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.14.4"
+  version: "5.16.0"
   skateboard-ui: "5.11.4"
   sources:
     - https://github.com/stevederico/skateboard
@@ -21,7 +21,7 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.14.4** | App scaffold (copied into new repos) |
+| **skateboard** (boilerplate) | **5.16.0** | App scaffold (copied into new repos) |
 | **@stevederico/skateboard-ui** | **5.11.4** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
@@ -60,7 +60,7 @@ cd backend && cargo run               # Rust :8000
 
 - Frontend: http://localhost:5173  
 - Backend: http://localhost:8000  
-- Stack: **React 19** · **react-router v7.18+** (via ui) · **Vite 8** (esbuild JSX, no SWC plugin) · **Tailwind v4** · **lucide-react** · **zero-crate Rust** · **SQLite**
+- Stack: **React 19** · **react-router v7.18+** (via ui) · **Vite 8** (JSX via tsconfig `react-jsx`, no SWC plugin) · **Tailwind v4** · **lucide-react** · **zero-crate Rust** · **SQLite**
 
 ## Project Structure (current boilerplate)
 
@@ -70,12 +70,16 @@ my-app/
 │   ├── components/          # App views (HomeView, skeletons, …)
 │   ├── assets/styles.css    # Brand tokens + optional utilities
 │   ├── main.tsx             # Routes + createSkateboardApp
+│   ├── icons.ts             # Icon funnel: the only lucide-react import
 │   └── constants.json       # App config
 ├── backend/
 │   ├── src/                 # zero-crate Rust server
 │   ├── Cargo.toml           # empty [dependencies]
 │   ├── config.json
 │   └── databases/           # local SQLite files (not for Docker secrets)
+├── guardrails/              # local ESLint plugin, Playwright flows (verify/), nested tool install
+├── eslint.config.js
+├── .dependency-cruiser.js   # import-graph boundaries (npm run depcruise)
 ├── package.json             # skateboardVersion + pin skateboard-ui exact
 └── vite.config.ts
 ```
@@ -263,7 +267,7 @@ import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
 - **[Styling](rules/styling.md)** — tokens, spacing
 - **[Composition](rules/composition.md)** — Card/Dialog/Form patterns
 - **[Forms](rules/forms.md)** — labels, validation
-- **[Icons](rules/icons.md)** — Lucide
+- **[Icons](rules/icons.md)** — Lucide through the `src/icons.ts` funnel
 - **[Guidelines](rules/guidelines.md)** — interface guidelines
 - **[Views](rules/views.md)** — page layout, data fetching
 
@@ -364,7 +368,8 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 | Issue | Fix |
 |---|---|
 | Feature icons empty | `constants.features.items[].icon` must be **Lucide names** (`lock`, `credit-card`), not emoji |
-| `skateboard-ui/icons` or `DynamicIcon` import fails | **5.0** — named-import from `lucide-react` instead |
+| `skateboard-ui/icons` or `DynamicIcon` import fails | **5.0** — add the icon to `src/icons.ts` (`export { X } from 'lucide-react'`) and import it from the funnel |
+| `npm run lint` fails after an upgrade | Run `npm run guardrails:install` first; each message says what to change (e.g. move `lucide-react` imports into `src/icons.ts`) |
 | Landing header CTA short | Button `size="default"` next to icon ThemeToggle (not `sm`) |
 | Updater `.js` conflict missed | `git grep` conflict markers in **all** extensions |
 | Empty `STRIPE_ENDPOINT_SECRET=` in `.env.example` | Can poison tests that load example into `process.env` |
@@ -389,3 +394,4 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 4. Never commit secrets; never ship `.env` via symlink/Docker context
 5. Teach **TS** frontend paths (`main.tsx`) and **Rust** backend (`backend/src/`)
 6. **Upgrades:** two channels — UI npm + `update-skateboard.js` for vendored backend; never bump the version label alone
+7. **Guardrails:** `npm run guardrails:install` once, then `npm run lint` and `npm run depcruise` before finishing; every message says why and the exact fix. After a UI or auth change run `npm run verify` and update `guardrails/verify/verify.e2e.js` if a view it asserts changed (AGENTS.md → Guardrails)

@@ -48,6 +48,20 @@ describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
     assert.deepEqual(missing, [], `backend boilerplate missing from ALLOWLIST: ${missing.join(', ')}`);
   });
 
+  it('every guardrails file is allowlisted', () => {
+    // The updater merges the template's `lint` / `test:guardrails` / `depcruise` /
+    // `verify` scripts into apps, so the files they run must ship too. A new rule,
+    // helper, or verify flow fails here until listed.
+    const missing = ['eslint-plugin', 'verify']
+      .flatMap(dir => walkRepo(join(REPO, 'guardrails', dir)))
+      .filter(f => !f.endsWith('.DS_Store'))
+      .filter(f => !ALLOWLIST.includes(f));
+    assert.deepEqual(missing, [], `guardrails files missing from ALLOWLIST: ${missing.join(', ')}`);
+    for (const f of ['eslint.config.js', '.dependency-cruiser.js', 'guardrails/package.json', 'guardrails/package-lock.json']) {
+      assert.ok(ALLOWLIST.includes(f), `${f} must be synced`);
+    }
+  });
+
   it('allowlists the build infra new in 4.5.0', () => {
     assert.ok(ALLOWLIST.includes('vite.plugins.ts'), 'vite.plugins.ts must be synced');
   });

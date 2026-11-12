@@ -1,0 +1,87 @@
+name: Verify
+# Runtime verification: boots the Vite frontend and the Rust backend, clicks through the
+# main flows in Chromium (guardrails/verify/verify.e2e.js) and uploads the screenshots.
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      artifact-url: ${{ steps.upload.outputs.artifact-url }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: System libraries for zero-crate backend
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libcurl4-openssl-dev pkg-config
+      - run: npm ci
+      - run: npm run guardrails:install
+      # --no-install: use the Playwright pinned in guardrails/package-lock.json, never a
+      # fresh download of whatever is latest.
+      - name: Install Chromium
+        working-directory: guardrails
+        run: npx --no-install playwright install --with-deps chromium
+      # Compile ahead of the run so the build is not charged to the server boot timeout.
+      - run: cargo build --manifest-path backend/Cargo.toml --locked
+      - run: npm run verify
+      - name: Upload screenshots and traces
+        id: upload
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verify-screenshots
+          path: |
+            verify-artifacts/screenshots
+            verify-artifacts/playwright
+          if-no-files-found: warn
+          retention-days: 14
+
+  comment:
+    # Posts (or updates) one PR comment linking the screenshots artifact.
+    # Skipped for fork PRs, whose token is read-only.
+    needs: verify
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # The only extra permission in this workflow: PR comments are written through the
+      # issues-comments API, which needs pull-requests: write. This job checks out no
+      # code and runs no repo scripts, so the write token never meets PR-controlled code.
+      pull-requests: write
+    steps:
+      - name: Post or update the verify comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          RESULT: ${{ needs.verify.result }}
+          ARTIFACT_URL: ${{ needs.verify.outputs.artifact-url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          marker='<!-- skateboard-verify -->'
+          if [ -n "$ARTIFACT_URL" ]; then
+            shots="[Download the screenshots]($ARTIFACT_URL)"
+          else
+            shots="No screenshots were uploaded."
+          fi
+          body="$(printf '%s\n**Runtime verify: %s** for %s\n\n%s ([run log](%s))\n' "$marker" "$RESULT" "$HEAD_SHA" "$shots" "$RUN_URL")"
+          existing="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n 1)"
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" --silent
+          else
+            gh api --method POST "repos/$REPO/issues/$PR/comments" -f body="$body" --silent
+          fi

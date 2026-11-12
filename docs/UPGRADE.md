@@ -7,6 +7,32 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.16.0 — boundary analyzer + runtime verify.** No runtime change. The
+updater now syncs `.dependency-cruiser.js` and `guardrails/verify/`, the nested
+`guardrails/package.json` gains dependency-cruiser and `@playwright/test`
+(re-run `npm run guardrails:install`), and two scripts are added. `npm run
+depcruise` checks the whole import graph against the same layer table as the
+lint rule, plus cycles, orphans, dev-only and undeclared packages; each message
+names the fix. `npm run verify` boots the Vite frontend and the Rust backend
+and clicks through the app in Chromium (first run:
+`cd guardrails && npx --no-install playwright install chromium`); its flows
+assert the template's views and `src/constants.json` names, so merge
+`guardrails/verify/verify.e2e.js` with your app's own pages. Add
+`verify-artifacts/` to `.gitignore` if the updater did not. The workflows
+(`.github/workflows/ci.yml` job `guardrails`, `verify.yml`) are not synced;
+copy them from the reference repo.
+
+**5.15.0 — guardrails lint + icon funnel.** No runtime change. The
+updater now syncs `eslint.config.js` and `guardrails/` (a local ESLint plugin
+whose rules mirror AGENTS.md; ESLint and its TypeScript parser live in the
+nested `guardrails/package.json`, never in root deps) and adds the
+`guardrails:install`, `lint` and `test:guardrails` scripts. Run
+`npm run guardrails:install && npm run lint` and follow each message. The one
+most apps hit: `lucide-react` may only be imported by `src/icons.ts` (app-owned,
+so create it): list the icons the app uses as
+`export { Plus, Trash2 } from 'lucide-react';` and change component imports to
+`import { Plus } from '../icons'`. Lint is not part of `npm run test`.
+
 **5.14.4 — base images pinned by digest.** No runtime change: the
 `Dockerfile` pins node, rust and debian by multi-arch digest (each at least
 7 days old) and sets `ENV RUSTUP_TOOLCHAIN=1.99.1`. Apps can copy the `FROM`
@@ -145,11 +171,11 @@ Summary of required work (do all of it):
 2. Refresh scripts/update-skateboard.js from skateboard master; run with --yes (use --baseline if needed).
 3. Resolve conflicts; ensure zero-crate Rust backend (empty [dependencies]); port any Hono routes to backend/src/routes.rs.
 4. npm install @stevederico/skateboard-ui@5.0.0 --save-exact && npm run verify:ui.
-5. Rewrite all @stevederico/skateboard-ui/icons and DynamicIcon imports to named lucide-react imports; add lucide-react dependency if missing.
+5. Rewrite all @stevederico/skateboard-ui/icons and DynamicIcon imports to named imports from src/icons.ts (create it: an explicit `export { X } from 'lucide-react'` list; it is the only file that imports lucide-react); add lucide-react dependency if missing.
 6. Keep @stevederico/skateboard-ui/shadcn/ui/* imports (exports remap in 5.0).
 7. Drop @vitejs/plugin-react-swc; let JSX come from tsconfig ("jsx": "react-jsx"); drop vite --force and optimizeDeps.force.
 8. Drop test:coverage* scripts if present.
-9. npm run typecheck && npm run test && (cd backend && cargo test --locked). Smoke sign-in + one API call.
+9. npm run typecheck && npm run test && (cd backend && cargo test --locked). Then npm run guardrails:install && npm run lint and fix every report (each message names the fix). Smoke sign-in + one API call.
 10. Set version and skateboardVersion to 5.0.0 (equal). Update app CHANGELOG. Commit on the branch; do not push without approval.
 
 Never touch src/constants.json, backend/config.json, or .env beyond what the updater merged. Prefer app-side AGENTS.md on conflicts.
@@ -157,7 +183,7 @@ Never touch src/constants.json, backend/config.json, or .env beyond what the upd
 
 ## Notes
 
-- The updater never touches app-owned files (`src/constants.json`, `src/components/*`, `src/main.tsx`, `src/assets/styles.css`, `backend/config.json`, `.env*`). Icon **rewrites inside** `src/components/*` are still required for 5.0 — do those manually (updater will not rewrite app imports).
+- The updater never touches app-owned files (`src/constants.json`, `src/components/*`, `src/main.tsx`, `src/icons.ts`, `src/assets/styles.css`, `backend/config.json`, `.env*`). Icon **rewrites inside** `src/components/*` are still required for 5.0 — do those manually (updater will not rewrite app imports); `npm run lint` lists every one.
 - skateboard-ui ≥3.10.0 ships its own TypeScript declarations, so the old `src/skateboard-ui.d.ts` shim is deleted on upgrade — a stale copy would shadow the package's real types.
 - `--baseline <version>` forces the 3-way merge baseline when `skateboardVersion` is wrong or was stamped prematurely. It also skips the "Already on latest" early-exit, so you can re-sync an app whose version was stamped without the files actually migrating.
 - If any file ends declined, conflicted, or errored, the updater does **not** stamp `skateboardVersion` — resolve the conflicts, then re-run with `--baseline <old-version>` to finish.
