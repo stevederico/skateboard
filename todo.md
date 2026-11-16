@@ -18,3 +18,12 @@ sign out, sign in, legal pages, 404, back and forward, icons).
 - [ ] `vite.config.ts`, `vite.plugins.ts` and `scripts/verify-ui-version.ts` are no longer
   typechecked (they left `tsconfig.json` with `@types/node`). Their tests still run
   (`npm run test:build`). Add a separate Node tsconfig only if they need the type gate.
+
+## No more `shadcn` paths (5.19.0)
+
+Done: pinned `@stevederico/skateboard-ui` 5.17.0, which removed the `./shadcn/*` exports.
+`src/` imports `@stevederico/skateboard-ui/ui/*` (CommandMenu, BlankView, SectionCards);
+`grep -rn "skateboard-ui/shadcn" src` prints nothing. Lint rule
+`no-removed-skateboard-ui-imports` reports any leftover with its new path. AGENTS.md,
+docs/UPGRADE.md (5.19.0 note), the skill, the rule messages and depcruise messages use
+the new paths. Prose that names the shadcn design system (upstream) stays.

@@ -30,7 +30,7 @@ export default {
     messages: {
       loadingText:
         'Found "{{text}}" rendered inside a `<Button>`. Why: swapping the label changes the button width (layout shift) and screen readers lose the action name mid-submit. ' +
-        'Fix: keep the label and show a spinner: `<Button type="submit" disabled={isSubmitting}>{isSubmitting ? <Spinner className="size-4" /> : "Save"}</Button>` (Spinner from `@stevederico/skateboard-ui/shadcn/ui/spinner`), or render `<Spinner />` next to the label.',
+        'Fix: keep the label and show a spinner: `<Button type="submit" disabled={isSubmitting}>{isSubmitting ? <Spinner className="size-4" /> : "Save"}</Button>` (Spinner from `@stevederico/skateboard-ui/ui/spinner`), or render `<Spinner />` next to the label.',
     },
   },
   create(context) {

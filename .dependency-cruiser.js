@@ -134,7 +134,7 @@ export default {
       severity: 'error',
       comment:
         'Found an import that does not resolve to a file or to a path in the package\'s `exports` map. Why: a typo, a deleted file, or a deep path into package internals (e.g. "pkg/dist/x.js") that the package does not export; the build fails or the path breaks on the next release. ' +
-        'Fix: correct the relative path, or import the package\'s public subpath (e.g. "@stevederico/skateboard-ui/Utilities", "@stevederico/skateboard-ui/shadcn/ui/<component>"). The Vite "@/" alias is not in tsconfig, so use relative paths.',
+        'Fix: correct the relative path, or import the package\'s public subpath (e.g. "@stevederico/skateboard-ui/Utilities", "@stevederico/skateboard-ui/ui/<component>"). The Vite "@/" alias is not in tsconfig, so use relative paths.',
       from: {},
       to: { couldNotResolve: true },
     },
@@ -143,7 +143,7 @@ export default {
       severity: 'error',
       comment:
         'Found a relative import that reaches into a node_modules folder. Why: it hard-codes one install layout (hoisting, workspaces, and Docker builds differ) and skips the package\'s `exports` map, so it breaks on the next install. ' +
-        'Fix: import the package by name (`import { Button } from "@stevederico/skateboard-ui/shadcn/ui/button"`).',
+        'Fix: import the package by name (`import { Button } from "@stevederico/skateboard-ui/ui/button"`).',
       from: {},
       to: { dependencyTypes: ['local'], path: '(^|/)node_modules/' },
     },

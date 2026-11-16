@@ -14,7 +14,7 @@ export default {
     messages: {
       template:
         'Found a conditional inside a className template literal. Why: string-glued classes leave stray spaces and "false"/"undefined" tokens, and cannot resolve Tailwind conflicts (p-2 vs p-4), so the last class does not reliably win. ' +
-        'Fix: compose with cn() (`import { cn } from "@stevederico/skateboard-ui/shadcn/lib/utils"`, which merges conflicting Tailwind classes): className={cn("base classes", isActive && "bg-accent", isLarge ? "p-6" : "p-4")}.',
+        'Fix: compose with cn() (`import { cn } from "@stevederico/skateboard-ui/lib/utils"`, which merges conflicting Tailwind classes): className={cn("base classes", isActive && "bg-accent", isLarge ? "p-6" : "p-4")}.',
     },
   },
   create(context) {

@@ -1,6 +1,6 @@
 import { findAttr, jsxName, staticAttrValue } from '../lib/jsx.js';
 
-const UI = '@stevederico/skateboard-ui/shadcn/ui';
+const UI = '@stevederico/skateboard-ui/ui';
 
 /** Replacement per raw element (and per `<input type>`). */
 const FIXES = {

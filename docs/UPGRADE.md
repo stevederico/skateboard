@@ -7,6 +7,14 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.19.0 — skateboard-ui 5.17.0, no `shadcn` paths.** skateboard-ui 5.17.0
+removed the `./shadcn/*` exports. Apps: `npm install @stevederico/skateboard-ui@5.17.0 --save-exact`,
+then rewrite `@stevederico/skateboard-ui/shadcn/ui/X` to `/ui/X`,
+`/shadcn/lib/utils` to `/lib/utils` and `/shadcn/hooks/X` to `/hooks/X` (same
+exports). `grep -rn "skateboard-ui/shadcn" src` must print nothing; the
+`no-removed-skateboard-ui-imports` lint rule reports any leftover with its new
+path.
+
 **5.18.0 — skateboard-ui 5.16.0, router from skateboard-ui, no @types/node.**
 skateboard-ui 5.16.0 vendors react-router 7.18.5 and exports it as
 `@stevederico/skateboard-ui/router` (and `/router/dom`), so it is no longer a
@@ -202,7 +210,7 @@ Summary of required work (do all of it):
 3. Resolve conflicts; ensure zero-crate Rust backend (empty [dependencies]); port any Hono routes to backend/src/routes.rs.
 4. npm install @stevederico/skateboard-ui@5.0.0 --save-exact && npm run verify:ui.
 5. Rewrite all @stevederico/skateboard-ui/icons and DynamicIcon imports to named imports from src/icons.ts (create it: an explicit `export { X } from 'lucide-react'` list; it is the only file that imports lucide-react); add lucide-react dependency if missing. (Later, at skateboard 5.17.0 / ui 5.13+, the funnel switches to `@stevederico/skateboard-ui/icons` and lucide-react is removed; see the 5.17.0 note above.)
-6. Keep @stevederico/skateboard-ui/shadcn/ui/* imports (exports remap in 5.0).
+6. Import primitives from @stevederico/skateboard-ui/ui/* (the old shadcn/ui/* alias was removed in ui 5.17.0).
 7. Drop @vitejs/plugin-react-swc; let JSX come from tsconfig ("jsx": "react-jsx"); drop vite --force and optimizeDeps.force.
 8. Drop test:coverage* scripts if present.
 9. npm run typecheck && npm run test && (cd backend && cargo test --locked). Then npm run guardrails:install && npm run lint and fix every report (each message names the fix). Smoke sign-in + one API call.

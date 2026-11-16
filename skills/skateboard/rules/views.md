@@ -116,7 +116,7 @@ function ViewSkeleton() {
 Every list/grid view needs an empty state:
 
 ```jsx
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@stevederico/skateboard-ui/shadcn/ui/empty";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@stevederico/skateboard-ui/ui/empty";
 
 {data.length === 0 ? (
   <Empty>

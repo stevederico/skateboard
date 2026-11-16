@@ -8,8 +8,8 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.18.0"
-  skateboard-ui: "5.16.0"
+  version: "5.19.0"
+  skateboard-ui: "5.17.0"
   sources:
     - https://github.com/stevederico/skateboard
     - https://github.com/stevederico/skateboard-ui
@@ -21,8 +21,8 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.18.0** | App scaffold (copied into new repos) |
-| **@stevederico/skateboard-ui** | **5.16.0** | Shell + components (npm package — pin exact) |
+| **skateboard** (boilerplate) | **5.19.0** | App scaffold (copied into new repos) |
+| **@stevederico/skateboard-ui** | **5.17.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
 
@@ -184,7 +184,7 @@ const { state, dispatch } = getState();
 
 `apiRequest`: credentials, CSRF, timeout, 401 handling.
 
-**Import shadcn:** `@stevederico/skateboard-ui/shadcn/ui/<component>`  
+**Import shadcn:** `@stevederico/skateboard-ui/ui/<component>`  
 **Shell pieces:** `…/Header`, `…/Layout`, `…/App`, etc. (see package `exports`)
 
 ## Backend — zero-crate Rust
@@ -249,13 +249,13 @@ FRONTEND_URL=               # Stripe redirects
 | Confirm | `<AlertDialog>` | `window.confirm` |
 | Field group | `<Field>` | freeform label/input/error |
 
-Import primitives as `@stevederico/skateboard-ui/shadcn/ui/<name>` (public path; ui **5.0** remaps exports to `ui/`). Shell uses a subset; fleet apps use more (button, empty, card, dialog, command, …).
+Import primitives as `@stevederico/skateboard-ui/ui/<name>` (public path; ui **5.0** remaps exports to `ui/`). Shell uses a subset; fleet apps use more (button, empty, card, dialog, command, …).
 
 ## Header
 
 ```tsx
 import Header from '@stevederico/skateboard-ui/Header';
-import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
+import { Button } from '@stevederico/skateboard-ui/ui/button';
 
 <Header title="Projects">
   <Button size="sm">New</Button>

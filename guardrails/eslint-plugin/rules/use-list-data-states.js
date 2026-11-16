@@ -12,7 +12,7 @@ export default {
     messages: {
       missingStates:
         'Found `useListData(...)` destructured without {{missing}}. Why: ignoring them shows a blank screen while loading and silently drops failed requests, which the repo forbids ("no silent failures"). ' +
-        'Fix: `const { data, loading, error, refetch } = useListData(...)`; `if (loading) return <ViewSkeleton />;` and `if (error)` render `<Empty>` with the message and `<Button onClick={refetch}>Try again</Button>` (Empty from `@stevederico/skateboard-ui/shadcn/ui/empty`).',
+        'Fix: `const { data, loading, error, refetch } = useListData(...)`; `if (loading) return <ViewSkeleton />;` and `if (error)` render `<Empty>` with the message and `<Button onClick={refetch}>Try again</Button>` (Empty from `@stevederico/skateboard-ui/ui/empty`).',
     },
   },
   create(context) {

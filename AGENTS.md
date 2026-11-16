@@ -535,9 +535,9 @@ Apps own their `vite.config.ts` directly. See [reference implementation](https:/
 
 ## UI Components — shadcn Primitives
 
-**Always use the shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui` when building views.** The goal is the standard shadcn design look and feel — clean, consistent, and composable.
+**Always use the shadcn primitives from `@stevederico/skateboard-ui/ui` when building views.** The goal is the standard shadcn design look and feel — clean, consistent, and composable.
 
-**Import path:** `@stevederico/skateboard-ui/shadcn/ui/<component>`
+**Import path:** `@stevederico/skateboard-ui/ui/<component>`
 
 **Available components:**
 `accordion`, `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `calendar`, `card`, `checkbox`, `collapsible`, `command`, `dialog`, `drawer`, `dropdown-menu`, `empty`, `field`, `input`, `kbd`, `label`, `pagination`, `popover`, `progress`, `radio-group`, `scroll-area`, `select`, `separator`, `sheet`, `sidebar`, `skeleton`, `slider`, `spinner`, `switch`, `table`, `tabs`, `textarea`, `toggle`, `toggle-group`, `tooltip`
@@ -552,7 +552,7 @@ Apps own their `vite.config.ts` directly. See [reference implementation](https:/
 **Compound Components — these use sub-components, NOT props:**
 ```javascript
 // Empty state — compound pattern (NOT <Empty icon={} title={}>)
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/ui/empty';
 
 <Empty>
   <EmptyHeader>
@@ -564,10 +564,10 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@s
 </Empty>
 
 // Card — compound pattern
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@stevederico/skateboard-ui/shadcn/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@stevederico/skateboard-ui/ui/card';
 
 // Dialog — compound pattern
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@stevederico/skateboard-ui/shadcn/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@stevederico/skateboard-ui/ui/dialog';
 ```
 
 **Header — use `children` for right-side actions:**
@@ -586,9 +586,9 @@ import Header from '@stevederico/skateboard-ui/Header';
 
 **Standard imports:**
 ```javascript
-import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
-import { Input } from '@stevederico/skateboard-ui/shadcn/ui/input';
-import { Label } from '@stevederico/skateboard-ui/shadcn/ui/label';
+import { Button } from '@stevederico/skateboard-ui/ui/button';
+import { Input } from '@stevederico/skateboard-ui/ui/input';
+import { Label } from '@stevederico/skateboard-ui/ui/label';
 ```
 
 ## Key Implementation Patterns
@@ -618,9 +618,9 @@ const newDeal = await apiRequest('/deals', {
 
 ```javascript
 import { useListData } from '@stevederico/skateboard-ui/Utilities';
-import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/shadcn/ui/empty';
-import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
+import { Spinner } from '@stevederico/skateboard-ui/ui/spinner';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/ui/empty';
+import { Button } from '@stevederico/skateboard-ui/ui/button';
 import { CircleAlert } from '../icons'; // add CircleAlert to src/icons.ts first
 
 function DealsView() {
@@ -696,7 +696,7 @@ This repo ships **`skills/skateboard/SKILL.md`** — the Cursor/Claude skill for
 
 **What agents must do:**
 1. Read `skills/skateboard/SKILL.md` first (and `skills/skateboard/rules/*` for icons/forms/styling/views as needed).
-2. Prefer shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui/*` over raw HTML.
+2. Prefer shadcn primitives from `@stevederico/skateboard-ui/ui/*` over raw HTML.
 3. Import icons by name from the `src/icons.ts` funnel; only that file imports `@stevederico/skateboard-ui/icons` (see Icons below).
 4. Treat `skateboardVersion` as a label — verify the tree (especially `backend/`) matches the template before claiming an upgrade is done.
 5. For upgrades, follow **Migrating 4.x → 5.0** below (and `docs/UPGRADE.md`).
@@ -709,8 +709,8 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.18.0
-- skateboard-ui@5.16.0
+- skateboard@5.19.0
+- skateboard-ui@5.17.0
 
 ## Migrating 4.x → 5.0 (exact checklist)
 
@@ -753,9 +753,9 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
     - Ensure `lucide-react` is listed in app `dependencies` (boilerplate ships it; ui 5.0 also depends on it).
     - **Then continue to ui 5.13+ (boilerplate 5.17.0):** the funnel re-exports from `@stevederico/skateboard-ui/icons` instead of `lucide-react`, `lucide-react` leaves `dependencies`, and `react-router` joins them (a peer of ui since 5.12.0). See `docs/UPGRADE.md` → 5.17.0. **Then ui 5.16+ (boilerplate 5.18.0):** react-router is vendored inside skateboard-ui, so `react-router` leaves `dependencies` again and router imports come from `@stevederico/skateboard-ui/router`. See `docs/UPGRADE.md` → 5.18.0.
 
-11. **Keep shadcn import paths**
-    - Continue using `@stevederico/skateboard-ui/shadcn/ui/<name>`.
-    - Do **not** rewrite to `…/ui/<name>` unless you want to — both work; `shadcn/ui/*` is remapped via package `exports` (linker shim files are gone).
+11. **UI import paths**
+    - Use `@stevederico/skateboard-ui/ui/<name>`, `@stevederico/skateboard-ui/lib/utils` (`cn`) and `@stevederico/skateboard-ui/hooks/use-mobile`.
+    - The old `@stevederico/skateboard-ui/shadcn/...` paths were removed in skateboard-ui 5.17.0 (lint: `no-removed-skateboard-ui-imports`). Rewrite `/shadcn/ui/X` → `/ui/X`, `/shadcn/lib/utils` → `/lib/utils`, `/shadcn/hooks/X` → `/hooks/X`; `grep -rn "skateboard-ui/shadcn" src` must print nothing.
 
 12. **Routing**
     - Apps must **not** import `react-router` / `react-router-dom` (lint: `no-direct-react-router`). Navigate with `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`.
@@ -798,7 +798,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 ### What 5.0 does *not* require
 
 - No rewrite of `constants.json` shape (icon **values** stay Lucide name strings).
-- No change to `@stevederico/skateboard-ui/shadcn/ui/*` import strings for apps.
+- No change to `@stevederico/skateboard-ui/ui/*` import strings for apps.
 - Calendar / CommandMenu / TextView / mid-tier primitives (accordion, progress, …) remain available.
 
 ## Updating from Skateboard Boilerplate

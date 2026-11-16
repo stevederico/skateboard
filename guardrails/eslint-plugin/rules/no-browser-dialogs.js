@@ -3,8 +3,8 @@ const GLOBALS = new Set(['window', 'globalThis', 'self']);
 
 const FIXES = {
   alert: 'use a toast (`toast()` / `toast.error()`, per AGENTS.md > Error Handling) for transient messages, or an inline error next to the field',
-  confirm: 'use `<AlertDialog>` from `@stevederico/skateboard-ui/shadcn/ui/alert-dialog` (AlertDialogAction / AlertDialogCancel) and run the action in its onClick handler',
-  prompt: 'use `<Dialog>` from `@stevederico/skateboard-ui/shadcn/ui/dialog` with a `<Label>` + `<Input>` from `@stevederico/skateboard-ui/shadcn/ui/input` and a submit `<Button>`',
+  confirm: 'use `<AlertDialog>` from `@stevederico/skateboard-ui/ui/alert-dialog` (AlertDialogAction / AlertDialogCancel) and run the action in its onClick handler',
+  prompt: 'use `<Dialog>` from `@stevederico/skateboard-ui/ui/dialog` with a `<Label>` + `<Input>` from `@stevederico/skateboard-ui/ui/input` and a submit `<Button>`',
 };
 
 /**

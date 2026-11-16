@@ -1,4 +1,4 @@
-import { Badge } from "@stevederico/skateboard-ui/shadcn/ui/badge"
+import { Badge } from "@stevederico/skateboard-ui/ui/badge"
 import {
   Card,
   CardAction,
@@ -6,7 +6,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@stevederico/skateboard-ui/shadcn/ui/card"
+} from "@stevederico/skateboard-ui/ui/card"
 import { TrendingDown, TrendingUp } from "../icons"
 
 /**

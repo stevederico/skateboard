@@ -15,7 +15,7 @@ export default {
     messages: {
       notKeyboardReachable:
         'Found `<{{name}} onClick>` missing {{missing}}. Why: a clickable div/span is invisible to the Tab key and screen readers, so keyboard and assistive-tech users cannot activate it. ' +
-        'Fix: use `<Button>` from `@stevederico/skateboard-ui/shadcn/ui/button` (`variant="ghost"` keeps it unstyled-looking); if it truly cannot be a button, add `role="button" tabIndex={0} onKeyDown={handleKeyDown}` handling Enter and Space.',
+        'Fix: use `<Button>` from `@stevederico/skateboard-ui/ui/button` (`variant="ghost"` keeps it unstyled-looking); if it truly cannot be a button, add `role="button" tabIndex={0} onKeyDown={handleKeyDown}` handling Enter and Space.',
     },
   },
   create(context) {

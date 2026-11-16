@@ -16,8 +16,8 @@ export default {
     type: 'problem',
     docs: {
       description:
-        'Never import per-icon subpaths `@stevederico/skateboard-ui/icons/<Name>` or public DynamicIcon (removed in 5.0); no `useForm`, `logEvent`, `setSidebarVisible` / `setTabBarVisible` (removed Utilities).',
-      source: 'AGENTS.md > Icons / Migrating 4.x -> 5.0 (steps 10 and 13)',
+        'Never import per-icon subpaths `@stevederico/skateboard-ui/icons/<Name>` or public DynamicIcon (removed in 5.0), or `@stevederico/skateboard-ui/shadcn/...` (removed in ui 5.17.0); no `useForm`, `logEvent`, `setSidebarVisible` / `setTabBarVisible` (removed Utilities).',
+      source: 'AGENTS.md > Icons / Migrating 4.x -> 5.0 (steps 10, 11 and 13); docs/UPGRADE.md 5.19.0',
     },
     schema: [],
     messages: {
@@ -27,6 +27,9 @@ export default {
       dynamicIcon:
         'Found an import of "{{source}}". Why: public DynamicIcon was removed in skateboard-ui 5.0 (string-to-icon lookup pulls every icon into the bundle). The shell still resolves constants.json icon strings privately. ' +
         'Fix: use a named icon from the funnel (`import { House } from "../icons";`) and render `<House size={18} />`.',
+      shadcn:
+        'Found an import of "{{source}}". Why: skateboard-ui 5.17.0 removed every `./shadcn/*` export (shadcn/ui was only an alias of ui/, and shadcn/lib + shadcn/hooks became lib/ and hooks/), so this path no longer resolves and the build fails. ' +
+        'Fix: import "{{replacement}}" instead (same exports).',
       removedUtility:
         'Found `{{name}}` imported from "@stevederico/skateboard-ui/Utilities". Why: it was removed from the shell in late 4.x, so the import is undefined at runtime. ' +
         'Fix: use {{replacement}}.',
@@ -37,6 +40,11 @@ export default {
       moduleSourceVisitors((node, source) => {
         if (source.startsWith(`${UI}/icons/`)) {
           context.report({ node, messageId: 'icons', data: { source } });
+        } else if (source === `${UI}/shadcn` || source.startsWith(`${UI}/shadcn/`)) {
+          const rest = source.slice(`${UI}/shadcn/`.length);
+          // Only lib/utils (cn) was ever exported from shadcn/lib.
+          const sub = rest.startsWith('ui/') || rest.startsWith('hooks/') ? rest : 'lib/utils';
+          context.report({ node, messageId: 'shadcn', data: { source, replacement: `${UI}/${sub}` } });
         } else if (source === `${UI}/DynamicIcon` || source.startsWith(`${UI}/DynamicIcon/`)) {
           context.report({ node, messageId: 'dynamicIcon', data: { source } });
         }

@@ -15,6 +15,13 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.19.0
+
+  Pin skateboard-ui 5.17.0
+  Rewrite shadcn imports
+  Ban shadcn paths
+  Update docs paths
+
 5.18.0
 
   Pin skateboard-ui 5.16.0

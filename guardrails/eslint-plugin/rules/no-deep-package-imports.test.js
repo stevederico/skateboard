@@ -3,7 +3,7 @@ import { runRuleTests } from '../lib/ruleTester.js';
 
 runRuleTests('no-deep-package-imports', rule, {
   valid: [
-    "import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';",
+    "import { Button } from '@stevederico/skateboard-ui/ui/button';",
     "import { Skeleton } from '@stevederico/skateboard-ui/ui/skeleton';",
     "import { createRoot } from 'react-dom/client';",
     { code: "export { Plus } from '@stevederico/skateboard-ui/icons';", filename: 'src/icons.ts' },

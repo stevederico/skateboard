@@ -41,16 +41,16 @@ export default {
     messages: {
       rawInCard:
         'Found raw content directly inside `<Card>`. Why: Card slots (CardHeader, CardContent, CardFooter) own the padding, gap and typography; raw children break the spacing and diverge from every other card. ' +
-        'Fix: wrap it: `<Card><CardHeader><CardTitle>…</CardTitle></CardHeader><CardContent className="flex flex-col gap-4">…</CardContent></Card>` (all from `@stevederico/skateboard-ui/shadcn/ui/card`).',
+        'Fix: wrap it: `<Card><CardHeader><CardTitle>…</CardTitle></CardHeader><CardContent className="flex flex-col gap-4">…</CardContent></Card>` (all from `@stevederico/skateboard-ui/ui/card`).',
       nestedCard:
         'Found a `<Card>` nested inside another `<Card>`. Why: stacked borders and padding create visual noise and break the elevation hierarchy. ' +
-        'Fix: flatten it: use sections inside one `CardContent` (separate with `<Separator>` from `@stevederico/skateboard-ui/shadcn/ui/separator`), or lay sibling Cards out in a `grid gap-4`.',
+        'Fix: flatten it: use sections inside one `CardContent` (separate with `<Separator>` from `@stevederico/skateboard-ui/ui/separator`), or lay sibling Cards out in a `grid gap-4`.',
       nestedDialog:
         'Found a `<Dialog>` nested inside another `<Dialog>`. Why: stacked modals fight over focus trapping and Escape handling, and users lose their place. ' +
         'Fix: replace the inner step in the same `DialogContent` (multi-step state), close the first dialog before opening the second, or use a `<Sheet>` for supplementary detail.',
       missingDescription:
         'Found `<{{content}}>` without a `<{{description}}>`. Why: Radix links the description to the dialog via aria-describedby; without it screen readers announce only the title and Radix logs an a11y warning. ' +
-        'Fix: add `<{{description}}>` inside the header (import it from `@stevederico/skateboard-ui/shadcn/ui/{{file}}`), or pass `aria-describedby={undefined}` explicitly when there is truly nothing to describe.',
+        'Fix: add `<{{description}}>` inside the header (import it from `@stevederico/skateboard-ui/ui/{{file}}`), or pass `aria-describedby={undefined}` explicitly when there is truly nothing to describe.',
     },
   },
   create(context) {

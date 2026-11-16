@@ -6,7 +6,7 @@ runRuleTests('icon-requires-size', rule, {
     'import { Plus } from "../icons"; <Plus size={18} aria-hidden="true" />;',
     'import { TrendingUp } from "../icons"; <TrendingUp className="size-4" aria-hidden="true" />;',
     'import { TrendingUp } from "@/icons"; <TrendingUp {...iconProps} />;',
-    'import { Badge } from "@stevederico/skateboard-ui/shadcn/ui/badge"; <Badge />;',
+    'import { Badge } from "@stevederico/skateboard-ui/ui/badge"; <Badge />;',
     { code: 'import { Plus } from "./icons.ts"; <Plus size={16} />;', filename: 'src/main.tsx' },
   ],
   invalid: [

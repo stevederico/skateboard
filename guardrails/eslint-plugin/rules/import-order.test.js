@@ -20,10 +20,10 @@ import { Plus } from '../icons';`,
   invalid: [
     {
       code: `import { Plus } from '../icons';
-import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';`,
+import { Button } from '@stevederico/skateboard-ui/ui/button';`,
       errors: [{
         messageId: 'order',
-        data: { group: 'external package', source: '@stevederico/skateboard-ui/shadcn/ui/button', laterGroup: 'relative path', later: '../icons' },
+        data: { group: 'external package', source: '@stevederico/skateboard-ui/ui/button', laterGroup: 'relative path', later: '../icons' },
       }],
     },
     {

@@ -9,7 +9,7 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
-} from '@stevederico/skateboard-ui/shadcn/ui/command';
+} from '@stevederico/skateboard-ui/ui/command';
 
 /** Page entry from constants.json's pages array. */
 interface PageEntry {

@@ -15,7 +15,7 @@ export default {
     messages: {
       unlabeled:
         'Found an `<{{name}}>` with no `id`, `aria-label`, `aria-labelledby`, or wrapping `<Label>`. Why: placeholder text is not a label; screen readers announce an unnamed field and clicking the label text does not focus it. ' +
-        'Fix: pair it with a label inside `<Field>`: `<Label htmlFor="email">Email</Label><{{name}} id="email" />` (Label from `@stevederico/skateboard-ui/shadcn/ui/label`, Field from `@stevederico/skateboard-ui/shadcn/ui/field`); use `aria-label` only when no visible label fits (e.g. a search box).',
+        'Fix: pair it with a label inside `<Field>`: `<Label htmlFor="email">Email</Label><{{name}} id="email" />` (Label from `@stevederico/skateboard-ui/ui/label`, Field from `@stevederico/skateboard-ui/ui/field`); use `aria-label` only when no visible label fits (e.g. a search box).',
     },
   },
   create(context) {
