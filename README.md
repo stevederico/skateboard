@@ -203,8 +203,8 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.20.0 | Boilerplate (this repo) |
-| **skateboard-ui** | v5.18.0 | Application Shell, Components, Theming |
+| **skateboard** | v5.21.0 | Boilerplate (this repo) |
+| **skateboard-ui** | v5.19.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (JSX via tsconfig `react-jsx`) |
 | **CSS** | plain | Styling: skateboard-ui `styles.css` + `src/assets/styles.css`, no Tailwind |
 | **React Router** | v7.18.5 | Routing (vendored in skateboard-ui: `@stevederico/skateboard-ui/router`; navigate with `useSafeNavigate`) |

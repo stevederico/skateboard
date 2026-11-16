@@ -15,6 +15,14 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.21.0
+
+  Pin skateboard-ui 5.19.0
+  Update react 19.3.1
+  Update react-dom 19.3.1
+  Update vite 8.3.7
+  Update React types
+
 5.20.0
 
   Pin skateboard-ui 5.18.0

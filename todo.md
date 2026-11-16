@@ -19,6 +19,17 @@ sign out, sign in, legal pages, 404, back and forward, icons).
   typechecked (they left `tsconfig.json` with `@types/node`). Their tests still run
   (`npm run test:build`). Add a separate Node tsconfig only if they need the type gate.
 
+## Dependency update (5.21.0)
+
+Done: react and react-dom 19.3.1, vite 8.3.7, @types/react and @types/react-dom 19.3.0,
+skateboard-ui 5.19.0 (its build moved to TypeScript 7; no app change); typescript stays
+7.0.2. Changelogs read: vite 8.2.2 to 8.3.7 is fixes plus dropping unreferenced worker
+chunks; React 19.3 adds `<ViewTransition />`, Fragment refs and `browser()`, renders
+transitions independently and batches `resize` updates to the next frame. Nothing in
+`src/` needed a change. Light and dark screenshots match 5.20.0 except the version label.
+
+- [ ] vite is pinned to 8.3.7 on purpose, not 8.3.8. Check before moving past it.
+
 ## Plain CSS, no Tailwind (5.20.0)
 
 Done: pinned `@stevederico/skateboard-ui` 5.18.0, which ships plain CSS for its own
