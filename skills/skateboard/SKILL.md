@@ -8,8 +8,8 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.19.0"
-  skateboard-ui: "5.17.0"
+  version: "5.20.0"
+  skateboard-ui: "5.18.0"
   sources:
     - https://github.com/stevederico/skateboard
     - https://github.com/stevederico/skateboard-ui
@@ -21,8 +21,8 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.19.0** | App scaffold (copied into new repos) |
-| **@stevederico/skateboard-ui** | **5.17.0** | Shell + components (npm package — pin exact) |
+| **skateboard** (boilerplate) | **5.20.0** | App scaffold (copied into new repos) |
+| **@stevederico/skateboard-ui** | **5.18.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
 
@@ -60,7 +60,7 @@ cd backend && cargo run               # Rust :8000
 
 - Frontend: http://localhost:5173  
 - Backend: http://localhost:8000  
-- Stack: **React 19** · **react-router 7.18.5** (vendored in ui; import from `@stevederico/skateboard-ui/router`, never `react-router`) · **Vite 8** (JSX via tsconfig `react-jsx`, no SWC plugin) · **Tailwind v4** · **Lucide** (vendored in ui, `@stevederico/skateboard-ui/icons`) · **zero-crate Rust** · **SQLite**
+- Stack: **React 19** · **react-router 7.18.5** (vendored in ui; import from `@stevederico/skateboard-ui/router`, never `react-router`) · **Vite 8** (JSX via tsconfig `react-jsx`, no SWC plugin) · **plain CSS** (no Tailwind) · **Lucide** (vendored in ui, `@stevederico/skateboard-ui/icons`) · **zero-crate Rust** · **SQLite**
 
 ## Project Structure (current boilerplate)
 
@@ -157,14 +157,15 @@ createSkateboardApp({
 
 ```css
 @import "@stevederico/skateboard-ui/styles.css";
-@source '../../node_modules/@stevederico/skateboard-ui';
 
-@theme {
+/* plain CSS, no Tailwind: classes src/ uses that skateboard-ui does not define */
+
+:root {
   --color-app: var(--color-purple-500);
 }
 ```
 
-Change `--color-app` for brand primary. Prefer tokens over raw colors.
+Change `--color-app` for brand primary. Prefer tokens over raw colors. Plain CSS since 5.20.0: no Tailwind, `@theme`, `@apply` or `@source`. A new className token needs its rule in this file (lint: `no-unknown-classes`).
 
 ## Frontend APIs (skateboard-ui)
 

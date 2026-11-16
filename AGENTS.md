@@ -138,7 +138,7 @@ All of these silence the compiler instead of proving correctness:
 - Never use `require()` — ES modules only
 - Never add a database driver package — the backend is SQLite through system `libsqlite3` FFI
 - Never use axios, got, or similar — native `fetch` only
-- Never use PostCSS, autoprefixer, or `tailwind.config.js`
+- Never use Tailwind (`tailwindcss`, `@tailwindcss/vite`), PostCSS, autoprefixer, or `tailwind.config.js` (lint: `no-banned-build-tooling`)
 - ESLint is used only to run the local guardrails plugin (`guardrails/eslint-plugin`, see **Guardrails** below) — never add third-party rule packs or shareable configs, and never the `globals` package
 - Minimize external packages — use built-in/native solutions when possible
 
@@ -239,15 +239,16 @@ npm run verify               # Playwright flows against the running app, screens
 
 ## Styling & UI
 
-- Always use tailwindcss v4+ with @tailwindcss/vite plugin
-- Style using utility classes on elements, not central CSS
+- Plain CSS, no Tailwind: skateboard-ui's `styles.css` (its components and theme) plus this app's `src/assets/styles.css` (the classes `src/` uses, brand and dark-mode overrides). Both are edited by hand
+- Style using utility-style classes on elements (`flex`, `gap-4`, `bg-background`). Every className token must be defined in one of those two files (lint: `no-unknown-classes`); for a new class, add its rule to `src/assets/styles.css` in the matching `@layer`, using the theme variables (`var(--spacing)`, `var(--muted)`)
+- Theme values are plain CSS variables (`:root { --color-app: var(--color-purple-500); }`, `.dark { ... }`), never `@theme`, `@apply` or `@source`
 - Support dark mode with bg-background, bg-accent — never manual `dark:` overrides (`dark:bg-gray-800`), semantic tokens handle it
 - Use semantic color tokens (`bg-background`, `text-foreground`, `border-border`) — never raw colors (`bg-white`, `text-gray-500`)
 - Use `gap-*` between flex/grid children — never `space-x-*` / `space-y-*`, never margin between siblings for spacing
 - Limit palette to 3-5 semantic colors per view — don't rainbow
 - Max 2 font families — 1 heading + 1 body (default: Geist Sans + Geist Mono)
 - Use `rounded-md` / `rounded-lg` from design tokens — never arbitrary `rounded-[12px]`
-- Prefer Tailwind scale values (`p-4`, `gap-6`) — never arbitrary values (`p-[16px]`, `gap-[24px]`)
+- Prefer scale values (`p-4`, `gap-6`) — never arbitrary values (`p-[16px]`, `gap-[24px]`)
 - Use `size-*` for square elements — never `w-10 h-10` when `size-10` works
 - Use `text-balance` or `text-pretty` on headings and titles
 - Use `cn()` for conditional class composition — never template literal ternaries
@@ -485,7 +486,7 @@ skateboard/
 ### Frontend Stack
 - React, Vite, skateboard-ui (routing via `useSafeNavigate`)
 - TypeScript (`strict`, no-build-step typecheck), ES modules only
-- Tailwind CSS v4+ with @tailwindcss/vite plugin
+- Plain CSS (skateboard-ui `styles.css` + `src/assets/styles.css`), no Tailwind or PostCSS
 
 ### Backend Stack
 - Runtime: zero-crate Rust (`std::net::TcpListener` + OS threads). Empty `[dependencies]`.
@@ -526,9 +527,9 @@ Apps own their `vite.config.ts` directly. See [reference implementation](https:/
 /* src/assets/styles.css */
 @import "@stevederico/skateboard-ui/styles.css";
 
-@source '../../node_modules/@stevederico/skateboard-ui';
+/* plain CSS (no Tailwind): classes src/ uses that skateboard-ui does not define */
 
-@theme {
+:root {
   --color-app: var(--color-purple-500);
 }
 ```
@@ -546,7 +547,7 @@ Apps own their `vite.config.ts` directly. See [reference implementation](https:/
 - Prefer shadcn components over custom HTML elements (e.g., use `<Button>` not `<button>`, `<Card>` not `<div className="card">`)
 - Compose views from these primitives — don't reinvent patterns they already solve
 - Check available components before building custom UI; if shadcn has it, use it
-- Combine with Tailwind utility classes for layout and spacing
+- Combine with utility-style classes for layout and spacing (defined in skateboard-ui's or the app's CSS)
 - Before using a component for the first time, read its source — many use compound patterns, not prop APIs
 
 **Compound Components — these use sub-components, NOT props:**
@@ -686,7 +687,6 @@ When working with these libraries, consult the provided documentation before mak
 | shadcn/ui | https://ui.shadcn.com/llms.txt |
 | Vite | https://vite.dev/llms.txt |
 | Rust std | https://doc.rust-lang.org/std/ |
-| Tailwind CSS v4 | https://raw.githubusercontent.com/tailwindlabs/tailwindcss.com/refs/heads/md-endpoints/llms.txt |
 
 ## Agent skill (required reading)
 
@@ -709,8 +709,8 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.19.0
-- skateboard-ui@5.17.0
+- skateboard@5.20.0
+- skateboard-ui@5.18.0
 
 ## Migrating 4.x → 5.0 (exact checklist)
 

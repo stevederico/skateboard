@@ -347,22 +347,22 @@ function MyComponent() {
 /* src/assets/styles.css */
 @import "@stevederico/skateboard-ui/styles.css";
 
-@source '../../node_modules/@stevederico/skateboard-ui';
+/* plain CSS: the classes src/ uses that skateboard-ui does not define */
 
-@theme {
+:root {
   --color-app: var(--color-purple-500);
 }
 ```
 
 **Base theme provides** (in skateboard-ui):
 - All CSS variables (light + dark mode)
-- Tailwind theme configuration
-- Animations (@theme inline)
+- Plain CSS for its components (no Tailwind)
+- Animations
 - Base layer styles
 
-**App can override**:
+**App can override** (plain CSS variables in src/assets/styles.css):
 ```css
-@theme {
+:root {
   --color-app: var(--color-green-500);
   --background: oklch(0.99 0 0);
   --radius: 0.5rem;
@@ -373,16 +373,15 @@ function MyComponent() {
 
 Apps own their `vite.config.ts` directly. skateboard-ui is a pure component library.
 
-**Why?** TailwindCSS v4 uses native Rust bindings that cannot be bundled. Separating build config from runtime code keeps things clean.
+**Why?** Build config belongs to the app; the shell ships only components and plain CSS. Since skateboard 5.20.0 there is no CSS build step at all: no Tailwind, no PostCSS.
 
 **App owns vite.config.ts**:
 ```javascript
 // vite.config.ts
 import { defineConfig } from 'vite';
-import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  plugins: [tailwindcss()],
+  plugins: [],
   server: { port: 5173 }
 });
 ```
@@ -571,10 +570,9 @@ Apps own their `vite.config.ts` - customize directly:
 
 ```javascript
 import { defineConfig } from 'vite';
-import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  plugins: [tailwindcss()],
+  plugins: [],
   server: {
     port: 3000,
     proxy: { '/api': 'http://localhost:8080' }
@@ -589,7 +587,7 @@ export default defineConfig({
 ```css
 @import "@stevederico/skateboard-ui/styles.css";
 
-@theme {
+:root {
   --color-app: var(--color-purple-500);
 }
 ```
@@ -598,18 +596,19 @@ export default defineConfig({
 ```css
 @import "@stevederico/skateboard-ui/styles.css";
 
-@theme {
+:root {
   --color-app: var(--color-green-500);
   --background: oklch(0.99 0 0);
   --radius: 0.5rem;
 }
 ```
 
-**Completely custom** (don't import):
+**Own classes**: write plain CSS in the same file; the `no-unknown-classes` lint rule
+accepts any class defined there.
 ```css
-@import "tailwindcss";
-
-/* Your complete custom theme */
+@layer utilities {
+  .my-card { padding: calc(var(--spacing) * 4); }
+}
 ```
 
 #### 3. Components
@@ -749,11 +748,10 @@ createSkateboardApp({ constants, appRoutes });
 **Good** (override pieces of the app-owned `vite.config.ts`):
 ```javascript
 import { defineConfig } from 'vite';
-import tailwindcss from '@tailwindcss/vite';
 // …import local plugins from './vite.plugins.ts'
 
 export default defineConfig({
-  plugins: [tailwindcss() /* … */],
+  plugins: [/* … */],
   server: { port: 3000 }
 });
 ```
@@ -892,7 +890,6 @@ export default function HomeView() {
 ```javascript
 // vite.config.ts
 import { defineConfig } from 'vite';
-import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import fs from 'fs';
 
@@ -903,7 +900,6 @@ const myAnalyticsPlugin = () => { /* ... */ };
 
 export default defineConfig({
   plugins: [
-    tailwindcss(),
     customLoggerPlugin(),
     htmlReplacePlugin(),
     myAnalyticsPlugin()
@@ -919,7 +915,7 @@ export default defineConfig({
 /* styles.css */
 @import "@stevederico/skateboard-ui/styles.css";
 
-@theme {
+:root {
   --color-app: var(--color-green-500);
   --radius: 0.25rem;
 }
@@ -1004,7 +1000,7 @@ See the [Migration](#migration) section below for the full upgrade prompt to han
 **Benefits:**
 - ✅ Error boundary for robust error handling
 - ✅ Automatic constants validation
-- ✅ Full TailwindCSS v4 support
+- ✅ Plain CSS: no Tailwind or PostCSS build step
 - ✅ Build configuration in your app (better control)
 - ✅ Pure component library (smaller package, simpler)
 - ✅ Cleaner separation of concerns

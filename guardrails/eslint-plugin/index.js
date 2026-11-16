@@ -56,6 +56,7 @@ import noSpaceUtilities from './rules/no-space-utilities.js';
 import noThirdPartyHttpClients from './rules/no-third-party-http-clients.js';
 import noTransitionAll from './rules/no-transition-all.js';
 import noTypeAssertion from './rules/no-type-assertion.js';
+import noUnknownClasses from './rules/no-unknown-classes.js';
 import preferSizeUtility from './rules/prefer-size-utility.js';
 import requireJsdocOnExports from './rules/require-jsdoc-on-exports.js';
 import suspenseSkeletonFallback from './rules/suspense-skeleton-fallback.js';
@@ -124,6 +125,7 @@ const APP_RULES = {
   'prefer-size-utility': preferSizeUtility,
   'no-classname-template-ternary': noClassnameTemplateTernary,
   'motion-safe-animations': motionSafeAnimations,
+  'no-unknown-classes': noUnknownClasses,
 };
 
 /**

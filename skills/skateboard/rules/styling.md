@@ -32,7 +32,7 @@ Never introduce raw Tailwind colors (`blue-500`, `green-400`) when a semantic to
 - Use `gap-*` between flex/grid children — never margin between siblings
 - Use `p-*` for internal padding
 - Never use `space-x-*` or `space-y-*` — always use `gap-*`
-- Prefer Tailwind scale values (`p-4`, `gap-6`) — never arbitrary values (`p-[16px]`, `gap-[24px]`)
+- Prefer scale values (`p-4`, `gap-6`) — never arbitrary values (`p-[16px]`, `gap-[24px]`)
 - Standard spacing scale: `1` (4px), `2` (8px), `3` (12px), `4` (16px), `6` (24px), `8` (32px)
 
 ## Layout Rules

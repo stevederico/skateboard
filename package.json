@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "5.19.0",
-  "skateboardVersion": "5.19.0",
+  "version": "5.20.0",
+  "skateboardVersion": "5.20.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -26,15 +26,13 @@
     "verify": "node guardrails/node_modules/@playwright/test/cli.js test --config guardrails/verify/playwright.config.js"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "5.17.0",
+    "@stevederico/skateboard-ui": "5.18.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
-    "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vite": "8.2.2"
   }

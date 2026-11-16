@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite';
-import tailwindcss from '@tailwindcss/vite';
 import path from 'node:path';
 import {
   customLoggerPlugin,
@@ -13,7 +12,6 @@ import {
 
 export default defineConfig({
   plugins: [
-    tailwindcss(),
     customLoggerPlugin(),
     htmlReplacePlugin(),
     dynamicRobotsPlugin(),

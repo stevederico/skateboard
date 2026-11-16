@@ -7,6 +7,21 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.20.0 — skateboard-ui 5.18.0, plain CSS, no Tailwind.** skateboard-ui 5.18.0
+ships plain CSS for its own components and theme, and the app owns plain CSS for
+the classes its `src/` uses. Apps: `npm install @stevederico/skateboard-ui@5.18.0 --save-exact`,
+then write `src/assets/styles.css` once with skateboard-ui's
+`scripts/tailwind-to-css.js` (it runs Tailwind from a temporary install outside
+the app, never a dependency; see the script header):
+`node <skateboard-ui>/scripts/tailwind-to-css.js --tailwind <tmp> --input src/assets/styles.css --scan src --scan index.html --subtract node_modules/@stevederico/skateboard-ui/styles.css --app --out src/assets/styles.css`.
+It keeps the skateboard-ui import, turns `@theme` values into `:root` variables,
+compiles `@apply`, and repeats the few shell rules whose precedence an app class
+depends on. Then `npm uninstall tailwindcss @tailwindcss/vite`, remove
+`tailwindcss()` from `vite.config.ts`, and commit `package.json` with
+`package-lock.json`. Compare light and dark screenshots before and after. The
+updater syncs `no-unknown-classes` (every className must exist in one of the two
+CSS files) and `no-banned-build-tooling` (now bans Tailwind).
+
 **5.19.0 — skateboard-ui 5.17.0, no `shadcn` paths.** skateboard-ui 5.17.0
 removed the `./shadcn/*` exports. Apps: `npm install @stevederico/skateboard-ui@5.17.0 --save-exact`,
 then rewrite `@stevederico/skateboard-ui/shadcn/ui/X` to `/ui/X`,

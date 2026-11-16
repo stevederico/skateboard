@@ -1,12 +1,555 @@
-/* Base theme + Tailwind source globs come from the shell package. */
 @import "@stevederico/skateboard-ui/styles.css";
 
-@theme {
-  /* Brand accent: every `*-app` utility (bg-app, text-app, ring-app) resolves to this. */
-  --color-app: var(--color-purple-500);
+/* This app's plain CSS: the classes src/ uses that skateboard-ui's styles.css does not
+   define, a few shell rules repeated after them so they keep their precedence, and the
+   brand and dark-mode overrides. No Tailwind: edit by hand. A className token missing
+   here and in skateboard-ui's CSS fails lint (no-unknown-classes). */
+
+@layer theme {
+  :root, :host {
+    --color-purple-500: oklch(62.7% .265 303.9);
+    --color-app: var(--color-purple-500);
+  }
+}
+
+@layer base {
+  ::selection {
+    background-color: #ac4bff33;
+  }
+}
+
+@layer utilities {
+  .\@container\/card {
+    container: card / inline-size;
+  }
+
+  .\@container\/main {
+    container: main / inline-size;
+  }
+
+  .line-clamp-1 {
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    overflow: hidden;
+  }
+
+  .flex {
+    display: flex;
+  }
+
+  .flow-root {
+    display: flow-root;
+  }
+
+  .grid {
+    display: grid;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  .inline {
+    display: inline;
+  }
+
+  .inline-block {
+    display: inline-block;
+  }
+
+  .inline-flex {
+    display: inline-flex;
+  }
+
+  .inline-grid {
+    display: inline-grid;
+  }
+
+  .inline-table {
+    display: inline-table;
+  }
+
+  .list-item {
+    display: list-item;
+  }
+
+  .table {
+    display: table;
+  }
+
+  .table-caption {
+    display: table-caption;
+  }
+
+  .table-cell {
+    display: table-cell;
+  }
+
+  .table-column {
+    display: table-column;
+  }
+
+  .table-column-group {
+    display: table-column-group;
+  }
+
+  .table-footer-group {
+    display: table-footer-group;
+  }
+
+  .table-header-group {
+    display: table-header-group;
+  }
+
+  .table-row {
+    display: table-row;
+  }
+
+  .table-row-group {
+    display: table-row-group;
+  }
+
+  .w-32 {
+    width: calc(var(--spacing) * 32);
+  }
+
+  .w-40 {
+    width: calc(var(--spacing) * 40);
+  }
+
+  .border-app\/30 {
+    border-color: #ac4bff4d;
+  }
+
+  .border-border, .border-border\/60 {
+    border-color: var(--border);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-border\/60 {
+      border-color: color-mix(in oklab, var(--border) 60%, transparent);
+    }
+  }
+
+  .bg-app\/10 {
+    background-color: #ac4bff1a;
+  }
+
+  .bg-app\/15 {
+    background-color: #ac4bff26;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-app\/15 {
+      background-color: color-mix(in oklab, var(--color-app) 15%, transparent);
+    }
+  }
+
+  .bg-background, .bg-background\/80 {
+    background-color: var(--background);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-background\/80 {
+      background-color: color-mix(in oklab, var(--background) 80%, transparent);
+    }
+  }
+
+  .bg-foreground {
+    background-color: var(--foreground);
+  }
+
+  .bg-muted, .bg-muted\/30 {
+    background-color: var(--muted);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-muted\/30 {
+      background-color: color-mix(in oklab, var(--muted) 30%, transparent);
+    }
+  }
+
+  .bg-primary {
+    background-color: var(--primary);
+  }
+
+  .bg-transparent {
+    background-color: #0000;
+  }
+
+  .bg-gradient-to-b {
+    --tw-gradient-position: to bottom in oklab;
+    background-image: linear-gradient(var(--tw-gradient-stops));
+  }
+
+  .from-app\/5 {
+    --tw-gradient-from: #ac4bff0d;
+  }
+
+  .bg-clip-padding {
+    background-clip: padding-box;
+  }
+
+  .py-2\.5 {
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+
+  .bg-blend-color {
+    background-blend-mode: color;
+  }
+
+  .group-has-\[\[data-slot\=command-shortcut\]\]\/command-item\:hidden:is(:where(.group\/command-item):has([data-slot="command-shortcut"]) *) {
+    display: none;
+  }
+
+  .group-data-\[collapsible\=icon\]\:hidden:is(:where(.group)[data-collapsible="icon"] *) {
+    display: none;
+  }
+
+  .group-data-\[size\=sm\]\/alert-dialog-content\:grid:is(:where(.group\/alert-dialog-content)[data-size="sm"] *) {
+    display: grid;
+  }
+
+  .file\:bg-transparent::file-selector-button {
+    background-color: #0000;
+  }
+
+  .backdrop\:bg-black\/10::backdrop {
+    background-color: #0000001a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .backdrop\:bg-black\/10::backdrop {
+      background-color: color-mix(in oklab, var(--color-black) 10%, transparent);
+    }
+  }
+
+  .after\:bg-muted:after {
+    content: var(--tw-content);
+    background-color: var(--muted);
+  }
+
+  @media (hover: hover) {
+    .hover\:border-border:hover {
+      border-color: var(--border);
+    }
+
+    .hover\:bg-muted:hover, .hover\:bg-muted\/50:hover {
+      background-color: var(--muted);
+    }
+
+    .hover\:bg-primary\/80:hover {
+      background-color: var(--primary);
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\:bg-primary\/80:hover {
+        background-color: color-mix(in oklab, var(--primary) 80%, transparent);
+      }
+    }
+
+    .hover\:bg-sidebar-accent:hover {
+      background-color: var(--sidebar-accent);
+    }
+
+    .hover\:group-data-\[collapsible\=offcanvas\]\:bg-sidebar:hover:is(:where(.group)[data-collapsible="offcanvas"] *) {
+      background-color: var(--sidebar);
+    }
+
+    .hover\:after\:bg-sidebar-border:hover:after {
+      content: var(--tw-content);
+      background-color: var(--sidebar-border);
+    }
+  }
+
+  .active\:bg-sidebar-accent:active {
+    background-color: var(--sidebar-accent);
+  }
+
+  :where([data-slot="tooltip-content"]) .in-data-\[slot\=tooltip-content\]\:bg-background\/20 {
+    background-color: var(--background);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    :where([data-slot="tooltip-content"]) .in-data-\[slot\=tooltip-content\]\:bg-background\/20 {
+      background-color: color-mix(in oklab, var(--background) 20%, transparent);
+    }
+  }
+
+  .has-aria-expanded\:bg-muted\/50:has([aria-expanded="true"]) {
+    background-color: var(--muted);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .has-aria-expanded\:bg-muted\/50:has([aria-expanded="true"]) {
+      background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+    }
+  }
+
+  .aria-expanded\:bg-muted[aria-expanded="true"] {
+    background-color: var(--muted);
+  }
+
+  .aria-pressed\:bg-muted[aria-pressed="true"] {
+    background-color: var(--muted);
+  }
+
+  .data-active\:bg-sidebar-accent[data-active] {
+    background-color: var(--sidebar-accent);
+  }
+
+  @media (hover: hover) {
+    .data-open\:hover\:bg-sidebar-accent[data-open]:hover {
+      background-color: var(--sidebar-accent);
+    }
+  }
+
+  :is(.\*\:data-\[slot\=card\]\:bg-gradient-to-t > *)[data-slot="card"] {
+    --tw-gradient-position: to top in oklab;
+    background-image: linear-gradient(var(--tw-gradient-stops));
+  }
+
+  :is(.\*\:data-\[slot\=card\]\:from-primary\/5 > *)[data-slot="card"] {
+    --tw-gradient-from: var(--primary);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    :is(.\*\:data-\[slot\=card\]\:from-primary\/5 > *)[data-slot="card"] {
+      --tw-gradient-from: color-mix(in oklab, var(--primary) 5%, transparent);
+    }
+  }
+
+  :is(.\*\:data-\[slot\=card\]\:from-primary\/5 > *)[data-slot="card"] {
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  :is(.\*\:data-\[slot\=card\]\:to-card > *)[data-slot="card"] {
+    --tw-gradient-to: var(--card);
+    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+  }
+
+  :is(.\*\:data-\[slot\=card\]\:shadow-xs > *)[data-slot="card"] {
+    --tw-shadow: 0 1px 2px 0 var(--tw-shadow-color, #0000000d);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  :is(.\*\:data-\[slot\=select-value\]\:line-clamp-1 > *)[data-slot="select-value"] {
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    overflow: hidden;
+  }
+
+  :is(.\*\:data-\[slot\=select-value\]\:flex > *)[data-slot="select-value"] {
+    display: flex;
+  }
+
+  .data-\[state\=on\]\:bg-muted[data-state="on"], .data-\[state\=selected\]\:bg-muted[data-state="selected"] {
+    background-color: var(--muted);
+  }
+
+  @media (min-width: 40rem) {
+    .sm\:block {
+      display: block;
+    }
+
+    .sm\:flex {
+      display: flex;
+    }
+  }
+
+  @media (min-width: 48rem) {
+    .md\:block {
+      display: block;
+    }
+
+    .md\:flex {
+      display: flex;
+    }
+
+    .md\:hidden {
+      display: none;
+    }
+
+    .md\:gap-6 {
+      gap: calc(var(--spacing) * 6);
+    }
+
+    .md\:py-6 {
+      padding-block: calc(var(--spacing) * 6);
+    }
+
+    .md\:after\:hidden:after {
+      content: var(--tw-content);
+      display: none;
+    }
+  }
+
+  @container card (min-width: 250px) {
+    .\@\[250px\]\/card\:text-3xl {
+      font-size: var(--text-3xl);
+      line-height: var(--tw-leading, var(--text-3xl--line-height));
+    }
+  }
+
+  @container main (min-width: 36rem) {
+    .\@xl\/main\:grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @container main (min-width: 64rem) {
+    .\@5xl\/main\:grid-cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .dark\:border-input:is(.dark *) {
+    border-color: var(--input);
+  }
+
+  .dark\:bg-input\/30:is(.dark *) {
+    background-color: var(--input);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .dark\:bg-input\/30:is(.dark *) {
+      background-color: color-mix(in oklab, var(--input) 30%, transparent);
+    }
+  }
+
+  @media (hover: hover) {
+    .dark\:hover\:bg-input\/50:is(.dark *):hover {
+      background-color: var(--input);
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .dark\:hover\:bg-input\/50:is(.dark *):hover {
+        background-color: color-mix(in oklab, var(--input) 50%, transparent);
+      }
+    }
+
+    .dark\:hover\:bg-muted\/50:is(.dark *):hover {
+      background-color: var(--muted);
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .dark\:hover\:bg-muted\/50:is(.dark *):hover {
+        background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+      }
+    }
+
+    .hover\:dark\:bg-gray-100:hover:is(.dark *) {
+      background-color: var(--color-gray-100);
+    }
+  }
+
+  :where([data-slot="tooltip-content"]) .dark\:in-data-\[slot\=tooltip-content\]\:bg-background\/10:is(.dark *) {
+    background-color: var(--background);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    :where([data-slot="tooltip-content"]) .dark\:in-data-\[slot\=tooltip-content\]\:bg-background\/10:is(.dark *) {
+      background-color: color-mix(in oklab, var(--background) 10%, transparent);
+    }
+  }
+
+  .dark\:has-data-checked\:bg-primary\/10:is(.dark *):has([data-checked]) {
+    background-color: var(--primary);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .dark\:has-data-checked\:bg-primary\/10:is(.dark *):has([data-checked]) {
+      background-color: color-mix(in oklab, var(--primary) 10%, transparent);
+    }
+  }
+
+  .dark\:data-active\:bg-input\/30:is(.dark *)[data-active] {
+    background-color: var(--input);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .dark\:data-active\:bg-input\/30:is(.dark *)[data-active] {
+      background-color: color-mix(in oklab, var(--input) 30%, transparent);
+    }
+  }
+
+  .dark\:group-data-\[variant\=line\]\/tabs-list\:data-active\:bg-transparent:is(.dark *):is(:where(.group\/tabs-list)[data-variant="line"] *)[data-active] {
+    background-color: #0000;
+  }
+
+  .dark\:data-checked\:bg-primary:is(.dark *)[data-checked] {
+    background-color: var(--primary);
+  }
+
+  .dark\:data-checked\:bg-primary-foreground:is(.dark *)[data-checked] {
+    background-color: var(--primary-foreground);
+  }
+
+  .dark\:data-unchecked\:bg-foreground:is(.dark *)[data-unchecked] {
+    background-color: var(--foreground);
+  }
+
+  .dark\:data-unchecked\:bg-input\/80:is(.dark *)[data-unchecked] {
+    background-color: var(--input);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .dark\:data-unchecked\:bg-input\/80:is(.dark *)[data-unchecked] {
+      background-color: color-mix(in oklab, var(--input) 80%, transparent);
+    }
+  }
+
+  .dark\:data-\[variant\=destructive\]\:focus\:bg-destructive\/20:is(.dark *)[data-variant="destructive"]:focus {
+    background-color: var(--destructive);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .dark\:data-\[variant\=destructive\]\:focus\:bg-destructive\/20:is(.dark *)[data-variant="destructive"]:focus {
+      background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
+    }
+  }
+
+  @media (hover: hover) {
+    .\[a\]\:hover\:bg-primary\/80:is(a):hover {
+      background-color: var(--primary);
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .\[a\]\:hover\:bg-primary\/80:is(a):hover {
+        background-color: color-mix(in oklab, var(--primary) 80%, transparent);
+      }
+    }
+  }
+
+  .\[\&\>svg\]\:size-3 > svg {
+    width: calc(var(--spacing) * 3);
+    height: calc(var(--spacing) * 3);
+  }
+
+  .group-data-\[size\=sm\]\/avatar\:\[\&\>svg\]\:hidden:is(:where(.group\/avatar)[data-size="sm"] *) > svg {
+    display: none;
+  }
+
+  [data-slot="card-content"] .\[\[data-slot\=card-content\]_\&\]\:bg-transparent {
+    background-color: #0000;
+  }
+
+  [data-slot="popover-content"] .\[\[data-slot\=popover-content\]_\&\]\:bg-transparent {
+    background-color: #0000;
+  }
+}
+
+.gradient-btn {
+  box-shadow: 0 25px 50px -12px #ac4bff66;
 }
 
 .dark {
   --card: #0d0d0d;
-  --accent: #111111;
+  --accent: #111;
+}
+
+:root {
+  --color-app: var(--color-purple-500);
 }

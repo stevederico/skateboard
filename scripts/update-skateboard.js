@@ -69,7 +69,7 @@ const GUARDRAIL_RULES = [
   'no-outline-none-without-focus-ring', 'no-promise-then', 'no-raw-color-classes',
   'no-raw-form-elements', 'no-removed-skateboard-ui-imports', 'no-require',
   'no-space-utilities', 'no-third-party-http-clients', 'no-transition-all',
-  'no-type-assertion', 'prefer-size-utility', 'require-jsdoc-on-exports',
+  'no-type-assertion', 'no-unknown-classes', 'prefer-size-utility', 'require-jsdoc-on-exports',
   'suspense-skeleton-fallback', 'test-file-naming', 'use-list-data-states'
 ];
 

@@ -15,6 +15,15 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.20.0
+
+  Pin skateboard-ui 5.18.0
+  Drop Tailwind
+  Plain app CSS
+  Add no-unknown-classes
+  Ban Tailwind tooling
+  Update styling docs
+
 5.19.0
 
   Pin skateboard-ui 5.17.0
