@@ -16,14 +16,14 @@ export default {
     type: 'problem',
     docs: {
       description:
-        'Never import from `@stevederico/skateboard-ui/icons` or use public DynamicIcon (removed in 5.0); no `useForm`, `logEvent`, `setSidebarVisible` / `setTabBarVisible` (removed Utilities).',
+        'Never import per-icon subpaths `@stevederico/skateboard-ui/icons/<Name>` or public DynamicIcon (removed in 5.0); no `useForm`, `logEvent`, `setSidebarVisible` / `setTabBarVisible` (removed Utilities).',
       source: 'AGENTS.md > Icons / Migrating 4.x -> 5.0 (steps 10 and 13)',
     },
     schema: [],
     messages: {
       icons:
-        'Found an import of "{{source}}". Why: skateboard-ui 5.0 deleted its icon re-exports, so this path no longer exists and the build fails. ' +
-        'Fix: add the icon to the explicit export list in src/icons.ts (`export { Plus } from "lucide-react";`) and import it from the funnel: `import { Plus } from "../icons";`.',
+        'Found an import of "{{source}}". Why: skateboard-ui 5.0 deleted per-icon subpaths; the package exports one `./icons` entry (5.13+), so this path does not resolve and the build fails. ' +
+        'Fix: add the icon to the explicit export list in src/icons.ts (`export { Plus } from "@stevederico/skateboard-ui/icons";`) and import it from the funnel: `import { Plus } from "../icons";`.',
       dynamicIcon:
         'Found an import of "{{source}}". Why: public DynamicIcon was removed in skateboard-ui 5.0 (string-to-icon lookup pulls every icon into the bundle). The shell still resolves constants.json icon strings privately. ' +
         'Fix: use a named icon from the funnel (`import { House } from "../icons";`) and render `<House size={18} />`.',
@@ -35,7 +35,7 @@ export default {
   create(context) {
     return mergeVisitors(
       moduleSourceVisitors((node, source) => {
-        if (source === `${UI}/icons` || source.startsWith(`${UI}/icons/`)) {
+        if (source.startsWith(`${UI}/icons/`)) {
           context.report({ node, messageId: 'icons', data: { source } });
         } else if (source === `${UI}/DynamicIcon` || source.startsWith(`${UI}/DynamicIcon/`)) {
           context.report({ node, messageId: 'dynamicIcon', data: { source } });

@@ -257,12 +257,11 @@ npm run verify               # Playwright flows against the running app, screens
 
 ### Icons
 
-- Default library: Lucide React (`lucide-react`) — runtime dep of skateboard-ui **5.0** (hoisted); apps should declare it too (the boilerplate does)
-- **One icon funnel:** `src/icons.ts` is the only module that imports `lucide-react`. It re-exports an explicit, named list (no `export *`) of every icon the app uses
+- Default library: Lucide, vendored by skateboard-ui **5.13+** and exported from `@stevederico/skateboard-ui/icons`. Apps do **not** depend on `lucide-react` (the boilerplate dropped it in 5.17.0)
+- **One icon funnel:** `src/icons.ts` is the only module that imports `@stevederico/skateboard-ui/icons`. It re-exports an explicit, named list (no `export *`) of every icon the app uses
 - **Components import from the funnel:** `import { Plus, Trash2 } from '../icons'`. To use a new icon, add its Lucide name to `src/icons.ts` first
-- Why: one list keeps the icon set auditable and tree-shakeable, and lets the app swap an icon for a vendored SVG in one place (rename to `icons.tsx` when it holds JSX)
-- **Never** import `lucide-react` anywhere else, and never deep paths (`lucide-react/dist/...`, `lucide-react/icons/...`, anything through `node_modules/`, `@stevederico/skateboard-ui/dist/...`) — lint enforces both
-- **Never** import from `@stevederico/skateboard-ui/icons` or `@stevederico/skateboard-ui/icons/*` — removed in 5.0 (was 4.18)
+- Why: one list keeps the icon set auditable and tree-shakeable, and lets the app swap an icon for a local SVG in one place (rename to `icons.tsx` when it holds JSX). An icon skateboard-ui does not export fails the typecheck; add it as a local SVG component in the funnel
+- **Never** import `@stevederico/skateboard-ui/icons` outside the funnel, never import `lucide-react` at all, and never deep paths (`@stevederico/skateboard-ui/icons/*`, `lucide-react/dist/...`, anything through `node_modules/`, `@stevederico/skateboard-ui/dist/...`) — lint enforces all three
 - **Never** use public DynamicIcon — removed in 5.0 (was 4.17); shell-only `constantsIcon` resolves `constants.json` icon strings
 - When migrating from 4.x: rewrite every `skateboard-ui/icons` and `DynamicIcon` import to a named import from the `src/icons.ts` funnel (see **Migrating 4.x → 5.0**)
 - Never use emoji as UI icons — use proper icon components (exception: `constants.json` feature icons where the shell renders unknown/legacy values as text)
@@ -458,7 +457,7 @@ skateboard/
 │   ├── assets/
 │   │   └── styles.css   # Brand color override (7 lines)
 │   ├── main.tsx         # Route definitions + lazy view imports
-│   ├── icons.ts         # Icon funnel: the only lucide-react import
+│   ├── icons.ts         # Icon funnel: the only skateboard-ui/icons import
 │   └── constants.json   # All your app config
 ├── backend/
 │   ├── src/             # Zero-crate Rust server
@@ -698,7 +697,7 @@ This repo ships **`skills/skateboard/SKILL.md`** — the Cursor/Claude skill for
 **What agents must do:**
 1. Read `skills/skateboard/SKILL.md` first (and `skills/skateboard/rules/*` for icons/forms/styling/views as needed).
 2. Prefer shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui/*` over raw HTML.
-3. Import icons by name from the `src/icons.ts` funnel; only that file imports `lucide-react` (see Icons below).
+3. Import icons by name from the `src/icons.ts` funnel; only that file imports `@stevederico/skateboard-ui/icons` (see Icons below).
 4. Treat `skateboardVersion` as a label — verify the tree (especially `backend/`) matches the template before claiming an upgrade is done.
 5. For upgrades, follow **Migrating 4.x → 5.0** below (and `docs/UPGRADE.md`).
 6. Run `npm run lint` and `npm run depcruise` (after `npm run guardrails:install`) and fix what they report; each message names the fix. Run `npm run verify` after any UI or auth change (see **Guardrails**).
@@ -710,8 +709,8 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.16.0
-- skateboard-ui@5.11.4
+- skateboard@5.17.0
+- skateboard-ui@5.15.0
 
 ## Migrating 4.x → 5.0 (exact checklist)
 
@@ -752,13 +751,14 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
     - Replace `import { X } from '@stevederico/skateboard-ui/icons'` (and `/icons/X`) with `import { X } from '../icons'`, and add `X` to the explicit `export { ... } from 'lucide-react'` list in `src/icons.ts` (the only file that imports `lucide-react`; see **Icons**).
     - Delete every `import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon'` — use a named Lucide icon from the `src/icons.ts` funnel in app code. Shell still resolves `constants.json` `icon` strings privately (`constantsIcon`); apps do not get a public dynamic resolver.
     - Ensure `lucide-react` is listed in app `dependencies` (boilerplate ships it; ui 5.0 also depends on it).
+    - **Then continue to ui 5.13+ (boilerplate 5.17.0):** the funnel re-exports from `@stevederico/skateboard-ui/icons` instead of `lucide-react`, `lucide-react` leaves `dependencies`, and `react-router` joins them (a peer of ui since 5.12.0). See `docs/UPGRADE.md` → 5.17.0.
 
 11. **Keep shadcn import paths**
     - Continue using `@stevederico/skateboard-ui/shadcn/ui/<name>`.
     - Do **not** rewrite to `…/ui/<name>` unless you want to — both work; `shadcn/ui/*` is remapped via package `exports` (linker shim files are gone).
 
 12. **Routing**
-    - Apps must **not** depend on `react-router` / `react-router-dom` directly for shell navigation. Use `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`.
+    - Apps must **not** import `react-router` / `react-router-dom` directly for shell navigation. Use `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`.
     - ui 5.0 pins `react-router@7.18.3` (CVE-2026-55685). Do not downgrade below 7.18.0.
 
 13. **Removed Utilities (already gone in late 4.x — confirm)**

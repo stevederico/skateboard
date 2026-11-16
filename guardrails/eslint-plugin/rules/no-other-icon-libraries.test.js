@@ -4,7 +4,7 @@ import { runRuleTests } from '../lib/ruleTester.js';
 runRuleTests('no-other-icon-libraries', rule, {
   valid: [
     "import { Plus } from '../icons';",
-    { code: "export { Plus } from 'lucide-react';", filename: 'src/icons.ts' },
+    { code: "export { Plus } from '@stevederico/skateboard-ui/icons';", filename: 'src/icons.ts' },
   ],
   invalid: [
     { code: "import { FaLock } from 'react-icons/fa';", errors: [{ messageId: 'banned' }] },

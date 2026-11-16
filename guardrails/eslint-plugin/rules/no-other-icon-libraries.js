@@ -11,9 +11,9 @@ export default createBannedImportRule({
     {
       match: (source, pkg) => ICON_PACKAGES.has(pkg) || ICON_SCOPES.some((scope) => source.startsWith(scope)),
       why:
-        'mixed icon sets look inconsistent (stroke width, grid, corner style), and every extra library adds bundle weight. skateboard-ui renders Lucide for constants.json icons, so Lucide is the one set that matches the shell.',
+        'mixed icon sets look inconsistent (stroke width, grid, corner style), and every extra library adds bundle weight. skateboard-ui renders its vendored Lucide icons for constants.json icons, so Lucide is the one set that matches the shell.',
       fix:
-        'find the Lucide equivalent at https://lucide.dev/icons, add it to the explicit export list in src/icons.ts (`export { Plus, Trash2 } from "lucide-react";`), and import it from the funnel (`import { Plus } from "../icons";`).',
+        'find the Lucide equivalent at https://lucide.dev/icons, add it to the explicit export list in src/icons.ts (`export { Plus, Trash2 } from "@stevederico/skateboard-ui/icons";`), and import it from the funnel (`import { Plus } from "../icons";`).',
     },
   ],
 });

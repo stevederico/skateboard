@@ -15,6 +15,7 @@ runRuleTests('icon-requires-size', rule, {
       errors: [{ messageId: 'missingSize', data: { name: 'TrendingUp' } }],
     },
     { code: 'import { X } from "lucide-react"; <X />;', errors: [{ messageId: 'missingSize' }] },
+    { code: 'export { X } from "@stevederico/skateboard-ui/icons"; import { X } from "@stevederico/skateboard-ui/icons"; <X />;', filename: 'src/icons.tsx', errors: [{ messageId: 'missingSize' }] },
     { code: 'import { Plus } from "./icons"; <Plus className="text-muted-foreground" />;', filename: 'src/main.tsx', errors: [{ messageId: 'missingSize' }] },
   ],
 });

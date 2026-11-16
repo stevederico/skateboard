@@ -78,7 +78,7 @@ Everything you need to ship a production-ready app:
 - **Typecheck gates** - `npm run typecheck` for the frontend; `cargo test` for the backend
 - **Built-in hooks** - `useListData` for list fetching
 - **API utilities** - apiRequest with automatic auth and error handling
-- **Icons** - named `lucide-react` icons through one funnel, `src/icons.ts` (no `@stevederico/skateboard-ui/icons`)
+- **Icons** - named Lucide icons vendored by skateboard-ui (`@stevederico/skateboard-ui/icons`) through one funnel, `src/icons.ts`; no `lucide-react` dependency
 - **Guardrails** - `npm run lint` runs a local ESLint plugin whose rules mirror AGENTS.md and teach the fix in every message
 
 <br />
@@ -188,7 +188,7 @@ Skateboard is intentionally lean — current footprint (counting what ships at r
 
 The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, leftover bcrypt hashes still verify then rehash. SQLite via system `libsqlite3`. Stripe via system `libcurl`. Do not `cargo add`.
 
-The frontend pulls UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). That package depends on `react-router` and (from 4.18+) `lucide-react` (pinned); peers are `react` and `react-dom`. Apps do not declare `react-router`. Navigate with `useSafeNavigate()`. Icons come from `lucide-react` (boilerplate also lists it) through one funnel, `src/icons.ts`: it re-exports a named list, and components import from it (`import { Plus } from '../icons'`). There is no `@stevederico/skateboard-ui/icons` path.
+The frontend pulls UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). Its peers are `react`, `react-dom`, `tailwindcss` and (since 5.12.0) `react-router`, so the app declares `react-router` itself (exact pin) but never imports it: navigate with `useSafeNavigate()`. skateboard-ui (5.13+) vendors the Lucide icons and has no runtime dependencies. Icons come from `@stevederico/skateboard-ui/icons` through one funnel, `src/icons.ts`: it re-exports a named list, and components import from it (`import { Plus } from '../icons'`). There is no `lucide-react` dependency.
 
 Frontend dev deps are Vite + Tailwind (`@tailwindcss/vite`) plus `typescript` + `@types/*` for the typecheck gate. No `@vitejs/plugin-react-swc`. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` with its built-in transform.
 
@@ -203,12 +203,12 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.16.0 | Boilerplate (this repo) |
-| **skateboard-ui** | v5.11.4 | Application Shell, Components, Theming |
+| **skateboard** | v5.17.0 | Boilerplate (this repo) |
+| **skateboard-ui** | v5.15.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (JSX via tsconfig `react-jsx`) |
 | **Tailwind CSS** | v4.3+ | Styling |
-| **React Router** | v7.18+ | Routing (via skateboard-ui) |
-| **lucide-react** | v0.546+ | Icons (named, via `src/icons.ts`) |
+| **React Router** | v7.18+ | Routing (peer of skateboard-ui; use `useSafeNavigate`) |
+| **Lucide** | vendored | Icons (`@stevederico/skateboard-ui/icons`, named, via `src/icons.ts`) |
 | **Rust** | 1.95 | Zero-crate backend |
 | **TypeScript** | v7 | Frontend types (strict, no build step) |
 | **Node.js** | v24+ | Frontend toolchain |

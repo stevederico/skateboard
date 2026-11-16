@@ -7,6 +7,19 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.17.0 — skateboard-ui 5.15.0, no lucide-react.** skateboard-ui 5.12.0
+made `react-router` a peer (and added a `tailwindcss` peer), 5.13.0 vendored
+the Lucide icons and dropped its `lucide-react` dependency, and 5.13.1 added the
+`@stevederico/skateboard-ui/icons` entry. Apps: install the ui pin and an exact
+`react-router` from the reference `package.json`, change the source of every
+`export { ... }` in `src/icons.ts` from `'lucide-react'` to
+`'@stevederico/skateboard-ui/icons'`, move any other `lucide-react` import into
+the funnel, then remove `lucide-react` (`npm uninstall lucide-react`) and commit
+`package.json` with `package-lock.json`. An icon the package does not export
+fails `npm run typecheck`; add it as a local SVG component in the funnel. Re-run
+`npm run guardrails:install && npm run lint` after the updater syncs
+`guardrails/`: the funnel rule now reports any `lucide-react` import.
+
 **5.16.0 — boundary analyzer + runtime verify.** No runtime change. The
 updater now syncs `.dependency-cruiser.js` and `guardrails/verify/`, the nested
 `guardrails/package.json` gains dependency-cruiser and `@playwright/test`
@@ -171,7 +184,7 @@ Summary of required work (do all of it):
 2. Refresh scripts/update-skateboard.js from skateboard master; run with --yes (use --baseline if needed).
 3. Resolve conflicts; ensure zero-crate Rust backend (empty [dependencies]); port any Hono routes to backend/src/routes.rs.
 4. npm install @stevederico/skateboard-ui@5.0.0 --save-exact && npm run verify:ui.
-5. Rewrite all @stevederico/skateboard-ui/icons and DynamicIcon imports to named imports from src/icons.ts (create it: an explicit `export { X } from 'lucide-react'` list; it is the only file that imports lucide-react); add lucide-react dependency if missing.
+5. Rewrite all @stevederico/skateboard-ui/icons and DynamicIcon imports to named imports from src/icons.ts (create it: an explicit `export { X } from 'lucide-react'` list; it is the only file that imports lucide-react); add lucide-react dependency if missing. (Later, at skateboard 5.17.0 / ui 5.13+, the funnel switches to `@stevederico/skateboard-ui/icons` and lucide-react is removed; see the 5.17.0 note above.)
 6. Keep @stevederico/skateboard-ui/shadcn/ui/* imports (exports remap in 5.0).
 7. Drop @vitejs/plugin-react-swc; let JSX come from tsconfig ("jsx": "react-jsx"); drop vite --force and optimizeDeps.force.
 8. Drop test:coverage* scripts if present.

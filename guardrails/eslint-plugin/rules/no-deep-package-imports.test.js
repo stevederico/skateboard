@@ -6,7 +6,7 @@ runRuleTests('no-deep-package-imports', rule, {
     "import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';",
     "import { Skeleton } from '@stevederico/skateboard-ui/ui/skeleton';",
     "import { createRoot } from 'react-dom/client';",
-    { code: "export { Plus } from 'lucide-react';", filename: 'src/icons.ts' },
+    { code: "export { Plus } from '@stevederico/skateboard-ui/icons';", filename: 'src/icons.ts' },
     "import { SectionCards } from './SectionCards';",
   ],
   invalid: [

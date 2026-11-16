@@ -8,8 +8,8 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.16.0"
-  skateboard-ui: "5.11.4"
+  version: "5.17.0"
+  skateboard-ui: "5.15.0"
   sources:
     - https://github.com/stevederico/skateboard
     - https://github.com/stevederico/skateboard-ui
@@ -21,8 +21,8 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.16.0** | App scaffold (copied into new repos) |
-| **@stevederico/skateboard-ui** | **5.11.4** | Shell + components (npm package — pin exact) |
+| **skateboard** (boilerplate) | **5.17.0** | App scaffold (copied into new repos) |
+| **@stevederico/skateboard-ui** | **5.15.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
 
@@ -60,7 +60,7 @@ cd backend && cargo run               # Rust :8000
 
 - Frontend: http://localhost:5173  
 - Backend: http://localhost:8000  
-- Stack: **React 19** · **react-router v7.18+** (via ui) · **Vite 8** (JSX via tsconfig `react-jsx`, no SWC plugin) · **Tailwind v4** · **lucide-react** · **zero-crate Rust** · **SQLite**
+- Stack: **React 19** · **react-router v7.18+** (ui peer; app pins it, never imports it) · **Vite 8** (JSX via tsconfig `react-jsx`, no SWC plugin) · **Tailwind v4** · **Lucide** (vendored in ui, `@stevederico/skateboard-ui/icons`) · **zero-crate Rust** · **SQLite**
 
 ## Project Structure (current boilerplate)
 
@@ -70,7 +70,7 @@ my-app/
 │   ├── components/          # App views (HomeView, skeletons, …)
 │   ├── assets/styles.css    # Brand tokens + optional utilities
 │   ├── main.tsx             # Routes + createSkateboardApp
-│   ├── icons.ts             # Icon funnel: the only lucide-react import
+│   ├── icons.ts             # Icon funnel: the only skateboard-ui/icons import
 │   └── constants.json       # App config
 ├── backend/
 │   ├── src/                 # zero-crate Rust server
@@ -368,8 +368,9 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 | Issue | Fix |
 |---|---|
 | Feature icons empty | `constants.features.items[].icon` must be **Lucide names** (`lock`, `credit-card`), not emoji |
-| `skateboard-ui/icons` or `DynamicIcon` import fails | **5.0** — add the icon to `src/icons.ts` (`export { X } from 'lucide-react'`) and import it from the funnel |
-| `npm run lint` fails after an upgrade | Run `npm run guardrails:install` first; each message says what to change (e.g. move `lucide-react` imports into `src/icons.ts`) |
+| `skateboard-ui/icons` or `DynamicIcon` import fails | ui **5.0–5.13.0** have no `./icons` entry; bump ui to 5.13.1+ and re-export from `src/icons.ts` (`export { X } from '@stevederico/skateboard-ui/icons'`). DynamicIcon stays gone |
+| `lucide-react` import fails / lint `icons-through-funnel` | ui 5.13+ vendors the icons; skateboard 5.17.0 drops `lucide-react`. Change the funnel source to `@stevederico/skateboard-ui/icons` |
+| `npm run lint` fails after an upgrade | Run `npm run guardrails:install` first; each message says what to change (e.g. re-export icons from `@stevederico/skateboard-ui/icons` in `src/icons.ts`) |
 | Landing header CTA short | Button `size="default"` next to icon ThemeToggle (not `sm`) |
 | Updater `.js` conflict missed | `git grep` conflict markers in **all** extensions |
 | Empty `STRIPE_ENDPOINT_SECRET=` in `.env.example` | Can poison tests that load example into `process.env` |

@@ -1,20 +1,19 @@
 # Icon Rules
 
-## Icon Library: Lucide React
+## Icon Library: Lucide (vendored in skateboard-ui)
 
-Skateboard uses [Lucide](https://lucide.dev/icons) via `lucide-react`.
+Skateboard uses [Lucide](https://lucide.dev/icons) icons that `@stevederico/skateboard-ui` (5.13+) vendors and exports from `@stevederico/skateboard-ui/icons`. Apps have no `lucide-react` dependency.
 
-- **One funnel:** `src/icons.ts` is the only file that imports `lucide-react`. It re-exports an explicit, named list of every icon the app uses (no `export *`)
+- **One funnel:** `src/icons.ts` is the only file that imports `@stevederico/skateboard-ui/icons`. It re-exports an explicit, named list of every icon the app uses (no `export *`)
 - **App code:** imports icons from the funnel: `import { Plus, Trash2 } from "../icons"`
-- **New icon:** add its Lucide name to the list in `src/icons.ts`, then import it from the funnel
-- **Why:** one list keeps the icon set auditable and tree-shakeable, and lets the app swap any icon for a vendored SVG in one place (rename the file to `icons.tsx` once it holds JSX)
-- **ui 5.0+:** `lucide-react` is a runtime dependency of `@stevederico/skateboard-ui` and stays in the app's `dependencies` (the boilerplate lists it)
+- **New icon:** add its Lucide name to the list in `src/icons.ts`, then import it from the funnel. If skateboard-ui does not export it, `npm run typecheck` fails: add a local SVG component to the funnel (rename it `icons.tsx`)
+- **Why:** one list keeps the icon set auditable and tree-shakeable, and lets the app swap any icon for a local SVG in one place
 - **constants.json** icon strings (pages/features/appIcon) are resolved by the shell privately — do not use public DynamicIcon
-- `npm run lint` enforces the funnel (`skateboard/icons-through-funnel`) and bans deep paths (`lucide-react/dist/...`, `lucide-react/icons/...`, `node_modules/...`)
+- `npm run lint` enforces the funnel (`skateboard/icons-through-funnel`), reports every `lucide-react` import, and bans deep paths (`@stevederico/skateboard-ui/icons/*`, `lucide-react/dist/...`, `node_modules/...`)
 
 ```ts
 // src/icons.ts
-export { Plus, Settings, Trash2 } from "lucide-react";
+export { Plus, Settings, Trash2 } from "@stevederico/skateboard-ui/icons";
 ```
 
 ```jsx
@@ -107,9 +106,9 @@ Default stroke width is `2`. Use `strokeWidth={1.5}` for a lighter feel in dense
 
 ## Don't
 
-- Don't import `lucide-react` outside `src/icons.ts` — import from the funnel
-- Don't import deep paths (`lucide-react/dist/...`, `lucide-react/icons/...`, `node_modules/...`, `@stevederico/skateboard-ui/dist/...`)
-- Don't import from `@stevederico/skateboard-ui/icons` — gone in skateboard-ui **5.0**; add the icon to `src/icons.ts`
+- Don't import `@stevederico/skateboard-ui/icons` outside `src/icons.ts` — import from the funnel
+- Don't import `lucide-react` at all — it is not a dependency; the icons ship in skateboard-ui
+- Don't import deep paths (`@stevederico/skateboard-ui/icons/<Name>`, `lucide-react/dist/...`, `node_modules/...`, `@stevederico/skateboard-ui/dist/...`)
 - Don't use public `DynamicIcon` — gone in **5.0**; named-import icons from the funnel in app code
 - Don't use emoji as icons in UI (`🔐` → `Lock`)
 - Don't use Tabler, Heroicons, or Font Awesome — Lucide only

@@ -15,6 +15,14 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.17.0
+
+  Pin skateboard-ui 5.15.0
+  Add react-router dependency
+  Drop lucide-react
+  Icons from skateboard-ui
+  Update icon guardrails
+
 5.16.0
 
   Add dependency-cruiser boundaries

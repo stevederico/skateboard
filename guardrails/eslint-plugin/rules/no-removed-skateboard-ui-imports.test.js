@@ -5,10 +5,10 @@ runRuleTests('no-removed-skateboard-ui-imports', rule, {
   valid: [
     "import { useSafeNavigate, showSidebar } from '@stevederico/skateboard-ui/Utilities';",
     "import { Plus } from '../icons';",
+    { code: "export { Plus } from '@stevederico/skateboard-ui/icons';", filename: 'src/icons.ts' },
     "import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';",
   ],
   invalid: [
-    { code: "import { Plus } from '@stevederico/skateboard-ui/icons';", errors: [{ messageId: 'icons' }] },
     { code: "import Plus from '@stevederico/skateboard-ui/icons/Plus';", errors: [{ messageId: 'icons' }] },
     { code: "import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon';", errors: [{ messageId: 'dynamicIcon' }] },
     {

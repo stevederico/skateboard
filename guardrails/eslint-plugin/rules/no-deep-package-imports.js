@@ -32,8 +32,8 @@ export default {
         'Found an import through node_modules ("{{source}}"). Why: it hard-codes one install layout (hoisting, workspaces, and Docker builds differ) and skips the package\'s `exports` map, so it breaks on the next install. ' +
         'Fix: import the package by name (`import { Button } from "@stevederico/skateboard-ui/shadcn/ui/button"`).',
       lucide:
-        'Found a deep lucide-react import ("{{source}}"). Why: lucide\'s internal file layout is not public API and changes between versions; deep paths also bypass the app icon funnel. ' +
-        'Fix: add the icon by name to src/icons.ts (`export { {{hint}} } from "lucide-react";`) and import it from the funnel (`import { {{hint}} } from "../icons";`).',
+        'Found a deep lucide-react import ("{{source}}"). Why: lucide-react is not a dependency (skateboard-ui 5.13+ vendors the icons), lucide\'s internal file layout is not public API, and deep paths bypass the app icon funnel. ' +
+        'Fix: add the icon by name to src/icons.ts (`export { {{hint}} } from "@stevederico/skateboard-ui/icons";`) and import it from the funnel (`import { {{hint}} } from "../icons";`).',
       dist:
         'Found an import of a build-output path ("{{source}}"). Why: dist/ (and build/, esm/, cjs/) files are a package\'s private build artifacts; they skip its `exports` map and move between releases. skateboard-ui publishes stable subpaths instead. ' +
         'Fix: use the public subpath, e.g. "@stevederico/skateboard-ui/Utilities", "@stevederico/skateboard-ui/shadcn/ui/<component>", "@stevederico/skateboard-ui/Header" (see the package README and `exports`).',

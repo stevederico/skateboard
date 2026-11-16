@@ -6,14 +6,15 @@ import { resolveSpecifier } from '../lib/paths.js';
 const ICON_FUNNEL = /^src\/icons(\.tsx?)?$/;
 
 /**
- * True when an import specifier points at the icon funnel or at lucide-react.
+ * True when an import specifier points at the icon funnel, the vendored skateboard-ui icon
+ * set, or lucide-react.
  *
  * @param {import('eslint').Rule.RuleContext} context - Rule context
  * @param {string} source - Import specifier
  * @returns {boolean} Whether the imported names are icons
  */
 function isIconSource(context, source) {
-  if (source === 'lucide-react') return true;
+  if (source === 'lucide-react' || source === '@stevederico/skateboard-ui/icons') return true;
   const target = resolveSpecifier(context, source);
   return target !== null && ICON_FUNNEL.test(target);
 }
