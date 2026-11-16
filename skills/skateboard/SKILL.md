@@ -8,8 +8,8 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.17.0"
-  skateboard-ui: "5.15.0"
+  version: "5.18.0"
+  skateboard-ui: "5.16.0"
   sources:
     - https://github.com/stevederico/skateboard
     - https://github.com/stevederico/skateboard-ui
@@ -21,8 +21,8 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.17.0** | App scaffold (copied into new repos) |
-| **@stevederico/skateboard-ui** | **5.15.0** | Shell + components (npm package — pin exact) |
+| **skateboard** (boilerplate) | **5.18.0** | App scaffold (copied into new repos) |
+| **@stevederico/skateboard-ui** | **5.16.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
 
@@ -60,7 +60,7 @@ cd backend && cargo run               # Rust :8000
 
 - Frontend: http://localhost:5173  
 - Backend: http://localhost:8000  
-- Stack: **React 19** · **react-router v7.18+** (ui peer; app pins it, never imports it) · **Vite 8** (JSX via tsconfig `react-jsx`, no SWC plugin) · **Tailwind v4** · **Lucide** (vendored in ui, `@stevederico/skateboard-ui/icons`) · **zero-crate Rust** · **SQLite**
+- Stack: **React 19** · **react-router 7.18.5** (vendored in ui; import from `@stevederico/skateboard-ui/router`, never `react-router`) · **Vite 8** (JSX via tsconfig `react-jsx`, no SWC plugin) · **Tailwind v4** · **Lucide** (vendored in ui, `@stevederico/skateboard-ui/icons`) · **zero-crate Rust** · **SQLite**
 
 ## Project Structure (current boilerplate)
 

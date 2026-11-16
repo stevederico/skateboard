@@ -23,8 +23,9 @@ export default defineConfig({
   // JSX comes from tsconfig ("jsx": "react-jsx") via Vite's own transform — no
   // @vitejs/plugin-react-swc, so edits trigger a full reload instead of Fast Refresh.
   resolve: {
-    // react-router resolves through skateboard-ui; dedupe keeps one copy if an app adds it.
-    dedupe: ['react', 'react-dom', 'react-router'],
+    // One React copy for the app and skateboard-ui. react-router is not listed: it is
+    // vendored inside skateboard-ui (5.16+) and imported from '@stevederico/skateboard-ui/router'.
+    dedupe: ['react', 'react-dom'],
     alias: {
       '@': path.resolve(process.cwd(), './src')
     }
@@ -33,7 +34,7 @@ export default defineConfig({
     // skateboard-ui is excluded from prebundling, so its raw imports resolve straight to
     // these packages — every one it reaches for must be pre-converted to ESM, including
     // react/jsx-runtime (its compiled JSX imports it and React ships CJS).
-    include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react-router'],
+    include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime'],
     // skateboard-ui ships pre-built ESM; the native/CSS toolchain must never be prebundled.
     exclude: ['@stevederico/skateboard-ui', 'lightningcss', 'fsevents']
   },

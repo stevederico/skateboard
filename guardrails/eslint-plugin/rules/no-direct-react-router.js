@@ -2,15 +2,15 @@ import { createBannedImportRule, packages } from '../lib/bannedImports.js';
 
 export default createBannedImportRule({
   description:
-    'Apps must not depend on `react-router` / `react-router-dom` directly for shell navigation. Use `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`.',
-  source: 'AGENTS.md > Migrating 4.x -> 5.0 (step 12, Routing)',
+    "Never import `react-router` / `react-router-dom` (or `@react-router/*`). skateboard-ui 5.16+ vendors react-router: navigate with `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`, and import any other router API from `@stevederico/skateboard-ui/router`.",
+  source: 'AGENTS.md > Routing',
   entries: [
     {
-      match: packages(['react-router', 'react-router-dom', '@remix-run/router']),
+      match: (source, pkg) => packages(['react-router', 'react-router-dom', '@remix-run/router'])(source, pkg) || source.startsWith('@react-router/'),
       why:
-        'skateboard-ui owns the router (it pins react-router 7.18.x for CVE-2026-55685 and vite.config.ts dedupes it). App imports bind to whatever copy resolves, can end up outside the shell\'s RouterProvider, and silently pin the app to a router version the shell did not choose.',
+        'skateboard-ui ships exactly one router copy, its vendored react-router (5.16+), and react-router is not in package.json. A direct import either fails to resolve or loads a second router whose context the shell\'s routes and Outlet cannot see: hooks throw "may be used only in the context of a <Router>" and useSafeNavigate falls back to full page loads.',
       fix:
-        'navigate with `const navigate = useSafeNavigate();` from "@stevederico/skateboard-ui/Utilities" (`navigate("/app/projects")`), declare routes in src/main.tsx `appRoutes` (type `AppRoute` from "@stevederico/skateboard-ui/App"), and render links as `<Button onClick={() => navigate(...)}>`.',
+        'navigate with `const navigate = useSafeNavigate();` from "@stevederico/skateboard-ui/Utilities" (`navigate("/app/projects")`) and declare routes in src/main.tsx `appRoutes`. For other router APIs import the same names from the shell: `import { useParams, useSearchParams, Link } from "@stevederico/skateboard-ui/router";` (`react-router/dom` -> "@stevederico/skateboard-ui/router/dom"). Then remove react-router from package.json and from vite.config.ts `resolve.dedupe` / `optimizeDeps.include`.',
     },
   ],
 });

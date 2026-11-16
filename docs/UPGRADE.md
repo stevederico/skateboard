@@ -7,6 +7,23 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.18.0 — skateboard-ui 5.16.0, router from skateboard-ui, no @types/node.**
+skateboard-ui 5.16.0 vendors react-router 7.18.5 and exports it as
+`@stevederico/skateboard-ui/router` (and `/router/dom`), so it is no longer a
+peer. Apps: `npm install @stevederico/skateboard-ui@5.16.0 --save-exact` (if npm
+says `notarget` right after a release, add `--prefer-online`), change every
+`from 'react-router'` / `'react-router-dom'` to
+`from '@stevederico/skateboard-ui/router'` (`react-router/dom` →
+`@stevederico/skateboard-ui/router/dom`; same names, same API), then
+`npm uninstall react-router` and drop `'react-router'` from `vite.config.ts`
+`resolve.dedupe` and `optimizeDeps.include`. `grep -rnE "from ['\"]react-router(-dom)?(/[^'\"]*)?['\"]" src`
+must print nothing: a leftover import loads a second router the shell cannot
+see. The template also drops `@types/node`: `tsconfig.json` now includes only
+`src` and `types` is `["vite/client"]`; keep `@types/node` only if your `src/`
+uses Node types. Commit `package.json` with `package-lock.json`. The updater
+syncs the `no-direct-react-router` lint rule, whose message names the new
+import path.
+
 **5.17.0 — skateboard-ui 5.15.0, no lucide-react.** skateboard-ui 5.12.0
 made `react-router` a peer (and added a `tailwindcss` peer), 5.13.0 vendored
 the Lucide icons and dropped its `lucide-react` dependency, and 5.13.1 added the

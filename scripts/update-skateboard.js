@@ -794,7 +794,7 @@ async function main() {
   console.log('  1. npm install');
   console.log('  2. npm run typecheck — your custom code merged into .ts files may need annotations');
   console.log('  3. See docs/UPGRADE.md for the agent prompt that automates conflict + type fixes.');
-  console.log('  4. npm run guardrails:install && npm run lint — each message names the fix (e.g. re-export icons from @stevederico/skateboard-ui/icons in src/icons.ts; lucide-react is no longer a dependency)');
+  console.log('  4. npm run guardrails:install && npm run lint — each message names the fix (e.g. re-export icons from @stevederico/skateboard-ui/icons in src/icons.ts; lucide-react is no longer a dependency; router imports come from @stevederico/skateboard-ui/router, so remove react-router)');
 
   // tsc already installed → offer to run the typecheck right here.
   if (existsSync(join(APP_ROOT, 'node_modules', '.bin', 'tsc'))) {

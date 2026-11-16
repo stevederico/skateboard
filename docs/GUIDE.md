@@ -634,7 +634,7 @@ createSkateboardApp({ constants, appRoutes, defaultRoute });
 **Custom routing** (build your own):
 ```javascript
 import { ContextProvider } from '@stevederico/skateboard-ui/Context';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from '@stevederico/skateboard-ui/router';
 
 root.render(
   <ContextProvider constants={constants}>

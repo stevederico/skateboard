@@ -15,6 +15,15 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.18.0
+
+  Pin skateboard-ui 5.16.0
+  Router from skateboard-ui
+  Drop react-router
+  Drop @types/node
+  Typecheck src only
+  Update router guardrail
+
 5.17.0
 
   Pin skateboard-ui 5.15.0

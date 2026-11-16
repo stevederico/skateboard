@@ -188,9 +188,9 @@ Skateboard is intentionally lean — current footprint (counting what ships at r
 
 The backend is zero-crate Rust. JWT is HS256 HMAC, passwords are scrypt, leftover bcrypt hashes still verify then rehash. SQLite via system `libsqlite3`. Stripe via system `libcurl`. Do not `cargo add`.
 
-The frontend pulls UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). Its peers are `react`, `react-dom`, `tailwindcss` and (since 5.12.0) `react-router`, so the app declares `react-router` itself (exact pin) but never imports it: navigate with `useSafeNavigate()`. skateboard-ui (5.13+) vendors the Lucide icons and has no runtime dependencies. Icons come from `@stevederico/skateboard-ui/icons` through one funnel, `src/icons.ts`: it re-exports a named list, and components import from it (`import { Plus } from '../icons'`). There is no `lucide-react` dependency.
+The frontend pulls UI primitives from [`skateboard-ui`](https://github.com/stevederico/skateboard-ui). Its peers are `react`, `react-dom` and `tailwindcss`. Since 5.16.0 it vendors react-router and exports it as `@stevederico/skateboard-ui/router`, so the app has no `react-router` dependency: navigate with `useSafeNavigate()`, and import any other router API (`useParams`, `Link`, ...) from `@stevederico/skateboard-ui/router`. Never import `react-router` itself; a second copy breaks router context. skateboard-ui (5.13+) vendors the Lucide icons and has no runtime dependencies. Icons come from `@stevederico/skateboard-ui/icons` through one funnel, `src/icons.ts`: it re-exports a named list, and components import from it (`import { Plus } from '../icons'`). There is no `lucide-react` dependency.
 
-Frontend dev deps are Vite + Tailwind (`@tailwindcss/vite`) plus `typescript` + `@types/*` for the typecheck gate. No `@vitejs/plugin-react-swc`. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` with its built-in transform.
+Frontend dev deps are Vite + Tailwind (`@tailwindcss/vite`) plus `typescript` + `@types/react` / `@types/react-dom` for the typecheck gate, which checks `src/` only (no `@types/node`). No `@vitejs/plugin-react-swc`. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` with its built-in transform.
 
 Lint is a local guardrails plugin (`guardrails/eslint-plugin`): each rule enforces a written "never" rule from AGENTS.md and its message explains why and how to fix it. ESLint and its TypeScript parser live in the nested `guardrails/` package, not in the root dependencies (`npm run guardrails:install`, then `npm run lint`). The same nested package holds dependency-cruiser (`npm run depcruise`: layer boundaries, cycles, orphans, dev-only and undeclared packages across the whole import graph, generated from the same layer table as the lint rule) and Playwright (`npm run verify`: boots the Vite frontend and the Rust backend, clicks through landing, sign up, the app, settings, sign out, sign in and the 404 in Chromium, and saves screenshots to `verify-artifacts/`).
 
@@ -203,11 +203,11 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.17.0 | Boilerplate (this repo) |
-| **skateboard-ui** | v5.15.0 | Application Shell, Components, Theming |
+| **skateboard** | v5.18.0 | Boilerplate (this repo) |
+| **skateboard-ui** | v5.16.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (JSX via tsconfig `react-jsx`) |
 | **Tailwind CSS** | v4.3+ | Styling |
-| **React Router** | v7.18+ | Routing (peer of skateboard-ui; use `useSafeNavigate`) |
+| **React Router** | v7.18.5 | Routing (vendored in skateboard-ui: `@stevederico/skateboard-ui/router`; navigate with `useSafeNavigate`) |
 | **Lucide** | vendored | Icons (`@stevederico/skateboard-ui/icons`, named, via `src/icons.ts`) |
 | **Rust** | 1.95 | Zero-crate backend |
 | **TypeScript** | v7 | Frontend types (strict, no build step) |

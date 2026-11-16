@@ -108,7 +108,7 @@ When making ANY code changes, you MUST update:
 
 - TypeScript everywhere — `.ts` / `.tsx` files, `strict` mode always on
 - No build-step typechecking: `npm run typecheck` runs `tsc -p tsconfig.json` (`noEmit` is set in tsconfig) for the frontend; it gates `build`, `prod`, and `test`. Backend is `cargo test`.
-- `@types` packages are dev-only dependencies (`@types/node`, `@types/react`, `@types/react-dom`)
+- `@types` packages are dev-only dependencies (`@types/react`, `@types/react-dom`). No `@types/node`: `tsconfig.json` checks only `src/` (browser code); Node files (`vite.config.ts`, `vite.plugins.ts`, `scripts/`) run under Node's own type stripping and are not in its `include`. Add `@types/node` back only if `src/` ever needs Node types
 - Prefer `const` over `let` — use `let` only when reassigning
 - Prefer `async`/`await` over `.then()` chains
 - Prefer destructuring: `const { id } = user` over `const id = user.id`
@@ -709,8 +709,8 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.17.0
-- skateboard-ui@5.15.0
+- skateboard@5.18.0
+- skateboard-ui@5.16.0
 
 ## Migrating 4.x → 5.0 (exact checklist)
 
@@ -751,15 +751,17 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
     - Replace `import { X } from '@stevederico/skateboard-ui/icons'` (and `/icons/X`) with `import { X } from '../icons'`, and add `X` to the explicit `export { ... } from 'lucide-react'` list in `src/icons.ts` (the only file that imports `lucide-react`; see **Icons**).
     - Delete every `import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon'` — use a named Lucide icon from the `src/icons.ts` funnel in app code. Shell still resolves `constants.json` `icon` strings privately (`constantsIcon`); apps do not get a public dynamic resolver.
     - Ensure `lucide-react` is listed in app `dependencies` (boilerplate ships it; ui 5.0 also depends on it).
-    - **Then continue to ui 5.13+ (boilerplate 5.17.0):** the funnel re-exports from `@stevederico/skateboard-ui/icons` instead of `lucide-react`, `lucide-react` leaves `dependencies`, and `react-router` joins them (a peer of ui since 5.12.0). See `docs/UPGRADE.md` → 5.17.0.
+    - **Then continue to ui 5.13+ (boilerplate 5.17.0):** the funnel re-exports from `@stevederico/skateboard-ui/icons` instead of `lucide-react`, `lucide-react` leaves `dependencies`, and `react-router` joins them (a peer of ui since 5.12.0). See `docs/UPGRADE.md` → 5.17.0. **Then ui 5.16+ (boilerplate 5.18.0):** react-router is vendored inside skateboard-ui, so `react-router` leaves `dependencies` again and router imports come from `@stevederico/skateboard-ui/router`. See `docs/UPGRADE.md` → 5.18.0.
 
 11. **Keep shadcn import paths**
     - Continue using `@stevederico/skateboard-ui/shadcn/ui/<name>`.
     - Do **not** rewrite to `…/ui/<name>` unless you want to — both work; `shadcn/ui/*` is remapped via package `exports` (linker shim files are gone).
 
 12. **Routing**
-    - Apps must **not** import `react-router` / `react-router-dom` directly for shell navigation. Use `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`.
-    - ui 5.0 pins `react-router@7.18.3` (CVE-2026-55685). Do not downgrade below 7.18.0.
+    - Apps must **not** import `react-router` / `react-router-dom` (lint: `no-direct-react-router`). Navigate with `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`.
+    - skateboard-ui 5.16+ vendors react-router (7.18.5, past the CVE-2026-55685 fix in 7.18.3) and exports it: any other router API (`useParams`, `useSearchParams`, `Link`, `Navigate`, ...) comes from `@stevederico/skateboard-ui/router` (`react-router/dom` → `@stevederico/skateboard-ui/router/dom`). Same API, only the import path changes.
+    - Keep exactly one router copy: no `react-router` in `package.json`, none in `vite.config.ts` `resolve.dedupe` / `optimizeDeps.include`. Check with `grep -rnE "from ['\"]react-router(-dom)?(/[^'\"]*)?['\"]" src` (must print nothing). A second copy breaks router context: hooks throw "may be used only in the context of a <Router>" and `useSafeNavigate` falls back to full page loads.
+    - The router version moves only with the skateboard-ui pin. Its security advisories are not seen by `npm audit` (no dependency); skateboard-ui re-vendors when one applies.
 
 13. **Removed Utilities (already gone in late 4.x — confirm)**
     - No `useForm`, `logEvent`, or public `setSidebarVisible` / `setTabBarVisible` (use `showSidebar` / `hideSidebar` / `showTabBar` / `hideTabBar` if needed).
