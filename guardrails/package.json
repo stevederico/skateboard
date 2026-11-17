@@ -2,12 +2,9 @@
   "name": "skateboard-guardrails",
   "private": true,
   "type": "module",
-  "description": "Lint and boundary tooling for the skateboard template. Kept out of the root package so the app keeps TypeScript 7 while the ESLint parser gets the TypeScript 5 API it needs.",
+  "description": "Boundary tooling for the skateboard template. Kept out of the root package so the app keeps TypeScript 7 while dependency-cruiser gets the TypeScript 5 compiler API it needs to read .ts imports. Lint (oxlint) and runtime verify (agent-browser) are global CLIs, not dependencies.",
   "devDependencies": {
-    "@playwright/test": "1.64.1",
-    "@typescript-eslint/parser": "8.72.1",
     "dependency-cruiser": "18.7.2",
-    "eslint": "10.14.0",
     "typescript": "5.9.3"
   }
 }

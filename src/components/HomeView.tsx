@@ -1,12 +1,6 @@
 import Header from '@stevederico/skateboard-ui/Header';
 import { SectionCards } from './SectionCards';
 
-/**
- * Dashboard view with metric cards.
- *
- * @component
- * @returns Dashboard view
- */
 export default function HomeView() {
   return (
     <>

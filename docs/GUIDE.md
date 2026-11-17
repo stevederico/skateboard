@@ -1846,8 +1846,8 @@ Then install, sync the version label, and validate:
 ```bash
 npm install                                # root deps + lockfile
 npm run typecheck && npm run test
-npm run guardrails:install && npm run lint && npm run depcruise # guardrails; messages name each fix
-npm run verify # click through the running app in Chromium (ports 5173 + 8000 free)
+npm run guardrails:install && npm run lint && npm run depcruise # guardrails (oxlint is a global CLI); messages name each fix
+npm run verify # click through the running app with agent-browser (ports 5173 + 8000 free)
 cd backend && cargo test --locked
 ```
 

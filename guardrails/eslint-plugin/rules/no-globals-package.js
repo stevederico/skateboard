@@ -7,9 +7,9 @@ export default createBannedImportRule({
     {
       match: packages(['globals']),
       why:
-        'it only feeds environment globals to ESLint\'s `no-undef`, which this repo does not use: TypeScript (`npm run typecheck`, tsconfig "lib" and "types") already knows every browser and Node global. The guardrails plugin stays zero-dependency.',
+        'it only feeds environment globals to a linter\'s `no-undef`, which this repo does not use (oxlint runs only the guardrails plugin and four core rules): TypeScript (`npm run typecheck`, tsconfig "lib" and "types") already knows every browser and Node global. The guardrails plugin stays zero-dependency.',
       fix:
-        'delete the import and the `languageOptions.globals` entry. If a global is missing from typechecking, add the right lib or `@types` package to tsconfig.json "types" (dev-only).',
+        'delete the import (and any `globals` entry in a lint config). If a global is missing from typechecking, add the right lib or `@types` package to tsconfig.json "types" (dev-only).',
     },
   ],
 });

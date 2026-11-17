@@ -1,9 +1,3 @@
-/**
- * Name of a JSX element as written (`button`, `Button`, `Card.Header`).
- *
- * @param {any} name - JSXOpeningElement.name
- * @returns {string} Element name
- */
 export function jsxName(name) {
   if (name.type === 'JSXIdentifier') return name.name;
   if (name.type === 'JSXMemberExpression') return `${jsxName(name.object)}.${name.property.name}`;
@@ -11,36 +5,14 @@ export function jsxName(name) {
   return '';
 }
 
-/**
- * Find a named attribute on a JSX opening element.
- *
- * @param {any} opening - JSXOpeningElement
- * @param {string} attrName - Attribute name (`aria-label`, `className`)
- * @returns {any} The JSXAttribute, or undefined
- */
 export function findAttr(opening, attrName) {
   return opening.attributes.find((a) => a.type === 'JSXAttribute' && a.name.name === attrName);
 }
 
-/**
- * True when the element spreads props (`{...props}`), which may supply any attribute.
- * Rules that check for a missing attribute skip these to avoid false positives.
- *
- * @param {any} opening - JSXOpeningElement
- * @returns {boolean} Whether a spread attribute is present
- */
 export function hasSpread(opening) {
   return opening.attributes.some((a) => a.type === 'JSXSpreadAttribute');
 }
 
-/**
- * Static value of a JSX attribute: `true` for a bare attribute, the string for
- * `x="a"` / `x={'a'}`, the boolean/number for `x={true}` / `x={0}`, and `undefined`
- * when the value is computed at runtime.
- *
- * @param {any} attr - JSXAttribute (may be undefined)
- * @returns {string | number | boolean | null | undefined} Static value
- */
 export function staticAttrValue(attr) {
   if (!attr) return undefined;
   if (attr.value === null) return true;
@@ -54,30 +26,12 @@ export function staticAttrValue(attr) {
   return undefined;
 }
 
-/**
- * True for lowercase intrinsic elements (`div`, `button`), false for components.
- *
- * @param {string} name - Element name
- * @returns {boolean} Whether the element is a DOM tag
- */
 export const isIntrinsic = (name) => /^[a-z]/.test(name);
 
-/**
- * Children that carry content (drops whitespace-only text).
- *
- * @param {any} element - JSXElement
- * @returns {any[]} Meaningful children
- */
 export function meaningfulChildren(element) {
   return element.children.filter((c) => !(c.type === 'JSXText' && c.value.trim() === ''));
 }
 
-/**
- * Walk every JSX element nested under `element` (not including it).
- *
- * @param {any} element - JSXElement or JSXFragment
- * @param {(child: any) => void} visit - Called for each descendant JSXElement
- */
 export function walkJsx(element, visit) {
   const stack = [...(element.children ?? [])];
   while (stack.length) {

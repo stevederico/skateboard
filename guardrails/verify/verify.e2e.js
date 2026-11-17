@@ -1,7 +1,10 @@
+import { after, afterEach, before, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
 import { REPO, SCREENSHOTS } from './paths.js';
+import { BACKEND_BOOT_TIMEOUT_MS, FRONTEND_URL, assertPortsFree, resetArtifacts, startServers, stopServers } from './servers.js';
+import { ab, attribute, click, cookieHeader, drainProblems, expectGone, expectNoText, expectText, expectUrl, fill, findRole, labelledByText, writeBrowserConfig } from './browser.js';
 
 const constants = JSON.parse(readFileSync(path.join(REPO, 'src/constants.json'), 'utf8'));
 const PAGE_TITLES = constants.pages.map((item) => item.title);
@@ -9,159 +12,188 @@ const HOME_TITLE = PAGE_TITLES[0];
 
 const BACKEND_API = constants.devBackendURL;
 const USER = { name: 'Verify User', email: `verify-${Date.now()}@example.com`, password: 'verify-pass-1' };
+const VIEWPORT = ['1280', '720'];
+const SETUP_TIMEOUT_MS = BACKEND_BOOT_TIMEOUT_MS + 120_000;
+const FLOW_TIMEOUT_MS = 90_000;
 
-const ALLOWED_CONSOLE_ERRORS = [
-  // skateboard-ui probes GET /api/signup/options for an optional Turnstile site key; the
-  // template backend does not serve it and the sign-up form treats 404 as "no widget".
-  { pattern: /status of 404/, location: /\/api\/signup\/options$/ },
-  // The sign-in flow submits a wrong password on purpose; the browser logs the 401.
-  { pattern: /status of 401/, location: /\/api\/signin$/ },
+const ALLOWED_FAILED_REQUESTS = [
+  { status: 404, url: /\/api\/signup\/options$/ },
+  { status: 401, url: /\/api\/signin$/ },
 ];
 
-test.describe.configure({ mode: 'serial' });
+const MAIN = { role: 'main' };
+const BANNER = { role: 'banner' };
+const FOOTER = { role: 'contentinfo' };
+const authDialog = (mode) => ({ role: 'dialog', name: mode });
+const button = (name) => ({ role: 'button', name });
+const heading = (name, level) => ({ role: 'heading', name, level });
 
-let page;
+let servers = [];
+let hasFailed = false;
 const problems = [];
 
-async function shot(name) {
-  await page.screenshot({ path: path.join(SCREENSHOTS, `${name}.png`), fullPage: true, animations: 'disabled' });
+const goto = (route) => ab('open', `${FRONTEND_URL}${route}`);
+
+const shot = (name) => ab('screenshot', '--full', path.join(SCREENSHOTS, `${name}.png`));
+
+async function backendMe() {
+  const response = await fetch(`${BACKEND_API}/me`, { headers: { cookie: await cookieHeader(new URL(BACKEND_API).hostname) } });
+  return { status: response.status, body: response.ok ? await response.json() : null };
 }
 
-const authDialog = (mode) => page.getByRole('dialog', { name: mode });
-
-test.beforeAll(async ({ browser }) => {
-  page = await browser.newPage();
-  page.on('pageerror', (error) => problems.push(`uncaught exception: ${error.message}`));
-  page.on('console', (message) => {
-    if (message.type() !== 'error') return;
-    const text = message.text();
-    const { url } = message.location();
-    if (ALLOWED_CONSOLE_ERRORS.some((allowed) => allowed.pattern.test(text) && allowed.location.test(url))) return;
-    problems.push(`console error: ${text} (${url})`);
+function flow(name, body) {
+  it(name, { timeout: FLOW_TIMEOUT_MS }, async (t) => {
+    if (hasFailed) return t.skip('an earlier flow failed; the flows share one browser session');
+    try {
+      await body();
+    } catch (error) {
+      hasFailed = true;
+      throw error;
+    }
   });
-});
+}
 
-test.afterAll(async () => {
-  await page.close();
-});
+describe('runtime verify', () => {
+  before(async () => {
+    await assertPortsFree();
+    resetArtifacts();
+    writeBrowserConfig();
+    servers = await startServers();
+    await ab('open');
+    await ab('set', 'viewport', ...VIEWPORT);
+    await ab('set', 'media', 'light', 'reduced-motion');
+  }, { timeout: SETUP_TIMEOUT_MS });
 
-test('landing page shows the product, features, pricing and legal links', async () => {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1, name: constants.tagline })).toBeVisible();
-  await expect(page.getByRole('banner').getByRole('link', { name: constants.appName })).toBeVisible();
-  await expect(page.getByRole('heading', { name: constants.features.title })).toBeVisible();
-  await expect(page.getByRole('heading', { name: constants.pricing.title })).toBeVisible();
-  await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms');
-  await shot('01-landing');
-});
+  afterEach(async () => {
+    problems.push(...(await drainProblems(ALLOWED_FAILED_REQUESTS)));
+  });
 
-test('call to action opens the app for a guest, and settings asks them to sign in', async () => {
-  await page.getByRole('banner').getByRole('button', { name: constants.cta }).click();
-  await expect(page).toHaveURL(/\/app\/home$/);
-  await expect(page.getByRole('main').getByRole('heading', { level: 1, name: HOME_TITLE })).toBeVisible();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('main').getByText('Sign in to access your account settings.')).toBeVisible();
-  await shot('02-guest-settings');
-});
+  after(async () => {
+    try {
+      await ab('close');
+    } catch (error) {
+      console.error(`agent-browser close failed: ${error.message}`);
+    }
+    stopServers(servers);
+  });
 
-test('sign up creates an account and a backend session', async () => {
-  await page.goto('/signup');
-  const dialog = authDialog('Sign Up');
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Name').fill(USER.name);
-  await dialog.getByLabel('Email').fill(USER.email);
-  await dialog.getByLabel('Password').fill(USER.password);
-  await shot('03-sign-up-form');
-  await dialog.getByRole('button', { name: 'Sign Up' }).click();
-  await expect(dialog).toBeHidden();
-  const me = await page.request.get(`${BACKEND_API}/me`);
-  expect(me.status(), 'backend session cookie is set after sign up').toBe(200);
-  expect(await me.json()).toMatchObject({ email: USER.email, name: USER.name });
-});
+  flow('landing page shows the product, features, pricing and legal links', async () => {
+    await goto('/');
+    await findRole(heading(constants.tagline, 1));
+    await findRole({ role: 'link', name: constants.appName }, { within: BANNER });
+    await findRole(heading(constants.features.title));
+    await findRole(heading(constants.pricing.title));
+    assert.equal(await attribute({ role: 'link', name: 'Terms' }, 'href', { within: FOOTER }), '/terms');
+    await shot('01-landing');
+  });
 
-test('main app view renders the dashboard and sidebar pages', async () => {
-  await expect(page.getByRole('main').getByRole('heading', { level: 1, name: HOME_TITLE })).toBeVisible();
-  await expect(page.getByRole('main').getByText('Total Revenue')).toBeVisible();
-  for (const title of [...PAGE_TITLES, 'Settings']) {
-    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
-  }
-  await shot('04-dashboard');
-});
+  flow('call to action opens the app for a guest, and settings asks them to sign in', async () => {
+    await click(button(constants.cta), { within: BANNER });
+    await expectUrl(/\/app\/home$/);
+    await findRole(heading(HOME_TITLE, 1), { within: MAIN });
+    await click(button('Settings'));
+    await expectText('Sign in to access your account settings.', { within: MAIN });
+    await shot('02-guest-settings');
+  });
 
-test('sidebar navigates to a page with an empty state', async () => {
-  await page.getByRole('button', { name: 'Analytics', exact: true }).click();
-  await expect(page).toHaveURL(/\/app\/analytics$/);
-  await expect(page.getByRole('main').getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible();
-  await expect(page.getByRole('main').getByText('Analytics will appear here once you have activity.')).toBeVisible();
-  await shot('05-analytics-empty-state');
-});
+  flow('sign up creates an account and a backend session', async () => {
+    await goto('/signup');
+    const dialog = authDialog('Sign Up');
+    await findRole(dialog);
+    await fill({ role: 'textbox', name: 'Name' }, USER.name, { within: dialog });
+    await fill({ role: 'textbox', name: 'Email' }, USER.email, { within: dialog });
+    await fill({ role: 'textbox', name: 'Password' }, USER.password, { within: dialog });
+    await shot('03-sign-up-form');
+    await click(button('Sign Up'), { within: dialog });
+    await expectGone(dialog);
+    const me = await backendMe();
+    assert.equal(me.status, 200, 'backend session cookie is set after sign up');
+    assert.equal(me.body.email, USER.email);
+    assert.equal(me.body.name, USER.name);
+  });
 
-test('command menu opens with Ctrl+K and navigates', async () => {
-  await page.keyboard.press('Control+k');
-  const menu = page.getByRole('dialog', { name: 'Command Menu' });
-  await expect(menu.getByRole('combobox')).toBeVisible();
-  await shot('06-command-menu');
-  await menu.getByRole('option', { name: 'Projects' }).click();
-  await expect(page).toHaveURL(/\/app\/projects$/);
-  await expect(page.getByRole('main').getByRole('heading', { level: 1, name: 'Projects' })).toBeVisible();
-});
+  flow('main app view renders the dashboard and sidebar pages', async () => {
+    await findRole(heading(HOME_TITLE, 1), { within: MAIN });
+    await expectText('Total Revenue', { within: MAIN });
+    for (const title of [...PAGE_TITLES, 'Settings']) await findRole(button(title));
+    await shot('04-dashboard');
+  });
 
-test('settings shows the signed-in account, plan and version', async () => {
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page).toHaveURL(/\/app\/settings$/);
-  const main = page.getByRole('main');
-  await expect(main.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
-  await expect(main.getByText(USER.email)).toBeVisible();
-  await expect(main.getByText(USER.name, { exact: true })).toBeVisible();
-  await expect(main.getByText('Free plan')).toBeVisible();
-  await expect(main.getByText(/^v\d+\.\d+\.\d+$/)).toBeVisible();
-  await shot('07-settings');
-});
+  flow('sidebar navigates to a page with an empty state', async () => {
+    await click(button('Analytics'));
+    await expectUrl(/\/app\/analytics$/);
+    await findRole(heading('Analytics', 1), { within: MAIN });
+    await expectText('Analytics will appear here once you have activity.', { within: MAIN });
+    await shot('05-analytics-empty-state');
+  });
 
-test('sign out asks for confirmation and ends the session', async () => {
-  await page.getByRole('main').getByRole('button', { name: 'Sign Out' }).click();
-  const confirm = page.getByRole('alertdialog');
-  await expect(confirm.getByText('Are you sure you want to sign out?')).toBeVisible();
-  await shot('08-sign-out-confirm');
-  await confirm.getByRole('button', { name: 'Sign Out' }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { level: 1, name: constants.tagline })).toBeVisible();
-  const me = await page.request.get(`${BACKEND_API}/me`);
-  expect(me.status(), 'backend rejects the session after sign out').toBe(401);
-  await shot('09-signed-out');
-});
+  flow('command menu opens with Ctrl+K and navigates', async () => {
+    await ab('press', 'Control+k');
+    const menu = { role: 'dialog' };
+    await findRole({ role: 'combobox' }, { within: menu });
+    assert.equal(await labelledByText(menu), 'Command Menu');
+    await shot('06-command-menu');
+    await click({ role: 'option', name: 'Projects' }, { within: menu });
+    await expectUrl(/\/app\/projects$/);
+    await findRole(heading('Projects', 1), { within: MAIN });
+  });
 
-test('sign in rejects a wrong password, then restores the account', async () => {
-  await page.goto('/signin');
-  const dialog = authDialog('Sign In');
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Email').fill(USER.email);
-  await dialog.getByLabel('Password').fill('wrong-password');
-  await dialog.getByRole('button', { name: 'Sign In' }).click();
-  await expect(dialog.getByRole('alert')).toBeVisible();
-  await shot('10-sign-in-error');
-  await dialog.getByLabel('Password').fill(USER.password);
-  await dialog.getByRole('button', { name: 'Sign In' }).click();
-  await expect(dialog).toBeHidden();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('main').getByText(USER.email)).toBeVisible();
-  await shot('11-signed-in');
-});
+  flow('settings shows the signed-in account, plan and version', async () => {
+    await click(button('Settings'));
+    await expectUrl(/\/app\/settings$/);
+    await findRole(heading('Settings', 1), { within: MAIN });
+    await expectText(USER.email, { within: MAIN });
+    await expectText(USER.name, { within: MAIN, exact: true });
+    await expectText('Free plan', { within: MAIN });
+    await expectText(/^v\d+\.\d+\.\d+$/, { within: MAIN });
+    await shot('07-settings');
+  });
 
-test('legal page renders the terms with the company name filled in', async () => {
-  await page.goto('/terms');
-  await expect(page.getByText(`Welcome to the ${constants.companyName} Application.`)).toBeVisible();
-  await expect(page.getByText(/_COMPANY_|_WEBSITE_|_EMAIL_/)).toHaveCount(0);
-  await shot('12-terms');
-});
+  flow('sign out asks for confirmation and ends the session', async () => {
+    await click(button('Sign Out'), { within: MAIN });
+    const confirm = { role: 'alertdialog' };
+    await expectText('Are you sure you want to sign out?', { within: confirm });
+    await shot('08-sign-out-confirm');
+    await click(button('Sign Out'), { within: confirm });
+    await expectUrl(/:5173\/$/);
+    await findRole(heading(constants.tagline, 1));
+    const me = await backendMe();
+    assert.equal(me.status, 401, 'backend rejects the session after sign out');
+    await shot('09-signed-out');
+  });
 
-test('unknown route shows the 404 page', async () => {
-  await page.goto('/this-route-does-not-exist');
-  await expect(page.getByText('404', { exact: true })).toBeVisible();
-  await expect(page.getByText('Page not found.')).toBeVisible();
-  await shot('13-not-found');
-});
+  flow('sign in rejects a wrong password, then restores the account', async () => {
+    await goto('/signin');
+    const dialog = authDialog('Sign In');
+    await findRole(dialog);
+    await fill({ role: 'textbox', name: 'Email' }, USER.email, { within: dialog });
+    await fill({ role: 'textbox', name: 'Password' }, 'wrong-password', { within: dialog });
+    await click(button('Sign In'), { within: dialog });
+    await findRole({ role: 'alert' }, { within: dialog });
+    await shot('10-sign-in-error');
+    await fill({ role: 'textbox', name: 'Password' }, USER.password, { within: dialog });
+    await click(button('Sign In'), { within: dialog });
+    await expectGone(dialog);
+    await click(button('Settings'));
+    await expectText(USER.email, { within: MAIN });
+    await shot('11-signed-in');
+  });
 
-test('no uncaught exceptions or unexpected console errors during the flows', async () => {
-  expect(problems).toEqual([]);
+  flow('legal page renders the terms with the company name filled in', async () => {
+    await goto('/terms');
+    await expectText(`Welcome to the ${constants.companyName} Application.`);
+    await expectNoText(/_COMPANY_|_WEBSITE_|_EMAIL_/);
+    await shot('12-terms');
+  });
+
+  flow('unknown route shows the 404 page', async () => {
+    await goto('/this-route-does-not-exist');
+    await expectText('404', { exact: true });
+    await expectText('Page not found.');
+    await shot('13-not-found');
+  });
+
+  it('no uncaught exceptions, console errors or unexpected failed requests during the flows', () => {
+    assert.deepEqual(problems, []);
+  });
 });

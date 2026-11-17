@@ -1,16 +1,5 @@
 import { moduleSourceVisitors, packageName } from './moduleSources.js';
 
-/**
- * Build a rule that bans a family of imports. Every report names the specifier, the
- * reason, and the replacement, because the reader is usually an agent that will act on
- * the message verbatim.
- *
- * @param {object} options - Rule definition
- * @param {string} options.description - The written rule being enforced (quoted from the docs)
- * @param {string} options.source - Where the written rule lives
- * @param {BannedEntry[]} options.entries - Banned specifier families, checked in order
- * @returns {import('eslint').Rule.RuleModule} ESLint rule
- */
 export function createBannedImportRule({ description, source, entries }) {
   return {
     meta: {
@@ -33,12 +22,6 @@ export function createBannedImportRule({ description, source, entries }) {
   };
 }
 
-/**
- * Matcher for a list of package names, including their subpaths.
- *
- * @param {string[]} names - Package names (`axios`, `@scope/pkg`)
- * @returns {(source: string, pkg: string) => boolean} Matcher
- */
 export function packages(names) {
   const set = new Set(names);
   return (_source, pkg) => set.has(pkg);

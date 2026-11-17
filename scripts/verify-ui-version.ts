@@ -10,13 +10,6 @@ interface FsSeam {
 
 let fs: FsSeam = { existsSync, readFileSync };
 
-/**
- * Test-only seam: swap the filesystem backend. Avoids `mock.module('node:fs')`, whose
- * named/default exports don't survive `--experimental-test-module-mocks` reliably across
- * Node versions (Node 24.14 breaks named-import resolution on the mocked builtin).
- *
- * @param seam - Replacement existsSync/readFileSync implementations
- */
 export function __setFsForTests(seam: FsSeam): void {
   fs = seam;
 }
@@ -66,12 +59,6 @@ function readManifest(path: string): PackageManifest {
   return manifest;
 }
 
-/**
- * Verify installed skateboard-ui version matches package.json and npm-only stack.
- *
- * @param root - Project root directory (defaults to process.cwd())
- * @returns Result object indicating success or the reason for failure
- */
 export function verifyUiVersion(root: string = process.cwd()): VerifyResult {
   const pkg = readManifest(join(root, 'package.json'));
   const want = (pkg.dependencies?.[UI_PKG] ?? pkg.devDependencies?.[UI_PKG] ?? '').replace(/^[\^~]/, '');

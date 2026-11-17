@@ -15,6 +15,19 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.23.0
+
+  Lint with oxlint
+  Remove ESLint
+  Port rule tests
+  Verify with agent-browser
+  Remove Playwright
+  Remove JSDoc rule
+  Strip JSDoc blocks
+  Add no-eslint-or-playwright
+  Update CI workflows
+  Update docs
+
 5.22.0
 
   Remove code comments

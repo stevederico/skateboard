@@ -6,7 +6,7 @@ deno.jsonc
 
 # Node
 node_modules/
-# Nested installs (guardrails/node_modules holds ESLint; the image never runs lint)
+# Nested installs (guardrails/node_modules holds dependency-cruiser; the image never runs guardrails)
 **/node_modules/
 npm-debug.log*
 

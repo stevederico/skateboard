@@ -17,23 +17,6 @@ interface PageEntry {
   icon: string;
 }
 
-/**
- * Global command menu activated via Cmd+K (Mac) or Ctrl+K (Windows).
- *
- * Renders a searchable command palette overlay that lists all app pages
- * from constants.json. Selecting a page navigates to its route under /app/.
- *
- * Uses cmdk under the hood via skateboard-ui's Command primitives.
- * The keyboard listener is global, so this component works regardless
- * of which route is currently active.
- *
- * @component
- * @returns Command dialog with page navigation
- *
- * @example
- * // Add to any layout or view — keyboard shortcut is global
- * <CommandMenu />
- */
 export default function CommandMenu() {
   const [open, setOpen] = useState(false);
   const navigate = useSafeNavigate();

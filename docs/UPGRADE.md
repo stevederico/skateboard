@@ -7,6 +7,28 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.23.0 — oxlint replaces ESLint, agent-browser replaces Playwright, no JSDoc rule.**
+No runtime change. Install the two global CLIs once per machine:
+`mise use -g npm:oxlint npm:agent-browser` (or `npm install -g oxlint agent-browser`);
+they are not project dependencies. The updater syncs `.oxlintrc.json` (loads
+`guardrails/eslint-plugin` through `jsPlugins`; base rules on every linted file,
+app rules on `src/` only), the new `guardrails/verify/browser.js` and
+`servers.js`, and a `guardrails/package.json` that keeps only dependency-cruiser
+and TypeScript 5. It offers to delete `eslint.config.js`,
+`guardrails/verify/playwright.config.js` and the `require-jsdoc-on-exports` rule:
+code carries no comments now, doc comments included (existing JSDoc goes when its
+code is edited). Accept the `lint` and `verify` script updates, re-run
+`npm run guardrails:install`, then `npm run lint`, `npm run test:guardrails` and
+`npm run verify`. Port custom rule overrides from `eslint.config.js` into
+`.oxlintrc.json` `overrides`, and `// eslint-disable-next-line` comments keep
+working (oxlint honors them; `oxlint-disable-next-line` is the new spelling).
+If you merged your own flows into `verify.e2e.js`, rewrite them with the helpers
+in `guardrails/verify/browser.js` (`findRole`, `click`, `fill`, `expectText`,
+`expectUrl`), which read agent-browser's accessibility snapshot by role and name.
+Remove `verify-artifacts/playwright` if present. The workflows are not synced:
+copy `.github/workflows/ci.yml` (job `guardrails`) and `verify.yml`, which install
+pinned `oxlint` and `agent-browser` globally.
+
 **5.20.0 — skateboard-ui 5.18.0, plain CSS, no Tailwind.** skateboard-ui 5.18.0
 ships plain CSS for its own components and theme, and the app owns plain CSS for
 the classes its `src/` uses. Apps: `npm install @stevederico/skateboard-ui@5.18.0 --save-exact`,

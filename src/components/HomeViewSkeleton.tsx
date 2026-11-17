@@ -1,12 +1,5 @@
 import { Skeleton } from '@stevederico/skateboard-ui/ui/skeleton';
 
-/**
- * Loading placeholder that mirrors HomeView + SectionCards layout.
- * Used as the Suspense fallback for the lazy HomeView chunk so the
- * main content area never flashes a centered spinner.
- *
- * @returns Dashboard-shaped skeleton inside the layout inset
- */
 export default function HomeViewSkeleton() {
   return (
     <div aria-busy="true" aria-live="polite">

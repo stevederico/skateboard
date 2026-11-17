@@ -1,0 +1,114 @@
+{
+  "plugins": [],
+  "categories": {
+    "correctness": "off"
+  },
+  "jsPlugins": [
+    "./guardrails/eslint-plugin/index.js"
+  ],
+  "options": {
+    "reportUnusedDisableDirectives": "error",
+    "denyWarnings": true
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "dist/**",
+    "backend/**",
+    "public/**",
+    "verify-artifacts/**"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
+        "scripts/**/*.{js,mjs,ts}",
+        "vite.*.ts",
+        "vite.*.js",
+        ".dependency-cruiser.js",
+        "guardrails/eslint-plugin/**/*.js",
+        "guardrails/verify/**/*.js",
+        "**/{tailwind,postcss}.config.{js,cjs,mjs,ts}",
+        "**/{eslint,playwright,playwright-ct}.config.{js,cjs,mjs,ts,mts,cts}",
+        "**/.eslintrc.{js,cjs}"
+      ],
+      "rules": {
+        "no-var": "error",
+        "prefer-const": "error",
+        "object-shorthand": [
+          "error",
+          "always"
+        ],
+        "prefer-template": "error",
+        "skateboard/ban-ts-comment": "error",
+        "skateboard/no-explicit-any": "error",
+        "skateboard/no-type-assertion": "error",
+        "skateboard/no-non-null-assertion": "error",
+        "skateboard/no-loose-types": "error",
+        "skateboard/no-require": "error",
+        "skateboard/no-dotenv": "error",
+        "skateboard/no-third-party-http-clients": "error",
+        "skateboard/no-banned-build-tooling": "error",
+        "skateboard/no-globals-package": "error",
+        "skateboard/no-database-drivers": "error",
+        "skateboard/no-foreign-test-frameworks": "error",
+        "skateboard/no-other-icon-libraries": "error",
+        "skateboard/no-removed-skateboard-ui-imports": "error",
+        "skateboard/icons-through-funnel": "error",
+        "skateboard/no-deep-package-imports": "error",
+        "skateboard/layer-boundaries": "error",
+        "skateboard/no-empty-catch": "error",
+        "skateboard/no-promise-then": "error",
+        "skateboard/no-hardcoded-connection-strings": "error",
+        "skateboard/no-focused-or-skipped-tests": "error",
+        "skateboard/test-file-naming": "error",
+        "skateboard/import-order": "error",
+        "skateboard/no-eslint-or-playwright": "error"
+      }
+    },
+    {
+      "files": [
+        "src/**/*.{ts,tsx,js,jsx,mjs,cjs}"
+      ],
+      "rules": {
+        "skateboard/no-direct-react-router": "error",
+        "skateboard/filename-convention": "error",
+        "skateboard/no-fetch-in-effect": "error",
+        "skateboard/use-list-data-states": "error",
+        "skateboard/no-class-components": "error",
+        "skateboard/no-browser-dialogs": "error",
+        "skateboard/no-raw-form-elements": "error",
+        "skateboard/img-requires-alt": "error",
+        "skateboard/no-aria-hidden-on-focusable": "error",
+        "skateboard/icon-button-requires-label": "error",
+        "skateboard/clickable-element-needs-keyboard": "error",
+        "skateboard/input-requires-label": "error",
+        "skateboard/handler-naming": "error",
+        "skateboard/suspense-skeleton-fallback": "error",
+        "skateboard/no-loading-text-in-button": "error",
+        "skateboard/compound-component-structure": "error",
+        "skateboard/no-emoji-icons": "error",
+        "skateboard/no-inline-svg": "error",
+        "skateboard/icon-requires-size": "error",
+        "skateboard/heading-text-wrap": "error",
+        "skateboard/no-dark-variant": "error",
+        "skateboard/no-raw-color-classes": "error",
+        "skateboard/no-outline-none-without-focus-ring": "error",
+        "skateboard/no-space-utilities": "error",
+        "skateboard/no-transition-all": "error",
+        "skateboard/no-arbitrary-spacing-radius": "error",
+        "skateboard/prefer-size-utility": "error",
+        "skateboard/no-classname-template-ternary": "error",
+        "skateboard/motion-safe-animations": "error",
+        "skateboard/no-unknown-classes": "error"
+      }
+    },
+    {
+      "files": [
+        "guardrails/eslint-plugin/rules/*.test.js"
+      ],
+      "rules": {
+        "skateboard/no-hardcoded-connection-strings": "off"
+      }
+    }
+  ]
+}

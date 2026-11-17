@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "5.22.0",
-  "skateboardVersion": "5.22.0",
+  "version": "5.23.0",
+  "skateboardVersion": "5.23.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -20,10 +20,10 @@
     "test:build": "node --experimental-test-module-mocks --test vite.plugins.test.js scripts/verify-ui-version.test.js scripts/update-skateboard.test.js scripts/version-consistency.test.js",
     "test:docs": "node scripts/test-docs.mjs",
     "guardrails:install": "npm ci --prefix guardrails --no-audit --no-fund",
-    "lint": "node guardrails/node_modules/eslint/bin/eslint.js .",
+    "lint": "oxlint",
     "test:guardrails": "node --test \"guardrails/eslint-plugin/**/*.test.js\"",
     "depcruise": "node guardrails/node_modules/dependency-cruiser/bin/dependency-cruiser.mjs --config .dependency-cruiser.js .",
-    "verify": "node guardrails/node_modules/@playwright/test/cli.js test --config guardrails/verify/playwright.config.js"
+    "verify": "node --test --test-reporter=spec guardrails/verify/verify.e2e.js"
   },
   "dependencies": {
     "@stevederico/skateboard-ui": "5.19.0",

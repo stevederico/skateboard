@@ -10,14 +10,6 @@ const CommandMenu = lazy(() => import('./components/CommandMenu'));
 const HomeView = lazy(() => import('./components/HomeView'));
 const BlankView = lazy(() => import('./components/BlankView'));
 
-/**
- * App layout with global command menu overlay.
- *
- * Wraps the default skateboard-ui Layout and injects CommandMenu
- * so the Cmd+K shortcut is available on all authenticated routes.
- *
- * @returns Layout with command menu
- */
 export function AppLayout() {
   return (
     <>

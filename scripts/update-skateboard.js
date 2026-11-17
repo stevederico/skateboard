@@ -20,14 +20,14 @@ const GUARDRAIL_RULES = [
   'no-arbitrary-spacing-radius', 'no-aria-hidden-on-focusable', 'no-banned-build-tooling',
   'no-browser-dialogs', 'no-class-components', 'no-classname-template-ternary',
   'no-dark-variant', 'no-database-drivers', 'no-deep-package-imports', 'no-direct-react-router',
-  'no-dotenv', 'no-emoji-icons', 'no-empty-catch', 'no-explicit-any', 'no-fetch-in-effect',
+  'no-dotenv', 'no-emoji-icons', 'no-empty-catch', 'no-eslint-or-playwright', 'no-explicit-any', 'no-fetch-in-effect',
   'no-focused-or-skipped-tests', 'no-foreign-test-frameworks', 'no-globals-package',
   'no-hardcoded-connection-strings', 'no-inline-svg', 'no-loading-text-in-button',
   'no-loose-types', 'no-non-null-assertion', 'no-other-icon-libraries',
   'no-outline-none-without-focus-ring', 'no-promise-then', 'no-raw-color-classes',
   'no-raw-form-elements', 'no-removed-skateboard-ui-imports', 'no-require',
   'no-space-utilities', 'no-third-party-http-clients', 'no-transition-all',
-  'no-type-assertion', 'no-unknown-classes', 'prefer-size-utility', 'require-jsdoc-on-exports',
+  'no-type-assertion', 'no-unknown-classes', 'prefer-size-utility',
   'suspense-skeleton-fallback', 'test-file-naming', 'use-list-data-states'
 ];
 
@@ -72,10 +72,11 @@ const ALLOWLIST = [
   'scripts/version-consistency.test.js',
   'scripts/test-docs.mjs',
   'SECURITY.md',
-  'eslint.config.js',
+  '.oxlintrc.json',
   '.dependency-cruiser.js',
   'guardrails/verify/paths.js',
-  'guardrails/verify/playwright.config.js',
+  'guardrails/verify/browser.js',
+  'guardrails/verify/servers.js',
   'guardrails/verify/verify.e2e.js',
   'guardrails/package.json',
   'guardrails/package-lock.json',
@@ -142,7 +143,11 @@ const REMOVED = [
   'backend/lib/validation.js',
   'backend/lib/validation.test.js',
   'backend/vendor/legacy-bcrypt.js',
-  'backend/vendor/legacy-bcrypt.d.ts'
+  'backend/vendor/legacy-bcrypt.d.ts',
+  'eslint.config.js',
+  'guardrails/verify/playwright.config.js',
+  'guardrails/eslint-plugin/rules/require-jsdoc-on-exports.js',
+  'guardrails/eslint-plugin/rules/require-jsdoc-on-exports.test.js'
 ];
 
 const RENAMES = {
@@ -231,14 +236,6 @@ function writeSynced(dst, relPath, content) {
   if (relPath.startsWith('.githooks/')) chmodSync(dst, 0o755);
 }
 
-/**
- * 3-way merge baseContent→newContent onto appContent via `git merge-file`.
- *
- * @returns {{ merged: string, conflicts: number }} `conflicts` is the conflict count,
- *   or -1 on a hard failure (exit 255 or empty output for a non-empty input — binary/NUL
- *   or unmergeable content). On -1, `merged` echoes `appContent` and callers MUST leave
- *   the app's file untouched — writing the empty merge output would destroy it.
- */
 function threeWayMerge(appContent, baseContent, newContent) {
   const cur = join(tmpdir(), `sk-mf-cur.${process.pid}.tmp`);
   const base = join(tmpdir(), `sk-mf-base.${process.pid}.tmp`);
@@ -266,20 +263,6 @@ function threeWayMerge(appContent, baseContent, newContent) {
   return { merged, conflicts };
 }
 
-/**
- * Scan 3-way-merge output for defects that compile clean and ship silently:
- *   1. Residual conflict markers INSIDE block comments — `tsc` ignores `<<<<<<<`
- *      in a `/** ... *␐/` so `npm run typecheck` passes with the markers still there.
- *   2. Duplicate top-level declarations — when a function/const is absent from the
- *      (too-old) baseline but added on BOTH sides at different positions, the merge
- *      keeps both copies with NO conflict marker (later caught only as TS2393).
- * Returns an array of human-readable issue strings (empty = clean). Duplicate
- * detection runs only on JS/TS sources; marker detection on any text file.
- *
- * @param {string} content merged file content
- * @param {string} relPath path (selects whether duplicate detection applies)
- * @returns {string[]}
- */
 function findMergeDefects(content, relPath) {
   const issues = [];
   const lines = content.split('\n');
@@ -442,22 +425,6 @@ async function migrateRenamedFile(relPath, oldRel, baselineTag, newContent) {
   return 'declined';
 }
 
-/**
- * Ensure `linkRel` is a symlink pointing at `targetRel` (both relative to the app root).
- *
- * Recreates the template's `CLAUDE.md → AGENTS.md` symlink. Unlike ALLOWLIST files this
- * is NOT copied via `git show` (which would yield the 9-byte target string, not content)
- * — it is materialized with `symlinkSync` so the app gets a real symlink.
- *
- * - link absent            → create it
- * - link already correct   → no-op
- * - link wrong target      → retarget
- * - link is a regular file → offer to replace (legacy real CLAUDE.md; its content should
- *                            already have migrated into AGENTS.md via RENAMES)
- * - target missing         → skip (nothing to point at)
- *
- * @returns {Promise<'ok'|'wrote'|'declined'|'error'>}
- */
 async function ensureSymlink(linkRel, targetRel, { root = APP_ROOT, confirmFn = confirm } = {}) {
   const linkPath = join(root, linkRel);
   if (!existsSync(join(root, targetRel))) {
@@ -677,7 +644,7 @@ async function main() {
   console.log('  1. npm install');
   console.log('  2. npm run typecheck — your custom code merged into .ts files may need annotations');
   console.log('  3. See docs/UPGRADE.md for the agent prompt that automates conflict + type fixes.');
-  console.log('  4. npm run guardrails:install && npm run lint — each message names the fix (e.g. re-export icons from @stevederico/skateboard-ui/icons in src/icons.ts; lucide-react is no longer a dependency; router imports come from @stevederico/skateboard-ui/router, so remove react-router)');
+  console.log('  4. npm run guardrails:install && npm run lint (oxlint, a global CLI: mise use -g npm:oxlint) — each message names the fix (e.g. re-export icons from @stevederico/skateboard-ui/icons in src/icons.ts; lucide-react is no longer a dependency; router imports come from @stevederico/skateboard-ui/router, so remove react-router)');
 
   if (existsSync(join(APP_ROOT, 'node_modules', '.bin', 'tsc'))) {
     console.log('\ntsc is installed. Note: typecheck is EXPECTED to fail until your custom code is annotated — the errors are the to-do list, not a regression.');

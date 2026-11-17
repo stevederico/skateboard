@@ -10,8 +10,8 @@ export const LAYERS = [
   { name: 'build', pattern: /^vite\.[^/]+$/, description: 'vite.*: build config and plugins, run by Node at build time' },
   {
     name: 'guardrails',
-    pattern: /^(?:guardrails\/|eslint\.config\.js$|\.dependency-cruiser\.js$)/,
-    description: 'guardrails/ + eslint.config.js + .dependency-cruiser.js: lint, boundary, and runtime-verify tooling',
+    pattern: /^(?:guardrails\/|\.oxlintrc\.json$|\.dependency-cruiser\.js$)/,
+    description: 'guardrails/ + .oxlintrc.json + .dependency-cruiser.js: lint, boundary, and runtime-verify tooling',
   },
 ];
 
@@ -50,17 +50,11 @@ export const TARGET_GUIDANCE = {
     fix: 'expose build-time values through Vite (`define`, `import.meta.env.VITE_*`) or move pure helpers into the importing layer.',
   },
   guardrails: {
-    why: 'guardrails/ is lint tooling with its own node_modules and TypeScript 5 parser; app, tooling, and build code must run without it installed.',
+    why: 'guardrails/ is lint, boundary and verify tooling with its own node_modules; app, tooling, and build code must run without it installed.',
     fix: 'do not import lint code; copy the constant you need, or express the check as a lint rule instead.',
   },
 };
 
-/**
- * Find the layer a repo-relative path belongs to.
- *
- * @param {string} relPath - Repo-relative path with forward slashes
- * @returns {Layer | undefined} The first matching layer, or undefined (e.g. public/, root files)
- */
 export function layerOf(relPath) {
   return LAYERS.find((layer) => layer.pattern.test(relPath));
 }

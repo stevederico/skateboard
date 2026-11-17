@@ -42,13 +42,20 @@ describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
       .filter(f => !f.endsWith('.DS_Store'))
       .filter(f => !ALLOWLIST.includes(f));
     assert.deepEqual(missing, [], `guardrails files missing from ALLOWLIST: ${missing.join(', ')}`);
-    for (const f of ['eslint.config.js', '.dependency-cruiser.js', 'guardrails/package.json', 'guardrails/package-lock.json']) {
+    for (const f of ['.oxlintrc.json', '.dependency-cruiser.js', 'guardrails/package.json', 'guardrails/package-lock.json']) {
       assert.ok(ALLOWLIST.includes(f), `${f} must be synced`);
     }
   });
 
   it('allowlists the build infra new in 4.5.0', () => {
     assert.ok(ALLOWLIST.includes('vite.plugins.ts'), 'vite.plugins.ts must be synced');
+  });
+
+  it('drops ESLint, Playwright and require-jsdoc-on-exports from apps (5.23.0)', () => {
+    for (const f of ['eslint.config.js', 'guardrails/verify/playwright.config.js', 'guardrails/eslint-plugin/rules/require-jsdoc-on-exports.js']) {
+      assert.ok(REMOVED.includes(f), `${f} must be removed`);
+      assert.ok(!ALLOWLIST.includes(f), `${f} must not be synced`);
+    }
   });
 
   it('drops the old vitest harness from apps', () => {

@@ -40,6 +40,9 @@ jobs:
       # Root install first: dependency-cruiser resolves the app's imports against it.
       - run: npm ci
       - run: npm run guardrails:install
+      # oxlint is a global CLI, not a project dependency; CI pins the version it was proven on.
+      - name: Install oxlint
+        run: npm install -g --no-audit --no-fund oxlint@1.94.0
       - run: npm run lint
       - run: npm run test:guardrails
       - run: npm run depcruise

@@ -16,7 +16,7 @@ runRuleTests('layer-boundaries', rule, {
     { code: "import { verifyUiVersion } from './verify-ui-version.ts';", filename: 'scripts/verify-ui-version.mjs' },
     { code: "import constants from '../src/constants.json' with { type: 'json' };", filename: 'scripts/tool.js' },
     { code: "import { htmlReplacePlugin } from './vite.plugins.ts';", filename: 'vite.config.ts' },
-    { code: "import plugin from './guardrails/eslint-plugin/index.js';", filename: 'eslint.config.js' },
+    { code: "import { LAYERS } from './guardrails/eslint-plugin/layers.js';", filename: '.dependency-cruiser.js' },
     { code: "import { x } from '../../somewhere';", filename: 'public/theme-init.js' },
   ],
   invalid: [

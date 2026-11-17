@@ -79,7 +79,7 @@ Everything you need to ship a production-ready app:
 - **Built-in hooks** - `useListData` for list fetching
 - **API utilities** - apiRequest with automatic auth and error handling
 - **Icons** - named Lucide icons vendored by skateboard-ui (`@stevederico/skateboard-ui/icons`) through one funnel, `src/icons.ts`; no `lucide-react` dependency
-- **Guardrails** - `npm run lint` runs a local ESLint plugin whose rules mirror AGENTS.md and teach the fix in every message
+- **Guardrails** - `npm run lint` runs oxlint with a local rule plugin whose rules mirror AGENTS.md and teach the fix in every message
 
 <br />
 
@@ -192,7 +192,7 @@ The frontend pulls UI primitives from [`skateboard-ui`](https://github.com/steve
 
 Frontend dev deps are Vite plus `typescript` + `@types/react` / `@types/react-dom` for the typecheck gate, which checks `src/` only (no `@types/node`). No `@vitejs/plugin-react-swc`. No Tailwind or PostCSS: styling is plain CSS, skateboard-ui's `styles.css` plus `src/assets/styles.css`, and the `no-unknown-classes` lint rule checks every className against both. No component-test runner. Node 24 strips types natively; Vite compiles `.tsx` with its built-in transform.
 
-Lint is a local guardrails plugin (`guardrails/eslint-plugin`): each rule enforces a written "never" rule from AGENTS.md and its message explains why and how to fix it. ESLint and its TypeScript parser live in the nested `guardrails/` package, not in the root dependencies (`npm run guardrails:install`, then `npm run lint`). The same nested package holds dependency-cruiser (`npm run depcruise`: layer boundaries, cycles, orphans, dev-only and undeclared packages across the whole import graph, generated from the same layer table as the lint rule) and Playwright (`npm run verify`: boots the Vite frontend and the Rust backend, clicks through landing, sign up, the app, settings, sign out, sign in and the 404 in Chromium, and saves screenshots to `verify-artifacts/`).
+Lint is oxlint running a local guardrails plugin (`guardrails/eslint-plugin`, loaded through `jsPlugins` in `.oxlintrc.json`): each rule enforces a written "never" rule from AGENTS.md and its message explains why and how to fix it. oxlint and agent-browser are global CLIs (`mise use -g npm:oxlint npm:agent-browser`), not dependencies. The nested `guardrails/` package holds only dependency-cruiser and the TypeScript 5 API it reads `.ts` imports with (`npm run guardrails:install`, then `npm run depcruise`: layer boundaries, cycles, orphans, dev-only and undeclared packages across the whole import graph, generated from the same layer table as the lint rule). `npm run verify` boots the Vite frontend and the Rust backend, drives agent-browser through landing, sign up, the app, settings, sign out, sign in and the 404, fails on page errors, console errors and failed requests, and saves screenshots to `verify-artifacts/`.
 
 <br />
 
@@ -203,7 +203,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.22.0 | Boilerplate (this repo) |
+| **skateboard** | v5.23.0 | Boilerplate (this repo) |
 | **skateboard-ui** | v5.19.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (JSX via tsconfig `react-jsx`) |
 | **CSS** | plain | Styling: skateboard-ui `styles.css` + `src/assets/styles.css`, no Tailwind |
@@ -287,8 +287,9 @@ cd backend && cargo run       # backend :8000
 
 # Before opening a PR:
 npm run test                  # typecheck + script tests + doc links
-npm run guardrails:install    # once: ESLint + TS parser into guardrails/
-npm run lint                  # guardrails (rules from AGENTS.md)
+mise use -g npm:oxlint npm:agent-browser   # once: the lint and verify CLIs
+npm run guardrails:install    # once: dependency-cruiser into guardrails/
+npm run lint                  # oxlint guardrails (rules from AGENTS.md)
 npm run test:guardrails       # rule tests
 npm run depcruise             # import-graph boundaries
 npm run verify                # click through the running app (needs ports 5173 + 8000 free)

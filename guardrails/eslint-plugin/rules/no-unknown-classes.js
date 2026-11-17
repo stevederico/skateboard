@@ -27,14 +27,6 @@ function unescapeCss(ident) {
   );
 }
 
-/**
- * Class names defined by `.name` selectors in a stylesheet. Only rule preludes are
- * scanned (text before `{`); at-rule preludes, declarations, comments and quoted
- * strings are skipped, so `0.5rem` or `url("a.png")` never count as classes.
- *
- * @param {string} text - Stylesheet source
- * @returns {Set<string>} Unescaped class names
- */
 export function cssClassNames(text) {
   const out = new Set();
   const src = text.replace(/\/\*[\s\S]*?\*\//g, '');

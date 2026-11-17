@@ -13,14 +13,6 @@ interface BlankViewProps {
   children?: ReactNode;
 }
 
-/**
- * Blank view template component
- *
- * Starter view with Header and empty state. Use as starting point for new views.
- *
- * @component
- * @returns Blank view with header and empty state
- */
 export default function BlankView({ title = "Blank", description, buttonTitle, onButtonClick, icon, children }: BlankViewProps) {
   return (
     <>

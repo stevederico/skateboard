@@ -5,15 +5,6 @@ function staticString(node) {
   return null;
 }
 
-/**
- * Build visitors that report every static module specifier in a file: `import`,
- * `export ... from`, dynamic `import()`, `require()`, TS `import x = require()`, and
- * `import('x').Type` type queries. One helper keeps every import-based rule consistent,
- * so a ban cannot be dodged by switching import syntax.
- *
- * @param {SourceCallback} onSource - Called with the specifier node and its string value
- * @returns {import('eslint').Rule.RuleListener} ESLint visitors
- */
 export function moduleSourceVisitors(onSource) {
   const check = (node) => {
     const value = staticString(node);
@@ -37,23 +28,11 @@ export function moduleSourceVisitors(onSource) {
   };
 }
 
-/**
- * Package name of a bare specifier (`@scope/pkg/sub` → `@scope/pkg`, `pkg/sub` → `pkg`).
- *
- * @param {string} source - Import specifier
- * @returns {string} Package name (the specifier itself for relative paths)
- */
 export function packageName(source) {
   const parts = source.split('/');
   return source.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 }
 
-/**
- * Merge several visitor objects so two helpers can listen to the same node type.
- *
- * @param {...import('eslint').Rule.RuleListener} listeners - Visitor objects
- * @returns {import('eslint').Rule.RuleListener} Combined visitors
- */
 export function mergeVisitors(...listeners) {
   const byType = {};
   for (const listener of listeners) {

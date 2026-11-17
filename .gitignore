@@ -46,5 +46,5 @@ coverage
 bun.lock
 backend/target
 
-# Runtime verification output (npm run verify): screenshots, traces, throwaway backend state
+# Runtime verification output (npm run verify): screenshots, agent-browser config, throwaway backend state
 verify-artifacts/

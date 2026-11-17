@@ -28,12 +28,14 @@ cd backend && cargo test --locked
 
 **Guardrails (lint, boundaries, runtime verify):**
 ```bash
-npm run guardrails:install   # once: ESLint, TS parser, dependency-cruiser, Playwright into guardrails/
-npm run lint                 # local guardrails plugin (see Guardrails)
-npm run test:guardrails      # rule tests
+npm run guardrails:install   # once: dependency-cruiser (+ TypeScript 5) into guardrails/
+npm run lint                 # oxlint + the local guardrails plugin (see Guardrails)
+npm run test:guardrails      # rule tests (each case runs through oxlint)
 npm run depcruise            # whole-graph import boundaries (.dependency-cruiser.js)
-npm run verify               # boots frontend + backend, clicks through the app in Chromium
+npm run verify               # boots frontend + backend, clicks through the app with agent-browser
 ```
+
+`oxlint` and `agent-browser` are global CLIs, not project dependencies: `mise use -g npm:oxlint npm:agent-browser` (or `npm install -g oxlint agent-browser`).
 
 ## Code Standards
 
@@ -41,23 +43,13 @@ npm run verify               # boots frontend + backend, clicks through the app 
 
 **CRITICAL: Documentation must always match code.**
 
-**All exported/public functions, classes, and non-obvious constants must have JSDoc comments (`/** */`).**
+**No comments in code, doc comments included (no JSDoc `/** */`).** Comments go stale, nobody reads them, and they give an agent a place to justify a workaround instead of fixing the cause. Put the contract in a clear name, the TypeScript types, a test, or a lint rule.
 
-**Required:**
-- All exported/public functions and classes
-- Parameters, return types, and thrown errors/exceptions
-- Non-obvious constants and configuration objects
-- Complex logic via inline comments explaining *why*, not *what*
-
-**Exempt:**
-- Trivial getters/setters where the name is self-documenting
-- One-liner utility functions with obvious intent (e.g., `const isEven = (n) => n % 2 === 0`)
-- Private/internal helpers under ~3 lines where intent is clear from context
-- Third-party and imported code (e.g., shadcn components, library wrappers)
+- New and edited code adds no comments. Existing comments go when someone edits the code around them.
+- Allowed: lint disable directives (`// oxlint-disable-next-line skateboard/<rule> -- <reason>`), `yagni:` markers (a deliberate shortcut with its ceiling and upgrade path), license headers, and shebangs.
+- Never leave commented-out code; git remembers.
 
 When making ANY code changes, you MUST update:
-- JSDoc comments on modified functions/classes/components
-- Inline comments explaining complex logic
 - README.md if user-facing behavior changes
 - CLAUDE.md if architecture/patterns change
 - API docs if endpoints change
@@ -70,11 +62,9 @@ When making ANY code changes, you MUST update:
 - Quick audit before committing a bump: `grep -rn "<old-version>" README.md docs/ AGENTS.md` must return nothing.
 
 **Before committing:**
-1. Review all modified functions — do JSDoc comments match current signatures and behavior?
-2. Check that parameter names, types, and descriptions are accurate
-3. Remove doc comments for deleted functions — don't leave orphaned docs
-4. Verify examples in docs still work with changes
-5. If any version changed, run the grep audit above and confirm zero stale hits
+1. Check that names and types still say what the code does, and that no comments were added
+2. Verify examples in docs still work with changes
+3. If any version changed, run the grep audit above and confirm zero stale hits
 
 **Out-of-date documentation is worse than no documentation.**
 
@@ -139,7 +129,8 @@ All of these silence the compiler instead of proving correctness:
 - Never add a database driver package — the backend is SQLite through system `libsqlite3` FFI
 - Never use axios, got, or similar — native `fetch` only
 - Never use Tailwind (`tailwindcss`, `@tailwindcss/vite`), PostCSS, autoprefixer, or `tailwind.config.js` (lint: `no-banned-build-tooling`)
-- ESLint is used only to run the local guardrails plugin (`guardrails/eslint-plugin`, see **Guardrails** below) — never add third-party rule packs or shareable configs, and never the `globals` package
+- oxlint is the only linter, and it runs only the local guardrails plugin (`guardrails/eslint-plugin`, loaded through `jsPlugins`, see **Guardrails** below) plus four core rules — never add ESLint, its parsers, third-party rule packs, shareable configs or other `jsPlugins`, and never the `globals` package (lint: `no-eslint-or-playwright`, `no-globals-package`)
+- Runtime verify drives the `agent-browser` CLI — never add Playwright, Puppeteer or another browser driver, and never download Playwright's browsers (lint: `no-eslint-or-playwright`)
 - Minimize external packages — use built-in/native solutions when possible
 
 ### Guardrails
@@ -147,20 +138,22 @@ All of these silence the compiler instead of proving correctness:
 Every written "never / don't" rule an agent keeps breaking becomes a machine check whose error message teaches the root cause and the fix. The rules in this file are the spec; `npm run lint` enforces the ones a single file's AST or filename can prove.
 
 ```bash
-npm run guardrails:install   # once: installs ESLint + the TS parser into guardrails/ (nested, pinned)
-npm run lint                 # run all guardrails over src/, scripts/, vite.*, guardrails/
-npm run test:guardrails      # RuleTester suites for every rule (node --test)
+mise use -g npm:oxlint npm:agent-browser   # once per machine: the two global CLIs
+npm run guardrails:install   # once: installs dependency-cruiser (+ TypeScript 5) into guardrails/ (nested, pinned)
+npm run lint                 # oxlint: all guardrails over src/, scripts/, vite.*, guardrails/
+npm run test:guardrails      # node --test: every rule's valid/invalid cases, each linted by the real oxlint
 npm run depcruise            # dependency-cruiser over the whole import graph
-npm run verify               # Playwright flows against the running app, screenshots to verify-artifacts/
+npm run verify               # agent-browser flows against the running app, screenshots to verify-artifacts/
 ```
 
-- **Where:** `guardrails/eslint-plugin/` — zero-dependency ES modules, one file per rule in `rules/` with a `<rule>.test.js` next to it. `eslint.config.js` at the root wires `skateboard/base` (every file) and `skateboard/app` (React/UI rules, `src/` only).
-- **Why nested:** the root keeps TypeScript 7 (no JS API); ESLint, `@typescript-eslint/parser` (TypeScript 5), dependency-cruiser and `@playwright/test` live in `guardrails/package.json`. Do not add them to the root.
-- **Adding a rule:** when you write a new "never" rule here or in `skills/skateboard/rules/*.md`, add a lint rule for it if it is checkable from one file. Every message must say what was found, `Why:` the repo forbids it, and `Fix:` with the exact skateboard-ui export or pattern (the test harness asserts this). Register it in `guardrails/eslint-plugin/index.js` and the updater ALLOWLIST (`scripts/update-skateboard.js` `GUARDRAIL_RULES`).
-- **Disabling:** only with `// eslint-disable-next-line skateboard/<rule> -- <reason>`; unused disables fail lint.
+- **Linter:** oxlint (a global CLI) is the only linter. `.oxlintrc.json` at the root loads the plugin through `jsPlugins`, turns oxlint's own categories off (`plugins: []`, `correctness: off`), enables the four core rules (`no-var`, `prefer-const`, `object-shorthand`, `prefer-template`), and splits the plugin's rules into two `overrides`: base rules on every linted file, app (React/UI) rules on `src/` only. It also fails on warnings and on unused disable directives. `guardrails/eslint-plugin/index.test.js` asserts the overrides list exactly the plugin's `BASE_RULES` and `APP_RULES`.
+- **Where:** `guardrails/eslint-plugin/` — zero-dependency ES modules written against the ESLint rule API that oxlint's `jsPlugins` implement (the directory keeps that name; ESLint itself is not installed), one file per rule in `rules/` with a `<rule>.test.js` next to it. `lib/ruleTester.js` runs each test case through the real `oxlint` binary on a fixture file in a temp dir (with the case's `filename` and `options`) and checks every message by `messageId` and `data`.
+- **Why nested:** the root keeps TypeScript 7 (no JS API); dependency-cruiser and the TypeScript 5 compiler API it reads `.ts` imports with live in `guardrails/package.json`. Do not add them to the root. oxlint and agent-browser are global CLIs; CI installs pinned versions with `npm install -g`.
+- **Adding a rule:** when you write a new "never" rule here or in `skills/skateboard/rules/*.md`, add a lint rule for it if it is checkable from one file. Every message must say what was found, `Why:` the repo forbids it, and `Fix:` with the exact skateboard-ui export or pattern (the test harness asserts this). Register it in `guardrails/eslint-plugin/index.js`, enable it in the matching `.oxlintrc.json` override, and add it to the updater ALLOWLIST (`scripts/update-skateboard.js` `GUARDRAIL_RULES`). A rule that takes options must declare a `schema` (oxlint refuses options otherwise).
+- **Disabling:** only with `// oxlint-disable-next-line skateboard/<rule> -- <reason>` (oxlint also honors `eslint-disable-*`); unused disables fail lint.
 - **Layers:** `guardrails/eslint-plugin/layers.js` is the layer table (`ui` = src/components, `app` = rest of src/, `server` = backend/, `tooling` = scripts/, `build` = vite.*, `guardrails`) and the allowed import edges. `skateboard/layer-boundaries` enforces it per file, and `.dependency-cruiser.js` generates its layer rules from the same table (never hand-copy a layer into either).
 - **Boundaries (`npm run depcruise`):** dependency-cruiser resolves every import on disk, so it proves what one file cannot: the layer table across the graph, no circular dependencies, no orphan modules, no devDependencies or Node builtins in `src/`, no packages missing from `package.json`, no unresolvable imports (including deep paths a package's `exports` map does not expose), no relative paths into `node_modules/`, no imports of test files. Each rule's `comment` states the root cause and the fix. Needs `npm ci` and `npm run guardrails:install` first.
-- **Runtime verify (`npm run verify`):** `guardrails/verify/verify.e2e.js` drives Chromium through landing, guest entry, sign up, the main view, sidebar, command menu, settings, sign out, sign in, a legal page and the 404, against the real Vite dev server (:5173) and the real Rust backend (`cargo run` on :8000, throwaway SQLite under `verify-artifacts/`; nothing is mocked). It fails on uncaught exceptions and unexpected console errors and saves full-page screenshots to `verify-artifacts/screenshots/` (gitignored). First run: `cd guardrails && npx --no-install playwright install chromium`. Ports 5173 and 8000 must be free. Playwright is the browser driver for these flows only; unit tests stay on `node --test`, so flow files are named `*.e2e.js`, never `*.test.js` / `*.spec.js`. When you change a view the flows assert, update the flow in the same change.
+- **Runtime verify (`npm run verify`):** `guardrails/verify/verify.e2e.js` (run by `node --test`) drives the `agent-browser` CLI through landing, guest entry, sign up, the main view, sidebar, command menu, settings, sign out, sign in, a legal page and the 404, against the real Vite dev server (:5173) and the real Rust backend (`cargo run` on :8000, throwaway SQLite under `verify-artifacts/`; nothing is mocked). Elements are found in agent-browser's accessibility snapshot by role and name (`guardrails/verify/browser.js`), the way a screen reader sees them. It fails on uncaught exceptions, console errors and unexpected failed requests (HTTP 4xx/5xx), and saves full-page screenshots to `verify-artifacts/screenshots/` (gitignored). agent-browser launches its own headless Chrome or Chromium in a private session (`--session skateboard-verify-<pid>`, config `verify-artifacts/agent-browser.json`, so a personal agent-browser config that attaches to a running browser is not used); set `AGENT_BROWSER_EXECUTABLE_PATH` if it cannot find one. Ports 5173 and 8000 must be free. Unit tests stay on `node --test` too, so flow files are named `*.e2e.js`, never `*.test.js` / `*.spec.js`. When you change a view the flows assert, update the flow in the same change.
 - **CI:** `.github/workflows/ci.yml` job `guardrails` runs lint, rule tests and depcruise; `.github/workflows/verify.yml` runs the flows on every pull request, uploads the screenshots, and keeps one PR comment linking them.
 
 **Written rules that are NOT linted (and why):**
@@ -168,6 +161,8 @@ npm run verify               # Playwright flows against the running app, screens
 | Rule | Why not linted |
 |---|---|
 | Never disable/loosen `strict` in tsconfig; `@types` dev-only; `vite --force` in scripts; dependency pins in docs; version/`skateboardVersion` sync | Not JS/TS source (JSON, Markdown). `npm run typecheck` and `scripts/version-consistency.test.js` cover the version parts |
+| No comments in code, doc comments included | Applies to new and edited lines; existing comments go when their code is edited. A whole-file rule would fail every app that still carries the JSDoc the removed `require-jsdoc-on-exports` rule demanded. Review |
+| oxlint and agent-browser stay global CLIs, not `package.json` dependencies | `package.json` is JSON; review (`no-eslint-or-playwright` covers the tools they replaced) |
 | Backend rules (zero crates, no `cargo add`, never hand-roll TLS, scrypt/JWT) | Rust — `cargo test`, review |
 | Optional chaining / nullish coalescing, prefer destructuring, array methods over loops, default params | "Prefer" style calls; the useful versions need type information |
 | Boolean names prefixed `is`/`has`/`should` | Needs type information to know a value is boolean |
@@ -466,10 +461,10 @@ skateboard/
 │   ├── databases/       # SQLite database files
 │   └── config.json      # Backend config with database settings
 ├── guardrails/
-│   ├── eslint-plugin/   # Local lint rules (one per written "never" rule)
-│   ├── verify/          # Playwright flows for `npm run verify`
-│   └── package.json     # Nested: ESLint, TS parser, dependency-cruiser, Playwright (not root deps)
-├── eslint.config.js     # Wires the guardrails plugin
+│   ├── eslint-plugin/   # Local lint rules for oxlint jsPlugins (one per written "never" rule)
+│   ├── verify/          # agent-browser flows for `npm run verify`
+│   └── package.json     # Nested: dependency-cruiser + TypeScript 5 (not root deps)
+├── .oxlintrc.json       # oxlint: loads the guardrails plugin, base/app overrides
 ├── .dependency-cruiser.js  # Import-graph boundaries, generated from the layer table
 ├── package.json         # Dependencies (includes skateboard-ui)
 ├── tsconfig.json        # Frontend TypeScript config (strict)
@@ -709,7 +704,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.22.0
+- skateboard@5.23.0
 - skateboard-ui@5.19.0
 
 ## Migrating 4.x → 5.0 (exact checklist)
@@ -833,7 +828,7 @@ a version in `package.json`:
 - `backend/src/*` - Rust server
 - `vite.config.ts` - Build configuration
 - `src/assets/styles.css` - Theme variables (merge carefully)
-- `eslint.config.js`, `.dependency-cruiser.js`, `guardrails/` - Lint, boundary and runtime-verify guardrails (template-owned; `guardrails/verify/verify.e2e.js` asserts the template's views, so expect to merge it with your app's flows)
+- `.oxlintrc.json`, `.dependency-cruiser.js`, `guardrails/` - Lint, boundary and runtime-verify guardrails (template-owned; `guardrails/verify/verify.e2e.js` asserts the template's views, so expect to merge it with your app's flows)
 
 ### Never Auto-Update (app-specific)
 - `constants.json` - App configuration

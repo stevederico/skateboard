@@ -1,6 +1,6 @@
 name: Verify
-# Runtime verification: boots the Vite frontend and the Rust backend, clicks through the
-# main flows in Chromium (guardrails/verify/verify.e2e.js) and uploads the screenshots.
+# Runtime verification: boots the Vite frontend and the Rust backend, drives agent-browser
+# through the main flows (guardrails/verify/verify.e2e.js) and uploads the screenshots.
 on:
   pull_request:
   workflow_dispatch:
@@ -27,24 +27,22 @@ jobs:
       - name: System libraries for zero-crate backend
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev libcurl4-openssl-dev pkg-config
       - run: npm ci
-      - run: npm run guardrails:install
-      # --no-install: use the Playwright pinned in guardrails/package-lock.json, never a
-      # fresh download of whatever is latest.
-      - name: Install Chromium
-        working-directory: guardrails
-        run: npx --no-install playwright install --with-deps chromium
+      # agent-browser is a global CLI, not a project dependency; CI pins the version it was
+      # proven on and points it at the runner's preinstalled Google Chrome (no browser download).
+      - name: Install agent-browser
+        run: npm install -g --no-audit --no-fund agent-browser@0.43.0
       # Compile ahead of the run so the build is not charged to the server boot timeout.
       - run: cargo build --manifest-path backend/Cargo.toml --locked
       - run: npm run verify
-      - name: Upload screenshots and traces
+        env:
+          AGENT_BROWSER_EXECUTABLE_PATH: /usr/bin/google-chrome
+      - name: Upload screenshots
         id: upload
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: verify-screenshots
-          path: |
-            verify-artifacts/screenshots
-            verify-artifacts/playwright
+          path: verify-artifacts/screenshots
           if-no-files-found: warn
           retention-days: 14
 

@@ -1,4 +1,3 @@
-import parser from '@typescript-eslint/parser';
 import banTsComment from './rules/ban-ts-comment.js';
 import clickableElementNeedsKeyboard from './rules/clickable-element-needs-keyboard.js';
 import compoundComponentStructure from './rules/compound-component-structure.js';
@@ -25,6 +24,7 @@ import noDeepPackageImports from './rules/no-deep-package-imports.js';
 import noDirectReactRouter from './rules/no-direct-react-router.js';
 import noDotenv from './rules/no-dotenv.js';
 import noEmojiIcons from './rules/no-emoji-icons.js';
+import noEslintOrPlaywright from './rules/no-eslint-or-playwright.js';
 import noEmptyCatch from './rules/no-empty-catch.js';
 import noExplicitAny from './rules/no-explicit-any.js';
 import noFetchInEffect from './rules/no-fetch-in-effect.js';
@@ -49,7 +49,6 @@ import noTransitionAll from './rules/no-transition-all.js';
 import noTypeAssertion from './rules/no-type-assertion.js';
 import noUnknownClasses from './rules/no-unknown-classes.js';
 import preferSizeUtility from './rules/prefer-size-utility.js';
-import requireJsdocOnExports from './rules/require-jsdoc-on-exports.js';
 import suspenseSkeletonFallback from './rules/suspense-skeleton-fallback.js';
 import testFileNaming from './rules/test-file-naming.js';
 import useListDataStates from './rules/use-list-data-states.js';
@@ -66,6 +65,7 @@ const BASE_RULES = {
   'no-dotenv': noDotenv,
   'no-third-party-http-clients': noThirdPartyHttpClients,
   'no-banned-build-tooling': noBannedBuildTooling,
+  'no-eslint-or-playwright': noEslintOrPlaywright,
   'no-globals-package': noGlobalsPackage,
   'no-database-drivers': noDatabaseDrivers,
   'no-foreign-test-frameworks': noForeignTestFrameworks,
@@ -80,7 +80,6 @@ const BASE_RULES = {
   'no-focused-or-skipped-tests': noFocusedOrSkippedTests,
   'test-file-naming': testFileNaming,
   'import-order': importOrder,
-  'require-jsdoc-on-exports': requireJsdocOnExports,
 };
 
 const APP_RULES = {
@@ -123,26 +122,10 @@ const CORE_RULES = {
   'prefer-template': 'error',
 };
 
-const asErrors = (rules) => Object.fromEntries(Object.keys(rules).map((name) => [`${NAMESPACE}/${name}`, 'error']));
-
 const plugin = {
   meta: { name: 'eslint-plugin-skateboard', version: '1.0.0', namespace: NAMESPACE },
   rules: { ...BASE_RULES, ...APP_RULES },
-  configs: {},
 };
 
-plugin.configs = {
-  base: {
-    name: 'skateboard/base',
-    plugins: { [NAMESPACE]: plugin },
-    rules: { ...CORE_RULES, ...asErrors(BASE_RULES) },
-  },
-  app: {
-    name: 'skateboard/app',
-    plugins: { [NAMESPACE]: plugin },
-    rules: asErrors(APP_RULES),
-  },
-};
-
-export { parser, BASE_RULES, APP_RULES, CORE_RULES };
+export { NAMESPACE, BASE_RULES, APP_RULES, CORE_RULES };
 export default plugin;

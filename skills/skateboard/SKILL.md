@@ -8,7 +8,7 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.22.0"
+  version: "5.23.0"
   skateboard-ui: "5.19.0"
   sources:
     - https://github.com/stevederico/skateboard
@@ -21,7 +21,7 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.22.0** | App scaffold (copied into new repos) |
+| **skateboard** (boilerplate) | **5.23.0** | App scaffold (copied into new repos) |
 | **@stevederico/skateboard-ui** | **5.19.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
@@ -77,8 +77,8 @@ my-app/
 │   ├── Cargo.toml           # empty [dependencies]
 │   ├── config.json
 │   └── databases/           # local SQLite files (not for Docker secrets)
-├── guardrails/              # local ESLint plugin, Playwright flows (verify/), nested tool install
-├── eslint.config.js
+├── guardrails/              # local oxlint rule plugin, agent-browser flows (verify/), nested dependency-cruiser
+├── .oxlintrc.json
 ├── .dependency-cruiser.js   # import-graph boundaries (npm run depcruise)
 ├── package.json             # skateboardVersion + pin skateboard-ui exact
 └── vite.config.ts
@@ -371,7 +371,7 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 | Feature icons empty | `constants.features.items[].icon` must be **Lucide names** (`lock`, `credit-card`), not emoji |
 | `skateboard-ui/icons` or `DynamicIcon` import fails | ui **5.0–5.13.0** have no `./icons` entry; bump ui to 5.13.1+ and re-export from `src/icons.ts` (`export { X } from '@stevederico/skateboard-ui/icons'`). DynamicIcon stays gone |
 | `lucide-react` import fails / lint `icons-through-funnel` | ui 5.13+ vendors the icons; skateboard 5.17.0 drops `lucide-react`. Change the funnel source to `@stevederico/skateboard-ui/icons` |
-| `npm run lint` fails after an upgrade | Run `npm run guardrails:install` first; each message says what to change (e.g. re-export icons from `@stevederico/skateboard-ui/icons` in `src/icons.ts`) |
+| `npm run lint` fails after an upgrade | `oxlint: not found`: install the global CLIs once (`mise use -g npm:oxlint npm:agent-browser`). Otherwise each message says what to change (e.g. re-export icons from `@stevederico/skateboard-ui/icons` in `src/icons.ts`) |
 | Landing header CTA short | Button `size="default"` next to icon ThemeToggle (not `sm`) |
 | Updater `.js` conflict missed | `git grep` conflict markers in **all** extensions |
 | Empty `STRIPE_ENDPOINT_SECRET=` in `.env.example` | Can poison tests that load example into `process.env` |
@@ -396,4 +396,4 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 4. Never commit secrets; never ship `.env` via symlink/Docker context
 5. Teach **TS** frontend paths (`main.tsx`) and **Rust** backend (`backend/src/`)
 6. **Upgrades:** two channels — UI npm + `update-skateboard.js` for vendored backend; never bump the version label alone
-7. **Guardrails:** `npm run guardrails:install` once, then `npm run lint` and `npm run depcruise` before finishing; every message says why and the exact fix. After a UI or auth change run `npm run verify` and update `guardrails/verify/verify.e2e.js` if a view it asserts changed (AGENTS.md → Guardrails)
+7. **Guardrails:** `oxlint` and `agent-browser` are global CLIs; `npm run guardrails:install` once, then `npm run lint` (oxlint) and `npm run depcruise` before finishing; every message says why and the exact fix. After a UI or auth change run `npm run verify` and update `guardrails/verify/verify.e2e.js` if a view it asserts changed (AGENTS.md → Guardrails)

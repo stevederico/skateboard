@@ -127,7 +127,7 @@ export default {
       name: 'no-import-of-test-file',
       severity: 'error',
       comment:
-        'Found a non-test module importing a test file. Why: test files run assertions on import and pull in node:test or Playwright, so shipping or tool code that imports one executes tests at runtime. ' +
+        'Found a non-test module importing a test file. Why: test files run assertions on import and pull in node:test or start the app and a browser, so shipping or tool code that imports one executes tests at runtime. ' +
         'Fix: move the shared helper out of the test file into a plain module next to it and import that from both.',
       from: { pathNot: TEST_FILES },
       to: { path: TEST_FILES },
