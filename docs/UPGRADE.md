@@ -41,6 +41,8 @@ hooksPath keeps running; the updater offers the new script and says which hooks
 will run. An app that already has a local `core.hooksPath` from the old
 postinstall keeps it until you run `git config --unset core.hooksPath`.
 
+**5.28.0 — generic smoke verify.** `guardrails/verify/smoke.e2e.js` (synced) opens every page in `src/constants.json` `pages`, plus landing, settings, terms and 404, and fails on uncaught exceptions, console errors or unexpected failed requests. `npm run verify` now runs `guardrails/verify/*.e2e.js`. The updater no longer syncs `verify.e2e.js`: delete the template's copy from an app unless you rewrote it for the app's own pages.
+
 **5.23.0 — oxlint replaces ESLint, agent-browser replaces Playwright, no JSDoc rule.**
 No runtime change. Install the two global CLIs once per machine:
 `mise use -g npm:oxlint npm:agent-browser` (or `npm install -g oxlint agent-browser`);

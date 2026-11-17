@@ -41,7 +41,10 @@ describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
     const missing = ['eslint-plugin', 'verify']
       .flatMap(dir => walkRepo(join(REPO, 'guardrails', dir)))
       .filter(f => !f.endsWith('.DS_Store'))
+      .filter(f => f !== 'guardrails/verify/verify.e2e.js')
       .filter(f => !ALLOWLIST.includes(f));
+    assert.ok(!ALLOWLIST.includes('guardrails/verify/verify.e2e.js'), 'verify.e2e.js asserts template views; apps own theirs');
+    assert.ok(ALLOWLIST.includes('guardrails/verify/smoke.e2e.js'), 'smoke.e2e.js must be synced');
     assert.deepEqual(missing, [], `guardrails files missing from ALLOWLIST: ${missing.join(', ')}`);
     for (const f of ['.oxlintrc.json', '.dependency-cruiser.js', 'guardrails/package.json', 'guardrails/package-lock.json']) {
       assert.ok(ALLOWLIST.includes(f), `${f} must be synced`);

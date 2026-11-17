@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.28.0
+
+  Add smoke verify
+  Stop syncing flows
+
 5.27.0
 
   Add SKATEBOARD_FRONTEND_PORT

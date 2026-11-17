@@ -77,7 +77,7 @@ const ALLOWLIST = [
   'guardrails/verify/paths.js',
   'guardrails/verify/browser.js',
   'guardrails/verify/servers.js',
-  'guardrails/verify/verify.e2e.js',
+  'guardrails/verify/smoke.e2e.js',
   'guardrails/verify/ports.e2e.js',
   'guardrails/package.json',
   'guardrails/package-lock.json',
