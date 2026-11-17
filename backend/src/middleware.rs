@@ -1,25 +1,10 @@
-//! Cross-cutting request middleware: CORS, security headers, request logging.
-//!
-//! Each function reproduces the exact wire behavior of the Hono middleware it
-//! replaces (`hono/cors`, `hono/secure-headers`, and the Apache-format logger
-//! in `server.ts`), because the parity harness diffs real responses.
-
 use crate::config::{self, Logger};
 use crate::http::{Request, Response};
 use crate::json::Json;
 
-/// Methods advertised on a CORS preflight, in the order `server.ts` lists them.
 const ALLOW_METHODS: &str = "GET,POST,PUT,DELETE,OPTIONS";
-/// Request headers accepted cross-origin.
 const ALLOW_HEADERS: &str = "Content-Type,Authorization,x-csrf-token";
 
-/// Apply CORS response headers for a non-preflight request.
-///
-/// `Access-Control-Allow-Origin` is echoed only for an allow-listed origin; a
-/// disallowed origin still gets a normal response without that header, which
-/// is what `hono/cors` does (it never rejects with 403). Credentials are always
-/// advertised, and `Vary: Origin` is appended because the response varies by
-/// origin.
 pub fn apply_cors(res: Response, req: &Request, allowed: &[String]) -> Response {
     let mut out = res;
     if let Some(origin) = req.header("origin") {
@@ -31,11 +16,6 @@ pub fn apply_cors(res: Response, req: &Request, allowed: &[String]) -> Response 
     out.header("Vary", "Origin")
 }
 
-/// Build the 204 response for a CORS preflight.
-///
-/// `hono/cors` short-circuits `OPTIONS` before any later middleware runs, so
-/// the preflight carries **no** security headers and no body — replicated here
-/// deliberately.
 pub fn preflight(req: &Request, allowed: &[String]) -> Response {
     let mut res = Response::empty(204);
     if let Some(origin) = req.header("origin") {
@@ -50,10 +30,6 @@ pub fn preflight(req: &Request, allowed: &[String]) -> Response {
         .header("Vary", "Access-Control-Request-Headers")
 }
 
-/// Content-Security-Policy value assembled from the `server.ts` directive list.
-///
-/// Kept as one literal rather than rebuilt from a map: the directive order is
-/// part of the header bytes, and there is exactly one policy.
 const CSP: &str = "default-src 'self'; \
 script-src 'self'; \
 style-src 'self' 'unsafe-inline'; \
@@ -62,18 +38,10 @@ font-src 'self'; \
 connect-src 'self'; \
 frame-ancestors 'none'";
 
-/// Permissions-Policy value: every listed feature disabled.
 const PERMISSIONS_POLICY: &str = "camera=(), microphone=(), geolocation=(), payment=()";
 
-/// HSTS value used in production. Omitted entirely outside production, matching
-/// `strictTransportSecurity: false` in the dev branch of the Hono options.
 const HSTS: &str = "max-age=31536000; includeSubDomains; preload";
 
-/// Apply the security headers `hono/secure-headers` emits for this config.
-///
-/// Includes the Hono defaults the server does not override
-/// (`Cross-Origin-Resource-Policy`, `X-DNS-Prefetch-Control`, and friends), so
-/// the header set matches the Node server exactly.
 pub fn apply_secure_headers(res: Response, prod: bool) -> Response {
     let mut out = res
         .set_header("Cross-Origin-Resource-Policy", "same-origin")
@@ -93,11 +61,6 @@ pub fn apply_secure_headers(res: Response, prod: bool) -> Response {
         .set_header("Permissions-Policy", PERMISSIONS_POLICY)
 }
 
-/// Emit the Apache-style access log line the Node server writes to stdout.
-///
-/// Format: `[YYYY-MM-DD HH:MM:SS] "METHOD /path" STATUS (Nms)`. The timestamp
-/// is UTC with the milliseconds and trailing `Z` stripped, matching
-/// `toISOString().replace('T',' ').replace(/\.\d{3}Z$/,'')`.
 pub fn access_log(method: &str, path: &str, status: u16, duration_ms: i64) {
     let iso = config::iso_now();
     let stamp = iso.replacen('T', " ", 1);
@@ -105,10 +68,6 @@ pub fn access_log(method: &str, path: &str, status: u16, duration_ms: i64) {
     println!("[{stamp}] \"{method} {path}\" {status} ({duration_ms}ms)");
 }
 
-/// Log a received request at DEBUG outside production.
-///
-/// The Node middleware attaches a random request id; that id appears only in
-/// logs, never in a response, so a simple counter-free random suffix is used.
 pub fn dev_request_log(log: &Logger, req: &Request, prod: bool) {
     if prod {
         return;
@@ -123,14 +82,7 @@ pub fn dev_request_log(log: &Logger, req: &Request, prod: bool) {
     );
 }
 
-/// A short opaque id for correlating log lines.
-///
-/// Mirrors `Math.random().toString(36).substr(2, 9)` in shape (9 base-36
-/// characters). Log correlation only — never used for anything security
-/// relevant, so a cheap non-cryptographic source is fine.
 pub fn request_id() -> String {
-    // Cheap, allocation-free entropy from the clock plus the thread id; a
-    // collision only makes two log lines share a tag.
     let ns = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.subsec_nanos() as u64)
@@ -138,7 +90,6 @@ pub fn request_id() -> String {
     let mut x = ns ^ (std::thread::current().id().as_u64_fallback() << 32);
     let mut out = String::with_capacity(9);
     for _ in 0..9 {
-        // xorshift keeps successive characters from repeating.
         x ^= x << 13;
         x ^= x >> 7;
         x ^= x << 17;
@@ -148,14 +99,11 @@ pub fn request_id() -> String {
     out
 }
 
-/// Extension used to get a numeric value out of a `ThreadId` without the
-/// unstable `as_u64` accessor.
 trait ThreadIdFallback {
     fn as_u64_fallback(&self) -> u64;
 }
 
 impl ThreadIdFallback for std::thread::ThreadId {
-    /// Hash the `ThreadId` to a `u64`. Only used to salt a log correlation id.
     fn as_u64_fallback(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let mut h = std::collections::hash_map::DefaultHasher::new();

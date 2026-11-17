@@ -1,6 +1,5 @@
 import { classGroupVisitors } from '../lib/classStrings.js';
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

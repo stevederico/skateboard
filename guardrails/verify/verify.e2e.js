@@ -1,34 +1,15 @@
-/**
- * Runtime verification: clicks through the main flows of the running app (real Vite
- * frontend + real Rust backend, see playwright.config.js) and saves a full-page
- * screenshot of each step to verify-artifacts/screenshots/.
- *
- * Flows: landing, guest entry, sign up, main app view, sidebar navigation, command menu, settings,
- * sign out, sign in, legal page, 404. Run with `npm run verify`.
- */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { REPO, SCREENSHOTS } from './paths.js';
 
-/**
- * App config, read with fs: guardrails/ may not import src/ (see layers.js), and reading
- * it keeps the flows in step with the app's own names. View content asserted below
- * ("Total Revenue", the Analytics empty state) is the template's; an app that replaces
- * those views edits the matching assertions.
- */
 const constants = JSON.parse(readFileSync(path.join(REPO, 'src/constants.json'), 'utf8'));
-const PAGE_TITLES = constants.pages.map((/** @type {{ title: string }} */ item) => item.title);
+const PAGE_TITLES = constants.pages.map((item) => item.title);
 const HOME_TITLE = PAGE_TITLES[0];
 
-/** Same origin the browser uses in dev (src/constants.json `devBackendURL`). */
 const BACKEND_API = constants.devBackendURL;
 const USER = { name: 'Verify User', email: `verify-${Date.now()}@example.com`, password: 'verify-pass-1' };
 
-/**
- * Console errors the template is known to produce, with the reason each is tolerated.
- * Anything else fails the run.
- */
 const ALLOWED_CONSOLE_ERRORS = [
   // skateboard-ui probes GET /api/signup/options for an optional Turnstile site key; the
   // template backend does not serve it and the sign-up form treats 404 as "no widget".
@@ -39,27 +20,13 @@ const ALLOWED_CONSOLE_ERRORS = [
 
 test.describe.configure({ mode: 'serial' });
 
-/** @type {import('@playwright/test').Page} */
 let page;
-/** @type {string[]} Uncaught exceptions and unexpected console errors seen on the page. */
 const problems = [];
 
-/**
- * Save a full-page screenshot as verify-artifacts/screenshots/<name>.png.
- *
- * @param {string} name - File name without extension, e.g. `01-landing`
- * @returns {Promise<void>}
- */
 async function shot(name) {
   await page.screenshot({ path: path.join(SCREENSHOTS, `${name}.png`), fullPage: true, animations: 'disabled' });
 }
 
-/**
- * The auth overlay dialog (sign up / sign in) rendered by skateboard-ui.
- *
- * @param {'Sign Up' | 'Sign In'} mode - Dialog title
- * @returns {import('@playwright/test').Locator} Dialog locator
- */
 const authDialog = (mode) => page.getByRole('dialog', { name: mode });
 
 test.beforeAll(async ({ browser }) => {

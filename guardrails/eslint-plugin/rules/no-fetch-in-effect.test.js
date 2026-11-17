@@ -3,7 +3,6 @@ import { runRuleTests } from '../lib/ruleTester.js';
 
 runRuleTests('no-fetch-in-effect', rule, {
   valid: [
-    // CommandMenu: an effect that only subscribes to a DOM event.
     `useEffect(() => {
       function handleKeyDown(e) { if (e.key === 'k') setOpen((p) => !p); }
       document.addEventListener('keydown', handleKeyDown);
@@ -13,7 +12,6 @@ runRuleTests('no-fetch-in-effect', rule, {
     `async function handleSave() {
       try { await apiRequest('/deals', { method: 'POST', body: '{}' }); } catch (err) { console.error(err); }
     }`,
-    // A function that fetches but is only called from an event handler.
     `const load = async () => fetch('/x');
      useEffect(() => { document.title = 'Deals'; }, []);
      const handleClick = () => load();`,

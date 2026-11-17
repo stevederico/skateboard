@@ -1,16 +1,6 @@
-/** Helpers whose string arguments are Tailwind class lists. */
 export const CLASS_FUNCTIONS = new Set(['cn', 'clsx', 'cx', 'cva', 'twMerge', 'classNames', 'tv']);
 
-/** JSX attributes whose values are Tailwind class lists. */
 export const CLASS_ATTRIBUTES = new Set(['className', 'class']);
-
-/**
- * @typedef {object} ClassToken
- * @property {any} node - AST node holding the token (report target)
- * @property {string} raw - Token as written, e.g. `dark:hover:bg-white/50`
- * @property {string[]} variants - Variant prefixes, e.g. `['dark', 'hover']`
- * @property {string} utility - Utility without variants or `!`, e.g. `bg-white/50`
- */
 
 /**
  * Split a class token into variants and utility. Colons inside `[...]` / `(...)`

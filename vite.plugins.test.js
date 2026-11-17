@@ -22,8 +22,6 @@ const constantsWithHttp = {
 
 let constantsMode = 'without-http';
 
-// Inject the constants source instead of mocking node:fs — the reader closes over the
-// live `constantsMode`, so flipping it in beforeEach/it switches the fixture.
 __setConstantsReaderForTests(() =>
   JSON.stringify(constantsMode === 'with-http' ? constantsWithHttp : constantsWithoutHttp)
 );
@@ -187,12 +185,6 @@ describe('dev server generated files', () => {
     constantsMode = 'without-http';
   });
 
-  /**
-   * Run a plugin's dev middleware and capture the response it writes.
-   *
-   * @param plugin - Plugin exposing configureServer
-   * @returns Registered route, response content type, and body
-   */
   function callDevMiddleware(plugin) {
     let registered = null;
     plugin.configureServer({

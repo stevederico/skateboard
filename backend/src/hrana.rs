@@ -1,10 +1,3 @@
-//! Hrana `/v2/pipeline` client for a shared libSQL (`sqld`) server.
-//!
-//! Speaks HTTP with the system libcurl. No libsql crate. A session keeps a
-//! server baton across `BEGIN` … `COMMIT` so [`crate::db::Pool::transaction`]
-//! stays one connection. Statements outside a transaction are a single
-//! execute-and-close pipeline.
-
 use std::ffi::{c_char, c_int, c_long, c_void, CString};
 use std::sync::{Mutex, Once};
 
@@ -13,18 +6,14 @@ use crate::json::{self, Json};
 
 const PIPELINE_PATH: &str = "/v2/pipeline";
 
-/// One logical connection to a libSQL namespace.
 pub struct Session {
     url: String,
     namespace: String,
-    /// Stream token returned by the server while a transaction is open.
     baton: Mutex<Option<String>>,
-    /// One curl handle per session, so libcurl keeps the TCP connection alive.
     curl: Mutex<Option<EasyHandle>>,
 }
 
 impl Session {
-    /// `base_url` is the sqld HTTP origin, without a path.
     pub fn open(base_url: &str, namespace: &str) -> Session {
         let url = base_url.trim_end_matches('/').to_string() + PIPELINE_PATH;
         Session {
@@ -35,18 +24,15 @@ impl Session {
         }
     }
 
-    /// Run SQL that returns no rows the caller needs.
     pub fn exec(&self, sql: &str) -> Result<(), DbError> {
         self.execute(sql, &[])?;
         Ok(())
     }
 
-    /// Run a parameterized read.
     pub fn query(&self, sql: &str, params: &[Value]) -> Result<Vec<Row>, DbError> {
         Ok(self.execute(sql, params)?.rows)
     }
 
-    /// Run a parameterized write.
     pub fn run(&self, sql: &str, params: &[Value]) -> Result<Changes, DbError> {
         let outcome = self.execute(sql, params)?;
         Ok(Changes {
@@ -105,7 +91,6 @@ impl Session {
         let handle = slot.as_ref().expect("curl handle set above");
         let result = post_json(handle, &self.url, &self.namespace, body);
         if result.is_err() {
-            // A transport failure can leave the connection in any state.
             *slot = None;
         }
         result
@@ -361,8 +346,6 @@ fn post_json(
         .map_err(|_| DbError::remote("hrana response was not UTF-8".to_string()))
 }
 
-// ==== HTTP OVER SYSTEM libcurl ====
-
 struct HttpResponse {
     status: u16,
     body: Vec<u8>,
@@ -519,8 +502,6 @@ fn http_post(
 
     // SAFETY: handle is configured; buffers above stay alive through perform.
     let rc = unsafe { curl_easy_perform(handle.0) };
-    // The handle outlives this call. Drop its pointers to the header list,
-    // body, and sink before they are freed. Every call sets them again.
     // SAFETY: null is a valid value for all three options.
     unsafe {
         curl_easy_setopt(handle.0, CURLOPT_HTTPHEADER, std::ptr::null_mut::<CurlSlist>());
@@ -609,8 +590,6 @@ mod tests {
         assert_eq!(next_baton(Kind::Begin, false, Some(&ok), false).as_deref(), Some("b5"));
     }
 
-    /// A sqld stand-in that accepts each baton once, like the real server.
-    /// Any statement containing `FAIL` returns an error result.
     fn fake_sqld() -> String {
         use std::io::{BufRead, BufReader, Read, Write};
         use std::net::TcpListener;

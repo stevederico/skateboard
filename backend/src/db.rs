@@ -1,74 +1,38 @@
-//! SQLite storage layer: a safe wrapper over the system `libsqlite3`, a small
-//! connection pool, and the typed store API the server routes call.
-//!
-//! Zero-crate replacement for `backend/adapters/sqlite.ts`. SQLite is linked as
-//! a *system library* (`#[link(name = "sqlite3")]`), not a crate, so the
-//! dependency list stays empty. Every `unsafe` block lives in this file's FFI
-//! section and carries a `// SAFETY:` justification; the exported surface
-//! ([`Db`], [`Pool`], [`Row`], the store methods) is entirely safe.
-//!
-//! Behavioral parity with the Node adapter is deliberate and load-bearing —
-//! including its quirks. The two that bite hardest are documented at
-//! [`Pool::find_user`]: a stored `usage_reset_at` of `0` reads back as `None`
-//! (JS `||`), while a stored `subscription_expires` of `0` reads back as
-//! `Some(0)` (JS `??`).
-
 use std::ffi::{c_char, c_int, CStr, CString};
 use std::path::Path;
 use std::sync::{Condvar, Mutex, MutexGuard};
 
-// ==== FFI ====
-
-/// Raw bindings to the system `libsqlite3`.
-///
-/// Private: nothing here escapes the module, so the crate never sees a raw
-/// pointer or an `extern "C"` signature.
 mod ffi {
     use std::ffi::{c_char, c_double, c_int, c_void};
 
-    /// Opaque database connection handle (`sqlite3`).
     #[repr(C)]
     pub struct Sqlite3 {
         _private: [u8; 0],
     }
 
-    /// Opaque prepared statement handle (`sqlite3_stmt`).
     #[repr(C)]
     pub struct Sqlite3Stmt {
         _private: [u8; 0],
     }
 
-    /// `sqlite3_destructor_type` — how SQLite should release a bound buffer.
     pub type Destructor = Option<unsafe extern "C" fn(*mut c_void)>;
 
-    /// Row callback passed to `sqlite3_exec`. Always `None` here.
     pub type ExecCallback = Option<
         unsafe extern "C" fn(*mut c_void, c_int, *mut *mut c_char, *mut *mut c_char) -> c_int,
     >;
 
-    /// Success.
-    /// SQL error or missing database.
     pub const SQLITE_ERROR: c_int = 1;
     pub const SQLITE_OK: c_int = 0;
-    /// `sqlite3_step` produced a row.
     pub const SQLITE_ROW: c_int = 100;
-    /// `sqlite3_step` finished the statement.
     pub const SQLITE_DONE: c_int = 101;
-    /// Library used incorrectly — reused for this module's own precondition errors.
     pub const SQLITE_MISUSE: c_int = 21;
 
-    /// Open for reading and writing.
     pub const SQLITE_OPEN_READWRITE: c_int = 0x0000_0002;
-    /// Create the file if it does not exist.
     pub const SQLITE_OPEN_CREATE: c_int = 0x0000_0004;
-    /// Serialized threading mode — the connection guards itself with a mutex.
     pub const SQLITE_OPEN_FULLMUTEX: c_int = 0x0001_0000;
 
-    /// Column holds a 64-bit integer.
     pub const SQLITE_INTEGER: c_int = 1;
-    /// Column holds a double.
     pub const SQLITE_FLOAT: c_int = 2;
-    /// Column holds SQL NULL.
     pub const SQLITE_NULL: c_int = 5;
 
     /// `SQLITE_TRANSIENT` — tells SQLite to copy the bound buffer immediately.
@@ -135,18 +99,9 @@ mod ffi {
     }
 }
 
-// ==== SAFE WRAPPER ====
-
-/// A SQLite failure: the driver result code plus `sqlite3_errmsg` text.
-///
-/// `message` carries the driver text verbatim because callers pattern-match on
-/// it — the signup route in `server.ts` detects a duplicate account by testing
-/// for the substring `"UNIQUE constraint failed"`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DbError {
-    /// SQLite extended result code, or [`ffi::SQLITE_MISUSE`] for local precondition failures.
     pub code: i32,
-    /// Driver error text, suitable for substring matching.
     pub message: String,
 }
 
@@ -159,7 +114,6 @@ impl std::fmt::Display for DbError {
 impl std::error::Error for DbError {}
 
 impl DbError {
-    /// Build a local (non-driver) error, e.g. a bad path or a closed pool.
     pub(crate) fn local(message: impl Into<String>) -> DbError {
         DbError {
             code: ffi::SQLITE_MISUSE,
@@ -167,8 +121,6 @@ impl DbError {
         }
     }
 
-    /// Build an error from a remote Hrana response. `code` stays
-    /// [`ffi::SQLITE_ERROR`] so callers still match on `message`.
     pub(crate) fn remote(message: impl Into<String>) -> DbError {
         DbError {
             code: ffi::SQLITE_ERROR,
@@ -177,43 +129,24 @@ impl DbError {
     }
 }
 
-/// A single SQLite value, covering the four storage classes this schema uses.
-///
-/// BLOB is deliberately absent: no column in the ported schema stores one, and
-/// `sqlite3_column_text` coerces a stray blob to [`Value::Text`].
-/// // yagni: no Blob variant, add one if a binary column ever lands.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    /// SQL NULL.
     Null,
-    /// 64-bit integer.
     Int(i64),
-    /// Double.
     Real(f64),
-    /// UTF-8 text.
     Text(String),
 }
 
-/// One result row, holding `(column name, value)` pairs in column order.
-///
-/// Lookup is a linear scan; the widest table here has nine columns, so a map
-/// would cost more in allocation than it saves in comparisons.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
     cells: Vec<(String, Value)>,
 }
 
 impl Row {
-    /// Assemble a row from a remote result. Column order follows the server.
     pub(crate) fn from_cells(cells: Vec<(String, Value)>) -> Row {
         Row { cells }
     }
 
-    /// Borrow a column's value by name, or `None` when the column is absent.
-    ///
-    /// A column that exists but holds SQL NULL returns `Some(&Value::Null)` —
-    /// distinguishing "no such column" from "column is null" is what makes the
-    /// stale-schema migration check work.
     pub fn get(&self, col: &str) -> Option<&Value> {
         self.cells
             .iter()
@@ -221,7 +154,6 @@ impl Row {
             .map(|(_, value)| value)
     }
 
-    /// Borrow a column as `&str`. `None` unless the column exists and is text.
     pub fn text(&self, col: &str) -> Option<&str> {
         match self.get(col) {
             Some(Value::Text(s)) => Some(s),
@@ -229,7 +161,6 @@ impl Row {
         }
     }
 
-    /// Read a column as `i64`. `None` unless the column exists and is an integer.
     pub fn int(&self, col: &str) -> Option<i64> {
         match self.get(col) {
             Some(Value::Int(v)) => Some(*v),
@@ -238,23 +169,12 @@ impl Row {
     }
 }
 
-/// Rows affected and rowid produced by a write statement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Changes {
-    /// Rows inserted, updated, or deleted by the most recent statement.
     pub changes: i64,
-    /// Rowid of the most recent successful insert on this connection.
     pub last_insert_rowid: i64,
 }
 
-/// An open SQLite connection.
-///
-/// Opened with `SQLITE_OPEN_FULLMUTEX` (serialized threading mode), so the
-/// handle is safe to move between threads — which is what [`Pool`] does when it
-/// hands a connection to a worker. The pool still gives each caller exclusive
-/// use, so the serialization mutex is never actually contended; FULLMUTEX buys
-/// a sound `Send` impl rather than throughput.
-/// Where a connection's SQL goes: the local file, or a libSQL server over HTTP.
 enum Store {
     Local(*mut ffi::Sqlite3),
     Remote(crate::hrana::Session),
@@ -276,7 +196,6 @@ impl Drop for Db {
         // been closed before (Drop runs once). sqlite3_close_v2 tolerates
         // outstanding statements, and this type finalizes every statement it
         // prepares before returning, so none are outstanding.
-        // A remote session closes its Hrana baton in Session's Drop.
         if let Store::Local(handle) = &self.store {
             unsafe {
                 ffi::sqlite3_close_v2(*handle);
@@ -285,9 +204,7 @@ impl Drop for Db {
     }
 }
 
-/// A prepared statement, finalized on drop so early returns cannot leak it.
 struct Stmt<'a> {
-    /// Keeps the connection borrowed for the statement's lifetime.
     _db: &'a Db,
     ptr: *mut ffi::Sqlite3Stmt,
 }
@@ -303,14 +220,6 @@ impl Drop for Stmt<'_> {
 }
 
 impl Db {
-    /// Open (or create) the database file at `path`.
-    ///
-    /// Sets a 5 second busy timeout so concurrent writers retry instead of
-    /// failing immediately with `SQLITE_BUSY`.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] when the path contains an interior NUL byte or
-    /// SQLite cannot open the file.
     pub fn open(path: &str) -> Result<Db, DbError> {
         let filename = CString::new(path)
             .map_err(|_| DbError::local("database path contains an interior NUL byte"))?;
@@ -334,7 +243,6 @@ impl Db {
             store: Store::Local(handle),
         };
         if rc != ffi::SQLITE_OK {
-            // Read the message off the handle before `db` drops and closes it.
             return Err(db.last_error(rc));
         }
 
@@ -345,7 +253,6 @@ impl Db {
         Ok(db)
     }
 
-    /// Open a Hrana session against `base_url` and namespace `namespace`.
     pub fn open_remote(base_url: &str, namespace: &str) -> Db {
         Db {
             store: Store::Remote(crate::hrana::Session::open(base_url, namespace)),
@@ -361,10 +268,6 @@ impl Db {
         }
     }
 
-    /// Run one or more statements with no parameters and no result rows.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] carrying the driver message on failure.
     pub fn exec(&self, sql: &str) -> Result<(), DbError> {
         if let Store::Remote(session) = &self.store {
             return session.exec(sql);
@@ -391,10 +294,6 @@ impl Db {
         }
     }
 
-    /// Run a parameterized statement and collect every result row.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] when the statement fails to prepare, bind, or step.
     pub fn query(&self, sql: &str, params: &[Value]) -> Result<Vec<Row>, DbError> {
         if let Store::Remote(session) = &self.store {
             return session.query(sql, params);
@@ -428,11 +327,6 @@ impl Db {
         }
     }
 
-    /// Run a parameterized write statement and report the rows it touched.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] carrying the driver message — including
-    /// `"UNIQUE constraint failed: ..."`, which the signup route matches on.
     pub fn run(&self, sql: &str, params: &[Value]) -> Result<Changes, DbError> {
         if let Store::Remote(session) = &self.store {
             return session.run(sql, params);
@@ -461,7 +355,6 @@ impl Db {
         Ok(changes)
     }
 
-    /// Compile `sql` into a statement handle tied to this connection.
     fn prepare(&self, sql: &str) -> Result<Stmt<'_>, DbError> {
         let bytes = sql.as_bytes();
         let len = c_int::try_from(bytes.len())
@@ -489,8 +382,6 @@ impl Db {
         if ptr.is_null() {
             return Err(DbError::local("SQL text contained no statement"));
         }
-        // Built before the tail check so that returning early still finalizes
-        // the compiled statement, via this guard's `Drop`.
         let stmt = Stmt { _db: self, ptr };
         if has_trailing_statement(bytes, tail) {
             // `prepare_v2` compiles only the first statement and reports the
@@ -504,7 +395,6 @@ impl Db {
         Ok(stmt)
     }
 
-    /// Bind positional parameters (1-based) to a prepared statement.
     fn bind(&self, stmt: &Stmt<'_>, params: &[Value]) -> Result<(), DbError> {
         for (offset, param) in params.iter().enumerate() {
             let idx = c_int::try_from(offset + 1)
@@ -538,7 +428,6 @@ impl Db {
         Ok(())
     }
 
-    /// Build a [`DbError`] from the connection's current error state.
     fn last_error(&self, fallback: c_int) -> DbError {
         // SAFETY: `handle` is live. sqlite3_errmsg returns a NUL-terminated
         // UTF-8 string owned by SQLite and valid until the next call on this
@@ -563,7 +452,6 @@ impl Db {
     }
 }
 
-/// Read a result column's name, falling back to an empty string.
 fn column_name(stmt: &Stmt<'_>, idx: c_int) -> String {
     // SAFETY: `stmt.ptr` is live and `idx` is below sqlite3_column_count. The
     // returned string is owned by SQLite and valid while the statement lives;
@@ -578,7 +466,6 @@ fn column_name(stmt: &Stmt<'_>, idx: c_int) -> String {
     }
 }
 
-/// Read one column of the current row into an owned [`Value`].
 fn read_column(stmt: &Stmt<'_>, idx: c_int) -> Value {
     // SAFETY: `stmt.ptr` is live and positioned on a row (the caller only
     // reaches here after SQLITE_ROW); `idx` is below sqlite3_column_count.
@@ -604,32 +491,18 @@ fn read_column(stmt: &Stmt<'_>, idx: c_int) -> Value {
     }
 }
 
-// ==== POOL ====
-
-/// Milliseconds a blocked writer waits for the database lock before erroring.
 const BUSY_TIMEOUT_MS: c_int = 5000;
 
-/// Connections held by a [`Pool`], plus its shutdown flag.
 struct PoolState {
-    /// Connections currently available for checkout.
     idle: Vec<Db>,
-    /// Set by [`Pool::close_all`]; checkouts fail and returns are dropped.
     closed: bool,
 }
 
-/// A fixed-size pool of SQLite connections.
-///
-/// The Node adapter caches one `DatabaseSync` per database name and drives it
-/// from a single-threaded event loop. The Rust server is multi-threaded, so
-/// connections are pooled and checked out exclusively instead. WAL mode plus a
-/// 5 second busy timeout (see [`BUSY_TIMEOUT_MS`]) lets readers run while one
-/// writer holds the write lock.
 pub struct Pool {
     state: Mutex<PoolState>,
     available: Condvar,
 }
 
-/// A borrowed connection, returned to its pool on drop — including on panic.
 struct Checkout<'a> {
     pool: &'a Pool,
     db: Option<Db>,
@@ -642,9 +515,6 @@ impl Drop for Checkout<'_> {
         };
         let mut state = self.pool.lock();
         if state.closed {
-            // Pool shut down while this connection was out: close it instead of
-            // resurrecting it. Release the lock first so the close is not held
-            // under the pool mutex.
             drop(state);
             drop(db);
             return;
@@ -656,14 +526,6 @@ impl Drop for Checkout<'_> {
 }
 
 impl Pool {
-    /// Open `size` connections to `path`, apply the pragmas, and ensure the schema.
-    ///
-    /// Creates the parent directory when missing, matching the Node adapter's
-    /// `mkdir('./databases', { recursive: true })`. A `size` of 0 is treated as 1.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] if the directory cannot be created, a connection
-    /// cannot be opened, or the schema cannot be created or migrated.
     pub fn open(path: &str, size: usize) -> Result<Pool, DbError> {
         require_threadsafe_sqlite()?;
         if let Some(parent) = Path::new(path).parent() {
@@ -682,9 +544,6 @@ impl Pool {
         for index in 0..count {
             let db = Db::open(path)?;
             apply_pragmas(&db)?;
-            // The schema is shared state; creating it once is enough, and doing
-            // it on the first connection matches the Node adapter's
-            // create-on-first-open behavior.
             if index == 0 {
                 ensure_schema(&db)?;
             }
@@ -700,11 +559,6 @@ impl Pool {
         })
     }
 
-    /// Open `size` Hrana sessions to a libSQL server. The schema is created on
-    /// the first session. Journal pragmas are skipped: the server owns those.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] when the schema cannot be created.
     pub fn open_remote(base_url: &str, namespace: &str, size: usize) -> Result<Pool, DbError> {
         let count = size.max(1);
         let mut idle = Vec::with_capacity(count);
@@ -724,41 +578,14 @@ impl Pool {
         })
     }
 
-    /// Run `f` with a pooled connection, returning it afterwards.
-    ///
-    /// The connection goes back to the pool even if `f` returns an error or
-    /// panics (the guard's `Drop` does it).
-    ///
-    /// # Errors
-    /// Returns [`DbError`] if the pool is closed, or whatever `f` returns.
     pub fn with<T>(&self, f: impl FnOnce(&Db) -> Result<T, DbError>) -> Result<T, DbError> {
         let guard = self.checkout()?;
         match guard.db.as_ref() {
             Some(db) => f(db),
-            // Unreachable: `checkout` only returns a populated guard.
             None => Err(DbError::local("pooled connection was missing")),
         }
     }
 
-    /// Run `f` inside a single `BEGIN IMMEDIATE` transaction.
-    ///
-    /// Every statement `f` issues must go through the `&Db` it is handed.
-    /// Calling a [`Pool`] method inside `f` would check out a *second*
-    /// connection, whose writes are not part of this transaction and which can
-    /// deadlock against it on the write lock — so use the `*_tx` helpers.
-    ///
-    /// `IMMEDIATE` takes the write lock up front instead of upgrading partway
-    /// through, which is what makes a read-then-write pair safe: a deferred
-    /// transaction can have its read invalidated by another writer and fail at
-    /// upgrade time with `SQLITE_BUSY` instead of waiting.
-    ///
-    /// The transaction is rolled back if `f` returns an error, if the commit
-    /// fails, or if `f` panics — a connection is never returned to the pool
-    /// with a transaction still open.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] if the pool is closed, the transaction cannot be
-    /// started or committed, or whatever `f` returns.
     pub fn transaction<T>(&self, f: impl FnOnce(&Db) -> Result<T, DbError>) -> Result<T, DbError> {
         self.with(|db| {
             db.exec("BEGIN IMMEDIATE")?;
@@ -773,10 +600,6 @@ impl Pool {
         })
     }
 
-    /// Close every idle connection and reject further checkouts.
-    ///
-    /// Connections currently checked out are closed when their caller returns
-    /// them. Waiting threads are woken so none block forever.
     pub fn close_all(&self) {
         let mut state = self.lock();
         state.closed = true;
@@ -786,7 +609,6 @@ impl Pool {
         self.available.notify_all();
     }
 
-    /// Take a connection, blocking until one is free.
     fn checkout(&self) -> Result<Checkout<'_>, DbError> {
         let mut state = self.lock();
         loop {
@@ -806,11 +628,6 @@ impl Pool {
         }
     }
 
-    /// Lock the pool state, recovering from poisoning.
-    ///
-    /// A panic inside a `with` closure must not brick the pool: the state is a
-    /// plain `Vec` of handles with no invariant a panic can break, so the
-    /// poison flag is cleared rather than propagated.
     fn lock(&self) -> MutexGuard<'_, PoolState> {
         self.state
             .lock()
@@ -824,12 +641,6 @@ impl Drop for Pool {
     }
 }
 
-/// Rolls back an open transaction unless it was committed.
-///
-/// Exists for the panic path: an early `return` can be handled by ordinary
-/// control flow, but an unwind through [`Pool::transaction`] would otherwise
-/// hand a connection back to the pool mid-transaction, and the next caller to
-/// borrow it would silently join that transaction.
 struct TxGuard<'a> {
     db: &'a Db,
     committed: bool,
@@ -840,24 +651,12 @@ impl Drop for TxGuard<'_> {
         if self.committed {
             return;
         }
-        // Nothing useful can be done with a rollback failure here: the caller
-        // is already unwinding or returning an error. `Db::exec` logs nothing,
-        // so surface it rather than dropping it silently.
         if let Err(e) = self.db.exec("ROLLBACK") {
             eprintln!("warning: transaction rollback failed: {e}");
         }
     }
 }
 
-// ==== SCHEMA ====
-
-/// Per-connection pragmas, byte-identical to the Node adapter's.
-///
-/// `PRAGMA foreign_keys` is deliberately absent: the Node adapter never enables
-/// it, so SQLite leaves the `Auths.userID` foreign key declared-but-unenforced.
-/// Turning it on here would change behavior (signup rollback ordering, user
-/// deletion) relative to the Node backend.
-/// // yagni: FKs stay off for parity; enable in both backends together if ever wanted.
 const PRAGMAS: &[&str] = &[
     "PRAGMA journal_mode = WAL",
     "PRAGMA synchronous = NORMAL",
@@ -865,8 +664,6 @@ const PRAGMAS: &[&str] = &[
     "PRAGMA temp_store = memory",
 ];
 
-/// `CREATE TABLE IF NOT EXISTS` / index statements, ported verbatim from
-/// `ensureSQLiteSchema` in `backend/adapters/sqlite.ts`.
 const SCHEMA: &[&str] = &[
     "CREATE TABLE IF NOT EXISTS Users (
         _id TEXT PRIMARY KEY,
@@ -893,13 +690,11 @@ const SCHEMA: &[&str] = &[
       )",
 ];
 
-/// Unique indexes, created after any column migration so the target column exists.
 const INDEXES: &[&str] = &[
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON Users(email)",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_auths_email ON Auths(email)",
 ];
 
-/// Columns an older `Users` table may be missing, with their `ADD COLUMN` types.
 const USERS_COLUMNS: &[(&str, &str)] = &[
     ("subscription_stripeID", "TEXT"),
     ("subscription_expires", "INTEGER"),
@@ -909,23 +704,16 @@ const USERS_COLUMNS: &[(&str, &str)] = &[
     ("usage_reset_at", "INTEGER"),
 ];
 
-/// Columns an older `Auths` table may be missing.
-///
-/// `NOT NULL` needs a default for `ALTER TABLE ... ADD COLUMN` to be legal on a
-/// populated table; an empty string is the inert choice (a blank hash never
-/// verifies, a blank userID never resolves).
 const AUTHS_COLUMNS: &[(&str, &str)] = &[
     ("password", "TEXT NOT NULL DEFAULT ''"),
     ("userID", "TEXT NOT NULL DEFAULT ''"),
 ];
 
-/// Columns an older `WebhookEvents` table may be missing.
 const WEBHOOK_COLUMNS: &[(&str, &str)] = &[
     ("event_type", "TEXT NOT NULL DEFAULT ''"),
     ("processed_at", "INTEGER NOT NULL DEFAULT 0"),
 ];
 
-/// Apply the connection pragmas.
 fn apply_pragmas(db: &Db) -> Result<(), DbError> {
     for pragma in PRAGMAS {
         db.exec(pragma)?;
@@ -933,16 +721,6 @@ fn apply_pragmas(db: &Db) -> Result<(), DbError> {
     Ok(())
 }
 
-/// Create the schema, then repair a stale one.
-///
-/// `CREATE TABLE IF NOT EXISTS` is a no-op against an existing table, so a
-/// database created by an older build keeps its old, narrower columns and every
-/// query referencing a newer column fails at runtime. After the creates, each
-/// table is compared against its expected columns via `PRAGMA table_info` and
-/// the missing ones are added.
-/// Same as [`ensure_schema`], but a unique index that existing rows already
-/// violate (common in data imported from another store) is skipped instead of
-/// failing startup.
 fn ensure_schema_remote(db: &Db) -> Result<(), DbError> {
     for statement in SCHEMA {
         db.exec(statement)?;
@@ -973,11 +751,6 @@ fn ensure_schema(db: &Db) -> Result<(), DbError> {
     Ok(())
 }
 
-/// Add any of `columns` that `table` does not already have.
-///
-/// `table` and the column definitions are module constants, never caller input,
-/// so interpolating them into SQL introduces no injection surface — SQLite
-/// accepts no placeholder in a DDL identifier position anyway.
 fn add_missing_columns(db: &Db, table: &str, columns: &[(&str, &str)]) -> Result<(), DbError> {
     let existing: Vec<String> = db
         .query(&format!("PRAGMA table_info({table})"), &[])?
@@ -993,86 +766,51 @@ fn add_missing_columns(db: &Db, table: &str, columns: &[(&str, &str)]) -> Result
     Ok(())
 }
 
-// ==== STORE TYPES ====
-
-/// Stripe subscription state stored flat in `subscription_*` columns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Subscription {
-    /// Stripe customer ID (`cus_...`), stored in `subscription_stripeID`.
     pub stripe_id: String,
-    /// Unix seconds when the period ends; `None` when the column is NULL.
     pub expires: Option<i64>,
-    /// Stripe subscription status; empty string when the column is NULL.
     pub status: String,
-    /// Stripe subscription ID (`sub_...`) the other fields describe, stored in
-    /// `subscription_id`. `None` for rows written before the column existed.
     pub subscription_id: Option<String>,
 }
 
-/// Free-tier usage counter stored flat in `usage_*` columns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Usage {
-    /// Operations consumed in the current window.
     pub count: i64,
-    /// Unix seconds when the window resets. See [`Pool::find_user`] for the 0 quirk.
     pub reset_at: Option<i64>,
 }
 
-/// Application user as stored in `Users`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct User {
-    /// User ID (UUID v4), the `_id` column.
     pub id: String,
-    /// Normalized lowercase email (unique).
     pub email: String,
-    /// Display name.
     pub name: String,
-    /// Unix milliseconds of account creation.
     pub created_at: i64,
-    /// Subscription state, present only once Stripe has populated it.
     pub subscription: Option<Subscription>,
-    /// Usage counter; effectively always present on SQLite (see [`Pool::find_user`]).
     pub usage: Option<Usage>,
 }
 
-/// Credential record stored in `Auths`, keyed by email.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthRecord {
-    /// Normalized lowercase email (primary key).
     pub email: String,
-    /// Password hash: `scrypt$<n>$<r>$<p>$<salt>$<key>`, the older
-    /// parameterless `scrypt$<salt>$<key>`, or a legacy bcrypt string.
     pub password: String,
-    /// Owning user's id, the `userID` column.
     pub user_id: String,
 }
 
-/// Processed Stripe webhook event, recorded for idempotency.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebhookEvent {
-    /// Stripe event ID (`evt_...`, unique).
     pub event_id: String,
-    /// Stripe event type, e.g. `invoice.paid`.
     pub event_type: String,
-    /// Unix milliseconds when the event was recorded.
     pub processed_at: i64,
 }
 
-/// Selector for a user lookup or delete.
-///
-/// The Node adapter accepts `{}` and returns null / 0 rows for it; that empty
-/// case is simply unrepresentable here, so the check disappears rather than
-/// being ported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UserQuery {
-    /// Match on `_id`.
     Id(String),
-    /// Match on `email`.
     Email(String),
 }
 
 impl UserQuery {
-    /// The `WHERE` fragment and bound value for this selector.
     fn clause(&self) -> (&'static str, Value) {
         match self {
             UserQuery::Id(id) => ("_id = ?", Value::Text(id.clone())),
@@ -1081,25 +819,16 @@ impl UserQuery {
     }
 }
 
-/// Rebuild a [`User`] from a `SELECT *` row, nesting the flat columns.
-///
-/// Returns `None` when a required column is missing or has the wrong storage
-/// class, mirroring the `isUserRow` type guard in the Node adapter (which makes
-/// `findUser` return null rather than a half-built object).
 fn user_from_row(row: &Row) -> Option<User> {
     let id = row.text("_id")?.to_string();
     let email = row.text("email")?.to_string();
     let name = row.text("name")?.to_string();
     let created_at = row.int("created_at")?;
 
-    // JS: `if (result.subscription_stripeID)` — a NULL or empty-string stripe
-    // ID is falsy, so no subscription object is produced.
     let subscription = match row.get("subscription_stripeID") {
         Some(Value::Text(stripe_id)) if !stripe_id.is_empty() => Some(Subscription {
             stripe_id: stripe_id.clone(),
-            // JS: `?? null` — nullish, so a stored 0 survives as Some(0).
             expires: row.int("subscription_expires"),
-            // JS: `?? ''`.
             status: row.text("subscription_status").unwrap_or("").to_string(),
             subscription_id: row
                 .text("subscription_id")
@@ -1109,12 +838,8 @@ fn user_from_row(row: &Row) -> Option<User> {
         _ => None,
     };
 
-    // JS: `if (result.usage_count !== undefined)`. SELECT * always yields the
-    // column once the schema exists, so usage is effectively always present.
     let usage = row.get("usage_count").map(|_| Usage {
-        // JS: `usage_count || 0` — NULL and 0 both land on 0.
         count: row.int("usage_count").unwrap_or(0),
-        // JS: `usage_reset_at || null` — a stored 0 is falsy and becomes null.
         reset_at: row.int("usage_reset_at").filter(|v| *v != 0),
     });
 
@@ -1127,8 +852,6 @@ fn user_from_row(row: &Row) -> Option<User> {
         usage,
     })
 }
-
-// ==== STORE API ====
 
 /// Verify the linked libsqlite3 was built thread-safe.
 ///
@@ -1157,13 +880,6 @@ fn require_threadsafe_sqlite() -> Result<(), DbError> {
     Ok(())
 }
 
-/// Whether `tail` points at anything other than trailing whitespace and
-/// semicolons within `sql`.
-///
-/// `tail` comes from `sqlite3_prepare_v2` and points into `sql` just past the
-/// statement it compiled. A pointer outside `sql` is treated as "nothing left"
-/// rather than trusted, so a surprising value cannot produce an out-of-range
-/// slice.
 fn has_trailing_statement(sql: &[u8], tail: *const c_char) -> bool {
     if tail.is_null() {
         return false;
@@ -1180,15 +896,6 @@ fn has_trailing_statement(sql: &[u8], tail: *const c_char) -> bool {
         .any(|b| !b.is_ascii_whitespace() && *b != b';')
 }
 
-/// Insert a new user on an existing connection.
-///
-/// Only `_id`, `email`, `name`, `created_at` are written; the subscription and
-/// usage columns take their schema defaults, so the `subscription` / `usage`
-/// fields of `u` are ignored.
-///
-/// # Errors
-/// Returns [`DbError`] whose `message` contains `"UNIQUE constraint failed"`
-/// when the email is already registered.
 fn insert_user_tx(db: &Db, u: &User) -> Result<(), DbError> {
     db.run(
         "INSERT INTO Users (_id, email, name, created_at) VALUES (?, ?, ?, ?)",
@@ -1202,11 +909,6 @@ fn insert_user_tx(db: &Db, u: &User) -> Result<(), DbError> {
     Ok(())
 }
 
-/// Insert a credential record on an existing connection.
-///
-/// # Errors
-/// Returns [`DbError`] whose `message` contains `"UNIQUE constraint failed"`
-/// when the email already has credentials.
 fn insert_auth_tx(db: &Db, a: &AuthRecord) -> Result<(), DbError> {
     db.run(
         "INSERT INTO Auths (email, password, userID) VALUES (?, ?, ?)",
@@ -1220,18 +922,6 @@ fn insert_auth_tx(db: &Db, a: &AuthRecord) -> Result<(), DbError> {
 }
 
 impl Pool {
-    /// Find a user by id or email, nesting the flat columns into
-    /// [`Subscription`] / [`Usage`].
-    ///
-    /// Two JS truthiness quirks are reproduced exactly, because routes read
-    /// these values:
-    /// - `subscription` appears only when `subscription_stripeID` is a
-    ///   non-empty string.
-    /// - `usage.reset_at` of `0` reads back as `None` (JS `||`), while
-    ///   `subscription.expires` of `0` reads back as `Some(0)` (JS `??`).
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn find_user(&self, q: &UserQuery) -> Result<Option<User>, DbError> {
         let (clause, param) = q.clause();
         let sql = format!("SELECT * FROM Users WHERE {clause}");
@@ -1241,28 +931,10 @@ impl Pool {
         })
     }
 
-    /// Insert a new user.
-    ///
-    /// Only `_id`, `email`, `name`, `created_at` are written; the subscription
-    /// and usage columns take their schema defaults, matching `insertUser`. The
-    /// `subscription` / `usage` fields of `u` are therefore ignored.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] whose `message` contains
-    /// `"UNIQUE constraint failed"` when the email is already registered.
     pub fn insert_user(&self, u: &User) -> Result<(), DbError> {
         self.with(|db| insert_user_tx(db, u))
     }
 
-    /// Set a user's display name. Returns the number of rows modified.
-    ///
-    /// The Node adapter filters `$set` keys against an `ALLOWED_FIELDS`
-    /// whitelist to keep caller-supplied names out of the SQL. Here the typed
-    /// methods make that structural: no caller can name a column, so the
-    /// whitelist is enforced by the type system and has no runtime counterpart.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn update_user_set_name(&self, id: &str, name: &str) -> Result<u64, DbError> {
         self.with(|db| {
             let changes = db.run(
@@ -1273,10 +945,6 @@ impl Pool {
         })
     }
 
-    /// Replace a user's subscription columns. Returns the number of rows modified.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn update_user_subscription(&self, id: &str, sub: &Subscription) -> Result<u64, DbError> {
         self.with(|db| {
             let changes = db.run(
@@ -1298,10 +966,6 @@ impl Pool {
         })
     }
 
-    /// Replace a user's usage columns. Returns the number of rows modified.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn update_user_usage(&self, id: &str, usage: &Usage) -> Result<u64, DbError> {
         self.with(|db| {
             let changes = db.run(
@@ -1319,14 +983,6 @@ impl Pool {
         })
     }
 
-    /// Atomically add `delta` to a user's usage count.
-    ///
-    /// `COALESCE` matches the Node adapter's `$inc` SQL so a NULL counter
-    /// starts from 0. A negative `delta` is the rollback path: the usage route
-    /// increments before doing the work and decrements by 1 if it fails.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn increment_usage_count(&self, id: &str, delta: i64) -> Result<u64, DbError> {
         self.with(|db| {
             let changes = db.run(
@@ -1337,27 +993,6 @@ impl Pool {
         })
     }
 
-    /// Consume one unit of quota, but only if the user is below `limit`.
-    ///
-    /// The limit is enforced by the `WHERE` clause, so the check and the
-    /// increment are a single atomic statement. Incrementing first and
-    /// compensating afterwards cannot hold a limit under concurrency: two
-    /// requests can both read a count below the limit and both increment, and
-    /// the compensating decrements then race each other too.
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - User id.
-    /// * `limit` - Maximum number of units allowed in the current window.
-    ///
-    /// # Returns
-    ///
-    /// `Some(new_count)` if a unit was consumed, or `None` if the user is
-    /// already at or above `limit` — which is also what a missing user returns,
-    /// since neither case may proceed.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn consume_usage(&self, id: &str, limit: i64) -> Result<Option<i64>, DbError> {
         self.transaction(|db| {
             let changes = db.run(
@@ -1376,22 +1011,6 @@ impl Pool {
         })
     }
 
-    /// Start a fresh usage window and consume the first unit atomically.
-    ///
-    /// Resetting and then incrementing as two calls lets a concurrent request
-    /// land in between and have its increment erased by the reset.
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - User id.
-    /// * `reset_at` - When the new window expires, in seconds.
-    /// * `consume` - Whether to count this request against the new window.
-    ///
-    /// # Returns
-    /// The usage count after the reset: 1 when `consume`, otherwise 0.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn reset_usage_window(
         &self,
         id: &str,
@@ -1412,10 +1031,6 @@ impl Pool {
         })
     }
 
-    /// Delete a user by id or email. Returns the number of rows deleted.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn delete_user(&self, q: &UserQuery) -> Result<u64, DbError> {
         let (clause, param) = q.clause();
         let sql = format!("DELETE FROM Users WHERE {clause}");
@@ -1425,18 +1040,12 @@ impl Pool {
         })
     }
 
-    /// Find a credential record by email.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn find_auth(&self, email: &str) -> Result<Option<AuthRecord>, DbError> {
         self.with(|db| {
             let rows = db.query(
                 "SELECT * FROM Auths WHERE email = ?",
                 &[Value::Text(email.to_string())],
             )?;
-            // Mirrors the isAuthRecord guard: a row missing any required text
-            // column reads as "not found" rather than a partial record.
             Ok(rows.first().and_then(|row| {
                 Some(AuthRecord {
                     email: row.text("email")?.to_string(),
@@ -1447,27 +1056,10 @@ impl Pool {
         })
     }
 
-    /// Insert a credential record.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] whose `message` contains
-    /// `"UNIQUE constraint failed"` when the email already has credentials.
     pub fn insert_auth(&self, a: &AuthRecord) -> Result<(), DbError> {
         self.with(|db| insert_auth_tx(db, a))
     }
 
-    /// Create a user and their credential record as one unit.
-    ///
-    /// Signup writes two tables, and a half-written signup is unrecoverable
-    /// from the outside: a `Users` row with no `Auths` row can never be signed
-    /// in to, yet its email occupies the unique index, so the address cannot be
-    /// registered again. Doing both inserts in one transaction removes that
-    /// state, and with it the compensating delete the caller used to need.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] whose `message` contains
-    /// `"UNIQUE constraint failed"` when the email is already registered.
-    /// Nothing is written in that case.
     pub fn create_account(&self, u: &User, a: &AuthRecord) -> Result<(), DbError> {
         self.transaction(|db| {
             insert_user_tx(db, u)?;
@@ -1475,11 +1067,6 @@ impl Pool {
         })
     }
 
-    /// Replace a credential record's password hash (the lazy bcrypt-to-scrypt
-    /// rehash on signin). Returns the number of rows modified.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn update_auth_password(&self, email: &str, password: &str) -> Result<u64, DbError> {
         self.with(|db| {
             let changes = db.run(
@@ -1493,10 +1080,6 @@ impl Pool {
         })
     }
 
-    /// Idempotency lookup for a processed Stripe webhook event.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn find_webhook_event(&self, event_id: &str) -> Result<Option<WebhookEvent>, DbError> {
         self.with(|db| {
             let rows = db.query(
@@ -1513,11 +1096,6 @@ impl Pool {
         })
     }
 
-    /// Record a Stripe webhook event as processed.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] whose `message` contains
-    /// `"UNIQUE constraint failed"` when the event was already recorded.
     pub fn insert_webhook_event(
         &self,
         event_id: &str,
@@ -1537,13 +1115,6 @@ impl Pool {
         })
     }
 
-    /// Forget a webhook event so Stripe's retry is processed instead of skipped.
-    ///
-    /// Called when handling failed after the idempotency row was written;
-    /// without it the retry would be treated as a duplicate and the update lost.
-    ///
-    /// # Errors
-    /// Returns [`DbError`] on a driver failure.
     pub fn delete_webhook_event(&self, event_id: &str) -> Result<(), DbError> {
         self.with(|db| {
             db.run(
@@ -1554,14 +1125,6 @@ impl Pool {
         })
     }
 
-    /// Drop processed webhook records older than `cutoff_ms`.
-    ///
-    /// The table exists only to make Stripe redeliveries idempotent, and Stripe
-    /// stops retrying long before the retention window, so old rows are dead
-    /// weight that would otherwise grow without bound.
-    ///
-    /// @param cutoff_ms - Unix epoch milliseconds; rows processed before this are deleted
-    /// @returns Number of rows removed
     pub fn prune_webhook_events(&self, cutoff_ms: i64) -> Result<i64, DbError> {
         self.with(|db| {
             let changes = db.run(
@@ -1572,9 +1135,6 @@ impl Pool {
         })
     }
 
-    /// Verify the pool can serve a query, for the health endpoint.
-    ///
-    /// @returns `Ok(())` when a trivial `SELECT` round-trips
     pub fn ping(&self) -> Result<(), DbError> {
         self.with(|db| {
             db.query("SELECT 1", &[])?;
@@ -1589,10 +1149,8 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
 
-    /// Counter making each test's temp directory unique within the process.
     static SEQ: AtomicU64 = AtomicU64::new(0);
 
-    /// A throwaway directory holding one test database, removed on drop.
     struct TempDb {
         dir: std::path::PathBuf,
     }
@@ -1605,8 +1163,6 @@ mod tests {
             TempDb { dir }
         }
 
-        /// Path to the database file, inside a `databases` subdirectory that
-        /// does not exist yet — so every test also exercises directory creation.
         fn path(&self) -> String {
             self.dir
                 .join("databases")
@@ -1621,8 +1177,6 @@ mod tests {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
-
-    // --- statement compilation ---
 
     #[test]
     fn query_rejects_more_than_one_statement() {
@@ -1653,12 +1207,8 @@ mod tests {
 
     #[test]
     fn linked_sqlite_is_threadsafe() {
-        // The `Send` impl on `Db` is only sound against a thread-safe build, so
-        // this is a requirement on the environment, not a property of our code.
         require_threadsafe_sqlite().expect("libsqlite3 must be built thread-safe");
     }
-
-    // --- transactions ---
 
     #[test]
     fn transaction_commits_all_or_nothing() {
@@ -1691,8 +1241,6 @@ mod tests {
     #[test]
     fn transaction_leaves_no_open_transaction_after_a_panic() {
         let tmp = TempDb::new("tx-panic");
-        // A single connection, so the next operation is guaranteed to reuse the
-        // one the panic unwound through.
         let pool = Pool::open(&tmp.path(), 1).unwrap();
         let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             pool.transaction::<()>(|db| {
@@ -1705,8 +1253,6 @@ mod tests {
             pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_none(),
             "the panicking transaction must have been rolled back"
         );
-        // Proves the connection is usable and not still inside a transaction:
-        // a stray open transaction would make this BEGIN fail.
         pool.transaction(|db| insert_user_tx(db, &sample_user("u2", "b@example.com")))
             .expect("connection must be reusable after a panic");
         assert!(pool.find_user(&UserQuery::Id("u2".into())).unwrap().is_some());
@@ -1723,7 +1269,6 @@ mod tests {
         };
         pool.insert_auth(&auth).unwrap();
 
-        // The Auths insert now collides, so the Users insert must be undone.
         let err = pool
             .create_account(&sample_user("u1", "dup@example.com"), &auth)
             .expect_err("duplicate credentials must fail");
@@ -1733,8 +1278,6 @@ mod tests {
             "a failed signup must not leave a user row holding the email"
         );
     }
-
-    // --- usage accounting ---
 
     #[test]
     fn consume_usage_stops_at_the_limit() {
@@ -1860,8 +1403,6 @@ mod tests {
         std::fs::create_dir_all(std::path::Path::new(&path).parent().expect("has parent"))
             .expect("dir created");
 
-        // Simulate a database written by an older build: Users exists but stops
-        // at created_at, so CREATE TABLE IF NOT EXISTS will not repair it.
         {
             let db = Db::open(&path).expect("raw open");
             db.exec(
@@ -1897,7 +1438,6 @@ mod tests {
             assert!(cols.iter().any(|c| c == name), "missing column {name}");
         }
 
-        // The legacy row survives and reads back through the new columns.
         let user = pool
             .find_user(&UserQuery::Id("old-1".into()))
             .expect("find succeeds")
@@ -1949,7 +1489,6 @@ mod tests {
         let err = pool
             .insert_user(&sample_user("u2", "dupe@example.com"))
             .expect_err("second insert fails");
-        // The signup route detects a duplicate account by this exact substring.
         assert!(
             err.message.contains("UNIQUE constraint failed"),
             "unexpected message: {}",
@@ -2010,7 +1549,6 @@ mod tests {
             .find_user(&UserQuery::Id("u1".into()))
             .expect("find succeeds")
             .expect("user found");
-        // JS `?? null` is nullish, not falsy — 0 is kept.
         assert_eq!(
             user.subscription.and_then(|s| s.expires),
             Some(0),
@@ -2039,7 +1577,6 @@ mod tests {
             .expect("user found")
             .usage
             .expect("usage present");
-        // JS `|| null` is falsy-based — a stored 0 becomes null.
         assert_eq!(usage.count, 7);
         assert_eq!(usage.reset_at, None, "reset_at 0 must read back as None");
     }
@@ -2055,7 +1592,6 @@ mod tests {
             pool.increment_usage_count("u1", 3).expect("inc succeeds"),
             1
         );
-        // Rollback path: the usage route decrements by 1 when the work fails.
         assert_eq!(
             pool.increment_usage_count("u1", -1).expect("dec succeeds"),
             1
@@ -2069,7 +1605,6 @@ mod tests {
             .expect("usage present");
         assert_eq!(usage.count, 2);
 
-        // No such user: zero rows modified, no error.
         assert_eq!(
             pool.increment_usage_count("nobody", 1)
                 .expect("inc succeeds"),
@@ -2194,7 +1729,6 @@ mod tests {
     #[test]
     fn serves_concurrent_callers_from_the_pool() {
         let tmp = TempDb::new("concurrent");
-        // Fewer connections than threads, so checkouts genuinely queue.
         let pool = Arc::new(Pool::open(&tmp.path(), 3).expect("pool opens"));
 
         let workers: Vec<_> = (0..8)
@@ -2238,7 +1772,6 @@ mod tests {
             .expect_err("closed pool rejects work");
         assert_eq!(err.message, "database pool is closed");
 
-        // Idempotent: closing twice must not hang or panic.
         pool.close_all();
     }
 
@@ -2252,7 +1785,6 @@ mod tests {
         }));
         assert!(caught.is_err(), "closure panicked");
 
-        // The single connection must be back in the pool, not lost.
         pool.insert_user(&sample_user("u1", "u1@example.com"))
             .expect("pool still usable");
     }

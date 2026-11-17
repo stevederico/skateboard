@@ -1,12 +1,6 @@
 const TEST_FUNCTIONS = new Set(['describe', 'it', 'test', 'suite']);
 const MODIFIERS = new Set(['only', 'skip']);
 
-/**
- * Name of the test function a call targets (`it(...)` → `it`, `it.only(...)` → `it`).
- *
- * @param {any} callee - CallExpression callee
- * @returns {string | null} Test function name, or null
- */
 function testFunctionName(callee) {
   if (callee.type === 'Identifier') return TEST_FUNCTIONS.has(callee.name) ? callee.name : null;
   if (callee.type === 'MemberExpression' && callee.object.type === 'Identifier') {
@@ -15,7 +9,6 @@ function testFunctionName(callee) {
   return null;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

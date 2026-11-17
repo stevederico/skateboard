@@ -1,14 +1,3 @@
-//! Input validation and HTML escaping.
-//!
-//! Zero-crate port of `backend/lib/validation.ts`. The email rule is the same
-//! grammar the Node regex encodes, rewritten as a hand-scanner — no regex
-//! engine is needed for a fixed grammar.
-
-/// Escape HTML special characters.
-///
-/// Replaces `& < > " ' /` with entities, matching `escapeHtml`. The `/`
-/// escape is unusual but intentional: it is what the Node backend stores, so
-/// names round-trip identically between the two servers.
 pub fn escape_html(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
@@ -25,25 +14,10 @@ pub fn escape_html(text: &str) -> String {
     out
 }
 
-/// Number of UTF-16 code units in a string.
-///
-/// JavaScript's `String.prototype.length` counts UTF-16 code units, so an
-/// astral-plane character costs 2. Length limits are ported through this
-/// helper rather than `chars().count()` so a name or email at the boundary is
-/// accepted or rejected identically by both servers.
 pub fn utf16_len(s: &str) -> usize {
     s.chars().map(char::len_utf16).sum()
 }
 
-/// Validate an email address.
-///
-/// Encodes the same grammar as the Node regex:
-/// - total length ≤ 254 (RFC 5321)
-/// - local part: starts and ends with `[A-Za-z0-9]`, interior may also use
-///   `.!#$%&'*+/=?^_`{|}~-`
-/// - domain: dot-separated labels of `[A-Za-z0-9]` with interior hyphens,
-///   each starting and ending alphanumeric
-/// - at least two labels, and the final label (TLD) is 2–63 ASCII letters
 pub fn validate_email(email: &str) -> bool {
     if email.is_empty() || utf16_len(email) > 254 {
         return false;
@@ -68,7 +42,6 @@ pub fn validate_email(email: &str) -> bool {
     tld.len() >= 2 && tld.len() <= 63 && tld.bytes().all(|b| b.is_ascii_alphabetic())
 }
 
-/// Local part rule: alphanumeric edges, an allowed interior character set.
 fn valid_local_part(local: &str) -> bool {
     const INTERIOR: &[u8] = b".!#$%&'*+/=?^_`{|}~-";
     let b = local.as_bytes();
@@ -85,7 +58,6 @@ fn valid_local_part(local: &str) -> bool {
     }
 }
 
-/// Domain label rule: alphanumeric edges, interior hyphens allowed.
 fn valid_domain_label(label: &str) -> bool {
     let b = label.as_bytes();
     match b.len() {
@@ -99,16 +71,11 @@ fn valid_domain_label(label: &str) -> bool {
     }
 }
 
-/// Validate password length: 6–72 UTF-16 code units.
-///
-/// The 72 ceiling is bcrypt's byte limit, kept after the scrypt migration so
-/// existing accounts keep working unchanged.
 pub fn validate_password(password: &str) -> bool {
     let len = utf16_len(password);
     !password.is_empty() && len >= 6 && len <= 72
 }
 
-/// Validate a display name: non-empty after trimming, ≤ 100 code units.
 pub fn validate_name(name: &str) -> bool {
     !name.is_empty() && !name.trim().is_empty() && utf16_len(name) <= 100
 }
@@ -164,7 +131,6 @@ mod tests {
 
     #[test]
     fn counts_utf16_units_like_js() {
-        // An astral character is 2 UTF-16 units, so 50 of them hit the limit.
         assert_eq!(utf16_len("🛹"), 2);
         assert!(validate_name(&"🛹".repeat(50)));
         assert!(!validate_name(&"🛹".repeat(51)));

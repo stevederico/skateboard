@@ -1,13 +1,3 @@
-/**
- * ESLint flat config. ESLint here runs ONLY the local guardrails plugin
- * (guardrails/eslint-plugin): each rule is a written "never" rule from AGENTS.md or
- * skills/skateboard/rules/*.md, with a message that teaches the root cause and the fix.
- * No third-party rule packs, no `globals` package.
- *
- * ESLint and the TypeScript parser live in guardrails/ (nested private package) so the
- * root keeps TypeScript 7. Install once with `npm run guardrails:install`, then
- * `npm run lint`.
- */
 import plugin, { parser } from './guardrails/eslint-plugin/index.js';
 
 export default [
@@ -37,7 +27,6 @@ export default [
       '.dependency-cruiser.js',
       'guardrails/eslint-plugin/**/*.js',
       'guardrails/verify/**/*.js',
-      // Banned toolchain config files are linted only so their existence is reported.
       '**/{tailwind,postcss}.config.{js,cjs,mjs,ts}',
     ],
   },
@@ -46,8 +35,6 @@ export default [
     files: ['src/**/*.{ts,tsx,js,jsx,mjs,cjs}'],
   },
   {
-    // RuleTester fixtures are strings of deliberately bad code; a fixture such as
-    // 'mongodb://admin:pw@db/app' must not fail lint on the plugin that bans it.
     name: 'skateboard/guardrails-fixtures',
     files: ['guardrails/eslint-plugin/rules/*.test.js'],
     rules: { 'skateboard/no-hardcoded-connection-strings': 'off' },

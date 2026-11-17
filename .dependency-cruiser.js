@@ -1,36 +1,14 @@
-/**
- * dependency-cruiser config: whole-graph boundary checks (`npm run depcruise`).
- *
- * The layer rules are GENERATED from guardrails/eslint-plugin/layers.js, the same table
- * the `skateboard/layer-boundaries` lint rule reads, so there is one source of truth:
- * edit LAYERS / ALLOWED_EDGES there and both checkers follow. ESLint sees one file at a
- * time; this pass resolves every import on disk, so it also proves what a single file
- * cannot: cycles, orphans, unresolvable paths, undeclared and dev-only packages.
- *
- * Every `comment` states what was found, `Why:` it is forbidden and the `Fix:`.
- * dependency-cruiser lives in the nested guardrails/ package (see AGENTS.md > Guardrails).
- */
 import { ALLOWED_EDGES, BROWSER_LAYERS, ENTRY_MODULE, LAYERS, TARGET_GUIDANCE } from './guardrails/eslint-plugin/layers.js';
 
-/** Test files by the repo convention (`*.test.js`) plus the Playwright flows (`*.e2e.js`). */
 const TEST_FILES = '\\.(?:test|e2e)\\.[cm]?[jt]sx?$';
 
-/**
- * Path condition selecting exactly one layer. layers.js is first-match-wins (`ui` sits
- * above `app`), so every earlier layer's pattern is subtracted.
- *
- * @param {number} index - Index of the layer in LAYERS
- * @returns {{ path: string, pathNot?: string[] }} dependency-cruiser path condition
- */
 function layerCondition(index) {
   const earlier = LAYERS.slice(0, index).map((layer) => layer.pattern.source);
   return { path: LAYERS[index].pattern.source, ...(earlier.length > 0 ? { pathNot: earlier } : {}) };
 }
 
-/** Path conditions for the layers bundled for the browser (ui + app). */
 const browserPaths = LAYERS.filter((layer) => BROWSER_LAYERS.has(layer.name)).map((layer) => layer.pattern.source);
 
-/** One forbidden rule per (from, to) layer pair that ALLOWED_EDGES does not list. */
 const layerRules = LAYERS.flatMap((from, fromIndex) =>
   LAYERS.flatMap((to, toIndex) => {
     if (ALLOWED_EDGES[from.name].includes(to.name)) return [];
@@ -47,7 +25,6 @@ const layerRules = LAYERS.flatMap((from, fromIndex) =>
   }),
 );
 
-/** @type {import('dependency-cruiser').IConfiguration} */
 export default {
   forbidden: [
     ...layerRules,
@@ -77,7 +54,6 @@ export default {
         'Fix: move the value into src/ (e.g. src/constants.json), or inject it at build time with Vite `define` / `import.meta.env.VITE_*`.',
       from: { path: browserPaths },
       to: {
-        // Other layers are reported by their layer-* rule; packages and builtins have their own rules.
         pathNot: [...LAYERS.map((layer) => layer.pattern.source), '(^|/)node_modules/'],
         dependencyTypes: ['local'],
         couldNotResolve: false,
@@ -102,10 +78,10 @@ export default {
         orphan: true,
         pathNot: [
           TEST_FILES,
-          '^scripts/', // CLI entry points run by npm scripts
-          '^public/', // plain scripts loaded by index.html
-          '(^|/)\\.[^/]+\\.[cm]?js$', // dotfile configs (.dependency-cruiser.js)
-          '\\.config\\.[cm]?[jt]s$', // tool configs (vite, eslint, playwright)
+          '^scripts/',
+          '^public/',
+          '(^|/)\\.[^/]+\\.[cm]?js$',
+          '\\.config\\.[cm]?[jt]s$',
           '\\.d\\.[cm]?ts$',
         ],
       },
@@ -158,14 +134,11 @@ export default {
     },
   ],
   options: {
-    // Resolve packages (so the dependency-type rules work) but never crawl into them.
     doNotFollow: { path: ['(^|/)node_modules/'] },
     exclude: { path: ['^dist/', '^verify-artifacts/', '^backend/target/'] },
-    // Keep `import type` edges: a type-only import across layers still couples them.
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
     enhancedResolveOptions: {
-      // Honour `exports` maps so deep paths a package does not export are unresolvable.
       exportsFields: ['exports'],
       conditionNames: ['import', 'require', 'node', 'default', 'types'],
       mainFields: ['module', 'main', 'types', 'typings'],

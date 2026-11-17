@@ -9,7 +9,6 @@ RuleTester.describe = describe;
 RuleTester.it = it;
 RuleTester.itOnly = it.only;
 
-/** Default file for cases that do not care where they live: a UI component. */
 const DEFAULT_FILE = 'src/components/Example.tsx';
 
 /**
@@ -21,12 +20,6 @@ const DEFAULT_FILE = 'src/components/Example.tsx';
  */
 export const fileAt = (rel) => path.join(process.cwd(), rel);
 
-/**
- * Normalize a test case: strings become `{ code }`, and `filename` is made absolute.
- *
- * @param {string | { code: string, filename?: string }} testCase - Valid or invalid case
- * @returns {object} RuleTester case
- */
 function withFile(testCase) {
   const c = typeof testCase === 'string' ? { code: testCase } : testCase;
   return { ...c, filename: fileAt(c.filename ?? DEFAULT_FILE) };

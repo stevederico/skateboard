@@ -1,11 +1,3 @@
-/**
- * True when a variable is a function defined in this file: a function declaration, or a
- * `const` initialized with an arrow/function expression or `useCallback(...)`. Props,
- * parameters, imports and hook results (`const [open, setOpen] = useState()`) are not.
- *
- * @param {any} variable - eslint-scope Variable
- * @returns {boolean} Whether it is a locally defined function
- */
 function isLocalFunction(variable) {
   const def = variable?.defs[0];
   if (!def) return false;
@@ -17,13 +9,6 @@ function isLocalFunction(variable) {
   return init.type === 'CallExpression' && init.callee.type === 'Identifier' && init.callee.name === 'useCallback';
 }
 
-/**
- * Look up an identifier through the enclosing scopes.
- *
- * @param {any} scope - Starting scope
- * @param {string} name - Identifier name
- * @returns {any} eslint-scope Variable, or undefined
- */
 function findVariable(scope, name) {
   for (let s = scope; s; s = s.upper) {
     const found = s.set.get(name);
@@ -32,7 +17,6 @@ function findVariable(scope, name) {
   return undefined;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',

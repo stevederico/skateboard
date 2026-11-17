@@ -5,19 +5,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
-/** Reads and parses a JSON file relative to the repo root. */
 const readJSON = (rel) => JSON.parse(readFileSync(join(REPO, rel), 'utf8'));
 
 const pkg = readJSON('package.json');
-// Apps decouple their own `version` from `skateboardVersion` and record releases in
-// CHANGELOG.md (not skateboard-changelog.md), so these template-authoring invariants
-// only hold in the skateboard repo itself. Runs only when name === 'skateboard'.
 const IS_TEMPLATE = pkg.name === 'skateboard';
 
-// Regression guard for the recurring release-drift bug: 4.6.0, 4.7.0, and 4.8.0 each
-// bumped package.json but left package-lock.json, the AGENTS.md Version block, and/or
-// skateboard-changelog.md behind. Every version-carrying file must agree, so a bump that
-// forgets one fails `npm run test` (via test:build) instead of shipping a silent lie.
 describe('version consistency', { skip: !IS_TEMPLATE }, () => {
   const { version } = pkg;
 

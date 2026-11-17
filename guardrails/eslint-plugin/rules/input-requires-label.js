@@ -1,9 +1,7 @@
 import { findAttr, hasSpread, jsxName, staticAttrValue } from '../lib/jsx.js';
 
-/** skateboard-ui text controls that need an associated label. */
 const CONTROLS = new Set(['Input', 'Textarea']);
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

@@ -5,12 +5,6 @@ const ARBITRARY_RE = new RegExp(
   `^(-?)(p${SIDES}|m${SIDES}|gap(?:-[xy])?|rounded(?:-(?:tl|tr|bl|br|ss|se|es|ee|[trblse]))?)-\\[([^\\]]+)\\]$`,
 );
 
-/**
- * Tailwind scale step for a CSS length, when it lands on the 4px grid.
- *
- * @param {string} value - Arbitrary value, e.g. `16px`, `1.5rem`
- * @returns {string | null} Scale step (`4`, `6`, `0.5`) or null
- */
 function scaleStep(value) {
   const match = /^(\d*\.?\d+)(px|rem)$/.exec(value);
   if (!match) return null;
@@ -19,21 +13,12 @@ function scaleStep(value) {
   return Number.isInteger(step * 2) ? String(step) : null;
 }
 
-/**
- * Replacement for an arbitrary spacing/radius token.
- *
- * @param {string} sign - `-` for negative margins, else empty
- * @param {string} utility - Utility name (`p`, `gap-x`, `rounded-t`)
- * @param {string} value - Bracketed value
- * @returns {string} Suggested class
- */
 function suggest(sign, utility, value) {
   if (utility.startsWith('rounded')) return `${utility}-md or ${utility}-lg (radius design tokens)`;
   const step = scaleStep(value);
   return step ? `${sign}${utility}-${step}` : `the nearest scale value (${sign}${utility}-2 = 8px, ${sign}${utility}-4 = 16px, ${sign}${utility}-6 = 24px)`;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

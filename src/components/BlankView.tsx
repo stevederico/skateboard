@@ -4,19 +4,12 @@ import { Button } from '@stevederico/skateboard-ui/ui/button';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@stevederico/skateboard-ui/ui/empty';
 import { LayoutDashboard, Plus } from '../icons';
 
-/** Props for the BlankView starter template. */
 interface BlankViewProps {
-  /** Header title */
   title?: string;
-  /** Empty state description text */
   description?: string;
-  /** CTA button text (e.g. "Create Project") — requires {@link BlankViewProps.onButtonClick} */
   buttonTitle?: string;
-  /** CTA button click handler — without it the button is omitted rather than rendered dead */
   onButtonClick?: () => void;
-  /** Custom icon element for empty state */
   icon?: ReactNode;
-  /** Optional content to replace empty state */
   children?: ReactNode;
 }
 

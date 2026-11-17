@@ -1,10 +1,3 @@
-/**
- * True for a callback that does nothing: `() => {}`, `function () {}`, `() => undefined`,
- * `() => null`.
- *
- * @param {any} fn - Candidate callback
- * @returns {boolean} Whether the callback swallows its argument
- */
 function isNoopCallback(fn) {
   if (fn?.type !== 'ArrowFunctionExpression' && fn?.type !== 'FunctionExpression') return false;
   if (fn.body.type === 'BlockStatement') return fn.body.body.length === 0;
@@ -12,7 +5,6 @@ function isNoopCallback(fn) {
   return (body.type === 'Identifier' && body.name === 'undefined') || (body.type === 'Literal' && body.value === null);
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

@@ -1,12 +1,3 @@
-/**
- * skateboard guardrails: a zero-dependency ESLint plugin that turns the written
- * "never / don't" rules in AGENTS.md and skills/skateboard/rules/*.md into machine
- * checks. Every message says what was found, why the repo forbids it, and the exact
- * fix, because the usual reader is an agent that will act on it verbatim.
- *
- * The TypeScript parser is re-exported so the root eslint.config.js can use it without
- * any root dependency (the root keeps TypeScript 7, which has no JS API).
- */
 import parser from '@typescript-eslint/parser';
 import banTsComment from './rules/ban-ts-comment.js';
 import clickableElementNeedsKeyboard from './rules/clickable-element-needs-keyboard.js';
@@ -63,10 +54,8 @@ import suspenseSkeletonFallback from './rules/suspense-skeleton-fallback.js';
 import testFileNaming from './rules/test-file-naming.js';
 import useListDataStates from './rules/use-list-data-states.js';
 
-/** Plugin namespace: rules are referenced as `skateboard/<rule>`. */
 const NAMESPACE = 'skateboard';
 
-/** Rules that apply to every linted file: TypeScript discipline, imports, errors, tests, docs. */
 const BASE_RULES = {
   'ban-ts-comment': banTsComment,
   'no-explicit-any': noExplicitAny,
@@ -94,7 +83,6 @@ const BASE_RULES = {
   'require-jsdoc-on-exports': requireJsdocOnExports,
 };
 
-/** Rules for browser app code under src/: React, accessibility, styling, data fetching. */
 const APP_RULES = {
   'no-direct-react-router': noDirectReactRouter,
   'filename-convention': filenameConvention,
@@ -128,10 +116,6 @@ const APP_RULES = {
   'no-unknown-classes': noUnknownClasses,
 };
 
-/**
- * ESLint core rules that map 1:1 to written rules in AGENTS.md > TypeScript Style
- * ("prefer const", "template literals over concatenation", "object shorthand", ES modules).
- */
 const CORE_RULES = {
   'no-var': 'error',
   'prefer-const': 'error',
@@ -139,29 +123,20 @@ const CORE_RULES = {
   'prefer-template': 'error',
 };
 
-/**
- * Turn a rule map into `{ "skateboard/<name>": "error" }`.
- *
- * @param {Record<string, unknown>} rules - Rule modules keyed by name
- * @returns {Record<string, 'error'>} Flat-config rule settings
- */
 const asErrors = (rules) => Object.fromEntries(Object.keys(rules).map((name) => [`${NAMESPACE}/${name}`, 'error']));
 
 const plugin = {
   meta: { name: 'eslint-plugin-skateboard', version: '1.0.0', namespace: NAMESPACE },
   rules: { ...BASE_RULES, ...APP_RULES },
-  /** @type {Record<string, import('eslint').Linter.Config>} */
   configs: {},
 };
 
 plugin.configs = {
-  /** Every linted JS/TS file: TypeScript discipline, imports, layers, errors, tests, docs. */
   base: {
     name: 'skateboard/base',
     plugins: { [NAMESPACE]: plugin },
     rules: { ...CORE_RULES, ...asErrors(BASE_RULES) },
   },
-  /** Browser app code (src/): React, accessibility, styling, data fetching. */
   app: {
     name: 'skateboard/app',
     plugins: { [NAMESPACE]: plugin },

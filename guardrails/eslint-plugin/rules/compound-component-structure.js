@@ -1,14 +1,7 @@
 import { findAttr, jsxName, meaningfulChildren, walkJsx } from '../lib/jsx.js';
 
-/** Overlay families whose `XContent` needs an `XDescription` for screen readers. */
 const OVERLAYS = ['Dialog', 'AlertDialog', 'Sheet', 'Drawer'];
 
-/**
- * True when a direct Card child is raw content rather than a Card* slot.
- *
- * @param {any} child - JSX child node
- * @returns {boolean} Whether it bypasses CardHeader/CardContent/CardFooter
- */
 function isRawCardChild(child) {
   if (child.type === 'JSXText') return true;
   if (child.type === 'JSXElement') return !jsxName(child.openingElement.name).startsWith('Card');
@@ -19,17 +12,9 @@ function isRawCardChild(child) {
   return false;
 }
 
-/**
- * True when some JSX ancestor has the given element name.
- *
- * @param {any[]} ancestors - Ancestors from the source code
- * @param {string} name - Element name to look for
- * @returns {boolean} Whether one encloses the node
- */
 const insideElement = (ancestors, name) =>
   ancestors.some((a) => a.type === 'JSXElement' && jsxName(a.openingElement.name) === name);
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

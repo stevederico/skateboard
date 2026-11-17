@@ -1,13 +1,11 @@
 import { classGroupVisitors } from '../lib/classStrings.js';
 
-/** Utilities that take a color. Longer prefixes first so `ring-offset` wins over `ring`. */
 const COLOR_PREFIXES = [
   'ring-offset', 'inset-shadow', 'inset-ring', 'border-x', 'border-y', 'border-t', 'border-r', 'border-b',
   'border-l', 'border-s', 'border-e', 'bg', 'text', 'border', 'ring', 'outline', 'fill', 'stroke', 'from',
   'via', 'to', 'divide', 'decoration', 'shadow', 'accent', 'caret', 'placeholder',
 ];
 
-/** Tailwind palette hues. Semantic tokens (background, muted-foreground, app, ...) are not in this list. */
 const HUES = [
   'slate', 'gray', 'zinc', 'neutral', 'stone', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald',
   'teal', 'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose', 'mauve', 'olive', 'mist', 'taupe',
@@ -18,7 +16,6 @@ const PALETTE_RE = new RegExp(`^-?${PREFIX}-(?:(${HUES.join('|')})-\\d{2,3}|(whi
 const ARBITRARY_RE = new RegExp(`^-?${PREFIX}-\\[(?:#|rgba?\\(|hsla?\\(|oklch\\(|oklab\\(|lab\\(|lch\\(|color\\()`);
 const HEX_RE = /\[[^\]]*#[0-9a-fA-F]{3,8}\b[^\]]*\]/;
 
-/** Hue → semantic token family. */
 const HUE_TOKEN = {
   red: 'destructive', rose: 'destructive',
   green: 'success', emerald: 'success', lime: 'success',
@@ -27,14 +24,6 @@ const HUE_TOKEN = {
 };
 const NEUTRALS = new Set(['slate', 'gray', 'zinc', 'neutral', 'stone', 'mauve', 'olive', 'mist', 'taupe']);
 
-/**
- * Suggest the semantic class for a raw color utility.
- *
- * @param {string} prefix - Utility prefix (`bg`, `text`, `border`, ...)
- * @param {string | undefined} hue - Palette hue, if any
- * @param {string | undefined} bw - `white` or `black`, if any
- * @returns {string} Suggested replacement class
- */
 function suggest(prefix, hue, bw) {
   const base = prefix.startsWith('border') || prefix === 'divide' ? 'border' : prefix;
   if (bw === 'white') return prefix === 'text' ? 'text-background (or text-primary-foreground on bg-primary)' : `${base}-background`;
@@ -49,12 +38,6 @@ function suggest(prefix, hue, bw) {
   return `${base}-app (brand color, set via --color-app in src/assets/styles.css)`;
 }
 
-/**
- * Suggestion for a raw color token, or null when the token is not a raw color.
- *
- * @param {string} utility - Utility without variants
- * @returns {string | null} Replacement suggestion
- */
 function rawColorSuggestion(utility) {
   const palette = PALETTE_RE.exec(utility);
   if (palette) return suggest(palette[1], palette[2], palette[3]);
@@ -64,7 +47,6 @@ function rawColorSuggestion(utility) {
   return null;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

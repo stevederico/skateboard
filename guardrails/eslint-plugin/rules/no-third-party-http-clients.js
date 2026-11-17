@@ -1,6 +1,5 @@
 import { createBannedImportRule, packages } from '../lib/bannedImports.js';
 
-/** HTTP client packages that duplicate the platform `fetch`. */
 const HTTP_CLIENTS = [
   'axios',
   'got',

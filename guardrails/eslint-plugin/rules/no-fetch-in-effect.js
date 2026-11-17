@@ -1,10 +1,5 @@
-/** Effect hooks whose callbacks must not fetch. */
 const EFFECT_HOOKS = new Set(['useEffect', 'useLayoutEffect', 'useInsertionEffect']);
 
-/**
- * Network calls: global fetch plus every skateboard-ui Utilities helper that performs a
- * request (from node_modules/@stevederico/skateboard-ui/dist/components/core/Utilities.d.ts).
- */
 const REQUEST_FUNCTIONS = new Set([
   'fetch',
   'apiRequest',
@@ -17,31 +12,16 @@ const REQUEST_FUNCTIONS = new Set([
   'showManage',
 ]);
 
-/** Request constructors. */
 const REQUEST_CONSTRUCTORS = new Set(['XMLHttpRequest']);
 
-/** Keys never worth descending into while scanning for calls. */
 const SKIP_KEYS = new Set(['parent', 'loc', 'range', 'tokens', 'comments']);
 
-/**
- * Name of the hook being called: `useEffect(...)` or `React.useEffect(...)`.
- *
- * @param {any} callee - CallExpression callee
- * @returns {string | null} Hook name or null
- */
 function hookName(callee) {
   if (callee.type === 'Identifier') return callee.name;
   if (callee.type === 'MemberExpression' && callee.property.type === 'Identifier') return callee.property.name;
   return null;
 }
 
-/**
- * Name of the request function a call/new expression invokes, or null. Handles
- * `fetch(...)`, `window.fetch(...)`, `globalThis.fetch(...)`, `new XMLHttpRequest()`.
- *
- * @param {any} node - CallExpression or NewExpression
- * @returns {string | null} Request function name
- */
 function requestName(node) {
   const { callee } = node;
   const name = callee.type === 'Identifier' ? callee.name : null;
@@ -55,7 +35,6 @@ function requestName(node) {
   return REQUEST_FUNCTIONS.has(called) ? called : null;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',
@@ -74,13 +53,6 @@ export default {
   create(context) {
     const sourceCode = context.sourceCode;
 
-    /**
-     * Resolve an identifier used as a callee or effect argument to the function it names
-     * in this file (function declaration or `const f = () => {}` / `useCallback(() => {})`).
-     *
-     * @param {any} identifier - Identifier node
-     * @returns {any} Function node, or null
-     */
     function resolveFunction(identifier) {
       let scope = sourceCode.getScope(identifier);
       while (scope) {
@@ -99,14 +71,6 @@ export default {
       return null;
     }
 
-    /**
-     * Find the first request call inside `root`, following calls to functions defined in
-     * this file. `visited` stops recursion on mutually recursive helpers.
-     *
-     * @param {any} root - Node to scan
-     * @param {Set<any>} visited - Functions already scanned
-     * @returns {{ node: any, call: string, via: string | null } | null} First request found
-     */
     function findRequest(root, visited) {
       const stack = [root];
       while (stack.length) {

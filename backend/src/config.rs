@@ -1,9 +1,3 @@
-//! Configuration, environment loading, and structured logging.
-//!
-//! Zero-crate port of `backend/lib/env.ts`, `backend/lib/logger.ts`, and the
-//! `config.json` loading in `backend/server.ts`. There is no dotenv: `.env`
-//! files are parsed by hand, exactly as the Node backend does.
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write as _;
@@ -12,57 +6,30 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::json::{self, Json};
 
-// ==== ENVIRONMENT ====
-
-/// True when `NODE_ENV` is exactly `production`.
-///
-/// Matches `isProd()` in `lib/env.ts`: any other value — including unset — is
-/// treated as development.
 pub fn is_prod() -> bool {
     std::env::var("NODE_ENV").as_deref() == Ok("production")
 }
 
-/// Read an environment variable, treating an unset variable as `None`.
-///
-/// An empty string is returned as `Some("")`, matching `process.env` semantics
-/// where a set-but-blank variable is distinct from an unset one.
 pub fn env(key: &str) -> Option<String> {
     std::env::var(key).ok()
 }
 
-/// Read an environment variable, returning `None` for unset *or* empty.
-///
-/// Used where the Node code tests truthiness (`if (!stripeKey)`), for which
-/// an empty string is falsy.
 pub fn env_nonempty(key: &str) -> Option<String> {
     env(key).filter(|v| !v.is_empty())
 }
 
-/// Whether a path exists and is a symbolic link (does not follow the link).
-///
-/// Mirrors `isEnvSymlink` — a symlinked `.env` is refused because it can
-/// dereference to a secrets store outside the project.
 pub fn is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path)
         .map(|m| m.file_type().is_symlink())
         .unwrap_or(false)
 }
 
-/// Whether a path exists as a regular file that is not a symlink.
 fn is_regular_file(path: &Path) -> bool {
     fs::symlink_metadata(path)
         .map(|m| m.file_type().is_file() && !m.file_type().is_symlink())
         .unwrap_or(false)
 }
 
-/// Parse a `.env` file into a key/value map without touching the process
-/// environment.
-///
-/// Skips blank lines, `#` comments, and lines with an empty key. A key with no
-/// value yields an empty string. Values may contain `=`, and a single pair of
-/// surrounding quotes is stripped. **Refuses symlinks** (secret-leak risk).
-///
-/// Returns `None` when the file is missing, unreadable, or refused.
 pub fn parse_env_file(path: &Path, log: &Logger) -> Option<BTreeMap<String, String>> {
     if is_symlink(path) {
         log.error(
@@ -90,10 +57,6 @@ pub fn parse_env_file(path: &Path, log: &Logger) -> Option<BTreeMap<String, Stri
     Some(parsed)
 }
 
-/// Strip one matching pair of leading/trailing single or double quotes.
-///
-/// Matches the Node regex `/^["']|["']$/g`, which also strips a *mismatched*
-/// leading and trailing quote — replicated here for parity.
 fn strip_quotes(value: &str) -> String {
     let bytes = value.as_bytes();
     let lead = matches!(bytes.first(), Some(b'"') | Some(b'\''));
@@ -104,9 +67,6 @@ fn strip_quotes(value: &str) -> String {
     value[start..end].to_string()
 }
 
-/// Ensure `.env` is a regular file, creating it from `.env.example` if absent.
-///
-/// A symlink is removed first. Returns whether a regular `.env` is ready.
 fn ensure_regular_env_file(env_path: &Path, example_path: &Path, log: &Logger) -> bool {
     if is_symlink(env_path) {
         log.error(
@@ -133,11 +93,6 @@ fn ensure_regular_env_file(env_path: &Path, example_path: &Path, log: &Logger) -
     }
 }
 
-/// Load `.env` then `.env.local` from `base_dir` into the process environment.
-///
-/// `.env.local` wins over `.env`, but neither overrides a variable already set
-/// on the process — shell, CI, and test values win. Only called outside
-/// production; Railway injects variables directly there.
 pub fn load_local_env(base_dir: &Path, log: &Logger) {
     let env_path = base_dir.join(".env");
     let local_path = base_dir.join(".env.local");
@@ -155,18 +110,11 @@ pub fn load_local_env(base_dir: &Path, log: &Logger) {
 
     for (key, value) in from_files {
         if std::env::var_os(&key).is_none() {
-            // SAFETY-equivalent note: set_var is safe on this edition; the
-            // call happens during single-threaded startup before any worker
-            // thread is spawned.
             std::env::set_var(&key, &value);
         }
     }
 }
 
-/// Expand `${VAR}` placeholders in a configuration string.
-///
-/// An undefined variable leaves the placeholder in place and logs a warning,
-/// matching `resolveEnvironmentVariables`.
 pub fn resolve_env_placeholders(input: &str, log: &Logger) -> String {
     let mut out = String::with_capacity(input.len());
     let bytes = input.as_bytes();
@@ -193,7 +141,6 @@ pub fn resolve_env_placeholders(input: &str, log: &Logger) -> String {
                 continue;
             }
         }
-        // Copy one UTF-8 scalar so multi-byte characters survive intact.
         let ch = input[i..].chars().next().unwrap_or('\u{fffd}');
         out.push(ch);
         i += ch.len_utf8();
@@ -201,33 +148,20 @@ pub fn resolve_env_placeholders(input: &str, log: &Logger) -> String {
     out
 }
 
-// ==== CONFIG FILE ====
-
-/// Database selection from `config.json`.
 #[derive(Debug, Clone)]
 pub struct DatabaseConfig {
-    /// Logical database name, used as the connection cache key.
     pub db: String,
-    /// Adapter selector. Only `sqlite` is supported by this backend.
     pub db_type: String,
-    /// SQLite file path, after `${VAR}` expansion.
     pub connection_string: String,
 }
 
-/// Resolved backend configuration.
 #[derive(Debug, Clone)]
 pub struct BackendConfig {
-    /// Directory of built frontend assets, relative to the binary's config dir.
     pub static_dir: String,
-    /// Database selection.
     pub database: DatabaseConfig,
 }
 
 impl BackendConfig {
-    /// Defaults used when `config.json` is missing or malformed.
-    ///
-    /// Mirrors the catch branch of `__testLoadApplicationConfig`, including the
-    /// `TEST_DATABASE_PATH` override.
     fn defaults() -> BackendConfig {
         BackendConfig {
             static_dir: "../dist".to_string(),
@@ -241,11 +175,6 @@ impl BackendConfig {
     }
 }
 
-/// Load `config.json` from `dir`, falling back to defaults on any failure.
-///
-/// The `database.connectionString` has `${VAR}` placeholders expanded. A file
-/// that parses but has the wrong shape is treated as a failure, matching the
-/// `isRawConfig` guard in the Node server.
 pub fn load_config(dir: &Path, log: &Logger) -> BackendConfig {
     let path = dir.join("config.json");
     let Ok(text) = fs::read(&path) else {
@@ -295,11 +224,6 @@ pub fn load_config(dir: &Path, log: &Logger) -> BackendConfig {
     }
 }
 
-/// Sellable Stripe `lookup_key`s from `src/constants.json`.
-///
-/// Checkout rejects anything not in this list so a client cannot pick an
-/// internal or legacy price that still has a lookup_key on the Stripe account.
-/// Missing or unreadable constants yield an empty list (fail closed).
 pub fn load_stripe_lookup_keys(backend_dir: &Path) -> Vec<String> {
     let path = backend_dir.join("../src/constants.json");
     let Ok(bytes) = fs::read(&path) else {
@@ -320,10 +244,6 @@ pub fn load_stripe_lookup_keys(backend_dir: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Warn about missing required environment variables.
-///
-/// Never exits: the Node server starts with reduced functionality and this
-/// port matches that. Returns whether everything required was present.
 pub fn validate_environment(config: &BackendConfig, log: &Logger) -> bool {
     let mut missing: Vec<Json> = Vec::new();
     if env_nonempty("STRIPE_KEY").is_none() {
@@ -335,7 +255,6 @@ pub fn validate_environment(config: &BackendConfig, log: &Logger) -> bool {
     if env_nonempty("JWT_SECRET").is_none() {
         missing.push(Json::Str("JWT_SECRET".into()));
     }
-    // An unexpanded ${VAR} in the connection string means the variable is unset.
     let conn = &config.database.connection_string;
     let mut i = 0;
     while let Some(start) = conn[i..].find("${") {
@@ -365,17 +284,8 @@ pub fn validate_environment(config: &BackendConfig, log: &Logger) -> bool {
     false
 }
 
-/// Shortest `JWT_SECRET` accepted in production (HMAC-SHA256 block size).
 pub const MIN_JWT_SECRET_LEN: usize = 32;
 
-/// Reject a production boot that cannot mint trustworthy sessions.
-///
-/// Development keeps the warn-and-continue behaviour so the template runs
-/// before any secret exists, but a deployed server with a missing or guessable
-/// `JWT_SECRET` would silently serve unauthenticated traffic, so it must not start.
-///
-/// @param secret - Value read from `JWT_SECRET`, if any
-/// @returns `Err` with an operator-facing reason when the secret is unusable
 pub fn check_prod_jwt_secret(secret: Option<&str>) -> Result<(), String> {
     match secret {
         None => Err("JWT_SECRET is not set - refusing to start in production".into()),
@@ -383,7 +293,6 @@ pub fn check_prod_jwt_secret(secret: Option<&str>) -> Result<(), String> {
             "JWT_SECRET must be at least {MIN_JWT_SECRET_LEN} characters in production (got {})",
             value.len()
         )),
-        // The published template value must never reach production.
         Some(value) if value.starts_with("your_super_secure_jwt_secret") => {
             Err("JWT_SECRET is still the .env.example placeholder - refusing to start".into())
         }
@@ -391,12 +300,6 @@ pub fn check_prod_jwt_secret(secret: Option<&str>) -> Result<(), String> {
     }
 }
 
-/// Resolve the directory holding `config.json`, `.env`, and `databases/`.
-///
-/// Uses `SKATEBOARD_BACKEND_DIR` when set (tests and containers), otherwise the
-/// directory containing the running executable's parent project — falling back
-/// to the current working directory, which is what `cargo run` and the
-/// production image both provide.
 pub fn backend_dir() -> PathBuf {
     if let Some(dir) = env_nonempty("SKATEBOARD_BACKEND_DIR") {
         return PathBuf::from(dir);
@@ -405,7 +308,6 @@ pub fn backend_dir() -> PathBuf {
     if cwd.join("config.json").is_file() {
         return cwd;
     }
-    // `cargo run --manifest-path backend/Cargo.toml` from the repo root.
     let nested = cwd.join("backend");
     if nested.join("config.json").is_file() {
         return nested;
@@ -413,45 +315,31 @@ pub fn backend_dir() -> PathBuf {
     cwd
 }
 
-// ==== LOGGER ====
-
-/// Structured JSON logger.
-///
-/// Port of `createLogger`: pretty-printed JSON in development, compact JSON in
-/// production, and `debug` suppressed in production. Errors and warnings go to
-/// stderr; info and debug go to stdout, matching `console.error`/`console.warn`
-/// versus `console.log`.
 pub struct Logger {
     prod: AtomicBool,
 }
 
 impl Logger {
-    /// Create a logger for the given mode.
     pub fn new(prod: bool) -> Logger {
         Logger { prod: AtomicBool::new(prod) }
     }
 
-    /// Whether production formatting is active.
     fn is_prod(&self) -> bool {
         self.prod.load(Ordering::Relaxed)
     }
 
-    /// Log at ERROR to stderr.
     pub fn error(&self, message: &str, meta: &[(&str, Json)]) {
         self.emit("ERROR", message, meta, true);
     }
 
-    /// Log at WARN to stderr.
     pub fn warn(&self, message: &str, meta: &[(&str, Json)]) {
         self.emit("WARN", message, meta, true);
     }
 
-    /// Log at INFO to stdout.
     pub fn info(&self, message: &str, meta: &[(&str, Json)]) {
         self.emit("INFO", message, meta, false);
     }
 
-    /// Log at DEBUG to stdout. Suppressed entirely in production.
     pub fn debug(&self, message: &str, meta: &[(&str, Json)]) {
         if self.is_prod() {
             return;
@@ -481,7 +369,6 @@ impl Logger {
     }
 }
 
-/// Two-space-indented JSON, matching `JSON.stringify(entry, null, 2)`.
 fn pretty(v: &Json, depth: usize) -> String {
     let pad = "  ".repeat(depth + 1);
     let close_pad = "  ".repeat(depth);
@@ -501,10 +388,6 @@ fn pretty(v: &Json, depth: usize) -> String {
     }
 }
 
-/// Milliseconds since the Unix epoch.
-///
-/// Equivalent to JavaScript's `Date.now()`. A clock before the epoch is
-/// clamped to 0 rather than panicking.
 pub fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -512,22 +395,14 @@ pub fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-/// Seconds since the Unix epoch, floored — equivalent to
-/// `Math.floor(Date.now() / 1000)`.
 pub fn now_secs() -> i64 {
     now_ms().div_euclid(1000)
 }
 
-/// Current time as an ISO-8601 UTC string with milliseconds,
-/// e.g. `2026-09-14T12:34:56.789Z` — matching `new Date().toISOString()`.
 pub fn iso_now() -> String {
     iso_from_ms(now_ms())
 }
 
-/// Format epoch milliseconds as `YYYY-MM-DDTHH:MM:SS.sssZ`.
-///
-/// Hand-rolled civil-from-days conversion (Howard Hinnant's algorithm) so no
-/// date crate is needed. Handles negative timestamps correctly.
 pub fn iso_from_ms(ms: i64) -> String {
     let (days, rem_ms) = (ms.div_euclid(86_400_000), ms.rem_euclid(86_400_000));
     let (y, m, d) = civil_from_days(days);
@@ -545,15 +420,10 @@ pub fn iso_from_ms(ms: i64) -> String {
     )
 }
 
-/// Format epoch **seconds** as an ISO-8601 UTC string with milliseconds.
-///
-/// Stripe period ends are in seconds; the Node server renders them with
-/// `new Date(expires * 1000).toISOString()`.
 pub fn iso_from_secs(secs: i64) -> String {
     iso_from_ms(secs * 1000)
 }
 
-/// Convert days since the Unix epoch to a proleptic Gregorian `(year, month, day)`.
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = z.div_euclid(146_097);
@@ -600,9 +470,7 @@ mod tests {
     fn iso_matches_known_timestamps() {
         assert_eq!(iso_from_ms(0), "1970-01-01T00:00:00.000Z");
         assert_eq!(iso_from_ms(1_000), "1970-01-01T00:00:01.000Z");
-        // 2026-09-14T00:00:00.000Z
         assert_eq!(iso_from_ms(1_789_344_000_000), "2026-09-14T00:00:00.000Z");
-        // Leap day.
         assert_eq!(iso_from_ms(1_709_164_800_000), "2024-02-29T00:00:00.000Z");
     }
 
@@ -616,7 +484,7 @@ mod tests {
         assert_eq!(strip_quotes("\"abc\""), "abc");
         assert_eq!(strip_quotes("'abc'"), "abc");
         assert_eq!(strip_quotes("abc"), "abc");
-        assert_eq!(strip_quotes("\""), ""); // Node `/^["']|["']$/g` strips a lone quote.
+        assert_eq!(strip_quotes("\""), "");
     }
 
     #[test]

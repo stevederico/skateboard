@@ -1,6 +1,5 @@
 import { classGroupVisitors } from '../lib/classStrings.js';
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',
@@ -17,7 +16,6 @@ export default {
   },
   create(context) {
     return classGroupVisitors((tokens) => {
-      /** @type {Map<string, import('../lib/classStrings.js').ClassToken>} */
       const widths = new Map();
       for (const t of tokens) {
         if (t.utility.startsWith('w-')) widths.set(`${t.variants.join(':')}|${t.utility.slice(2)}`, t);

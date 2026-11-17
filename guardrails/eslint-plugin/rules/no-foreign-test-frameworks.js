@@ -1,6 +1,5 @@
 import { createBannedImportRule, packages } from '../lib/bannedImports.js';
 
-/** Test runners and their assertion/mocking companions that replace node:test. */
 const RUNNERS = ['jest', '@jest/globals', 'mocha', 'jasmine', 'jasmine-core', 'vitest', '@vitest/expect', '@vitest/spy', 'ava', 'tap', 'uvu'];
 
 export default createBannedImportRule({

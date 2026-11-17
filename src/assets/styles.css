@@ -1,10 +1,5 @@
 @import "@stevederico/skateboard-ui/styles.css";
 
-/* This app's plain CSS: the classes src/ uses that skateboard-ui's styles.css does not
-   define, a few shell rules repeated after them so they keep their precedence, and the
-   brand and dark-mode overrides. No Tailwind: edit by hand. A className token missing
-   here and in skateboard-ui's CSS fails lint (no-unknown-classes). */
-
 @layer theme {
   :root, :host {
     --color-purple-500: oklch(62.7% .265 303.9);

@@ -1,10 +1,8 @@
 import path from 'node:path';
 import { moduleSourceVisitors, mergeVisitors, packageName } from '../lib/moduleSources.js';
 
-/** Config files that only exist for the banned PostCSS / Tailwind toolchain. */
 const BANNED_CONFIG_FILE = /^(?:tailwind|postcss)\.config\.[cm]?[jt]s$|^\.postcssrc(?:\.[cm]?[jt]s|\.json)?$/;
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

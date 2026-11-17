@@ -1,18 +1,6 @@
-//! Minimal JSON value, parser, and serializer.
-//!
-//! Zero-crate replacement for `JSON.parse` / `JSON.stringify`. Number
-//! formatting deliberately mirrors V8's `Number.prototype.toString` for the
-//! integral case (`100.0` serializes as `100`, not `100.0`) so responses
-//! byte-match the Node backend.
-
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-/// A parsed JSON value.
-///
-/// Object keys are held in a `BTreeMap`, so serialization is key-sorted rather
-/// than insertion-ordered. Response bodies are therefore compared with sorted
-/// keys (`jq -S`) in the parity harness.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
     Null,
@@ -23,15 +11,9 @@ pub enum Json {
     Obj(BTreeMap<String, Json>),
 }
 
-/// Reason a JSON document could not be parsed.
-///
-/// Callers only distinguish "malformed" from "valid", matching the Node
-/// backend's `SyntaxError` handling, so the variant carries just a position.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseError {
-    /// Byte offset where parsing stopped.
     pub at: usize,
-    /// Human-readable reason.
     pub msg: &'static str,
 }
 
@@ -44,7 +26,6 @@ impl std::fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 impl Json {
-    /// Borrow the value as an object map, or `None` for other variants.
     pub fn as_obj(&self) -> Option<&BTreeMap<String, Json>> {
         match self {
             Json::Obj(m) => Some(m),
@@ -52,7 +33,6 @@ impl Json {
         }
     }
 
-    /// Borrow the value as an array, or `None` for other variants.
     pub fn as_arr(&self) -> Option<&[Json]> {
         match self {
             Json::Arr(v) => Some(v),
@@ -60,7 +40,6 @@ impl Json {
         }
     }
 
-    /// Borrow the value as a string, or `None` for other variants.
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Json::Str(s) => Some(s),
@@ -68,7 +47,6 @@ impl Json {
         }
     }
 
-    /// Read the value as an `f64`, or `None` for non-numbers.
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             Json::Num(n) => Some(*n),
@@ -76,7 +54,6 @@ impl Json {
         }
     }
 
-    /// Read the value as an `i64` when it is an integral number in range.
     pub fn as_i64(&self) -> Option<i64> {
         match self {
             Json::Num(n) if n.fract() == 0.0 && n.is_finite() => Some(*n as i64),
@@ -84,7 +61,6 @@ impl Json {
         }
     }
 
-    /// Read the value as a bool, or `None` for other variants.
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             Json::Bool(b) => Some(*b),
@@ -92,19 +68,14 @@ impl Json {
         }
     }
 
-    /// True for `Json::Null`.
     pub fn is_null(&self) -> bool {
         matches!(self, Json::Null)
     }
 
-    /// Look up an object member by key. `None` when absent or not an object.
     pub fn get(&self, key: &str) -> Option<&Json> {
         self.as_obj().and_then(|m| m.get(key))
     }
 
-    /// Look up a nested member by dotted path, e.g. `"items.data"` is two hops.
-    ///
-    /// Array indices are not supported — callers index arrays explicitly.
     pub fn path(&self, dotted: &str) -> Option<&Json> {
         let mut cur = self;
         for seg in dotted.split('.') {
@@ -113,12 +84,10 @@ impl Json {
         Some(cur)
     }
 
-    /// Convenience: object member as `&str`.
     pub fn get_str(&self, key: &str) -> Option<&str> {
         self.get(key).and_then(Json::as_str)
     }
 
-    /// Convenience: object member as `i64`.
     pub fn get_i64(&self, key: &str) -> Option<i64> {
         self.get(key).and_then(Json::as_i64)
     }
@@ -137,29 +106,18 @@ pub fn obj<const N: usize>(pairs: [(&str, Json); N]) -> Json {
     Json::Obj(m)
 }
 
-/// Shorthand for a JSON string value.
 pub fn s(v: impl Into<String>) -> Json {
     Json::Str(v.into())
 }
 
-/// Shorthand for a JSON number from any integer.
 pub fn n(v: impl Into<f64>) -> Json {
     Json::Num(v.into())
 }
 
-/// Shorthand for a JSON number from an `i64` (which has no `Into<f64>`).
 pub fn i(v: i64) -> Json {
     Json::Num(v as f64)
 }
 
-// ==== PARSER ====
-
-/// Parse a JSON document.
-///
-/// Rejects trailing content after the top-level value, matching `JSON.parse`.
-///
-/// # Errors
-/// Returns [`ParseError`] for any malformed input.
 pub fn parse(input: &[u8]) -> Result<Json, ParseError> {
     let mut p = Parser { b: input, i: 0 };
     p.ws();
@@ -171,8 +129,6 @@ pub fn parse(input: &[u8]) -> Result<Json, ParseError> {
     Ok(v)
 }
 
-/// Recursion limit for nested arrays/objects. Guards against stack exhaustion
-/// from a hostile deeply-nested body; `JSON.parse` has an equivalent limit.
 const MAX_DEPTH: usize = 128;
 
 struct Parser<'a> {
@@ -238,7 +194,7 @@ impl<'a> Parser<'a> {
     }
 
     fn array(&mut self, depth: usize) -> Result<Json, ParseError> {
-        self.i += 1; // '['
+        self.i += 1;
         let mut out = Vec::new();
         self.ws();
         if self.peek() == Some(b']') {
@@ -261,7 +217,7 @@ impl<'a> Parser<'a> {
     }
 
     fn object(&mut self, depth: usize) -> Result<Json, ParseError> {
-        self.i += 1; // '{'
+        self.i += 1;
         let mut out = BTreeMap::new();
         self.ws();
         if self.peek() == Some(b'}') {
@@ -295,7 +251,7 @@ impl<'a> Parser<'a> {
     }
 
     fn string(&mut self) -> Result<String, ParseError> {
-        self.i += 1; // opening quote
+        self.i += 1;
         let mut out = String::new();
         loop {
             let c = self.peek().ok_or_else(|| self.err("unterminated string"))?;
@@ -323,7 +279,6 @@ impl<'a> Parser<'a> {
                 }
                 0x00..=0x1f => return Err(self.err("raw control char in string")),
                 _ => {
-                    // Copy one UTF-8 scalar verbatim.
                     let start = self.i;
                     let len = utf8_len(c);
                     if self.i + len > self.b.len() {
@@ -340,14 +295,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Decode a `\uXXXX` escape, joining a surrogate pair when present.
-    ///
-    /// An unpaired surrogate becomes U+FFFD, matching how `JSON.parse` +
-    /// UTF-8 re-encoding round-trips a lone surrogate.
     fn unicode_escape(&mut self) -> Result<char, ParseError> {
         let hi = self.hex4()?;
         if (0xD800..0xDC00).contains(&hi) {
-            // Expect a low surrogate.
             if self.peek() == Some(b'\\') && self.b.get(self.i + 1) == Some(&b'u') {
                 let save = self.i;
                 self.i += 2;
@@ -390,7 +340,6 @@ impl<'a> Parser<'a> {
         if self.peek() == Some(b'-') {
             self.i += 1;
         }
-        // int part
         match self.peek() {
             Some(b'0') => self.i += 1,
             Some(b'1'..=b'9') => {
@@ -400,7 +349,6 @@ impl<'a> Parser<'a> {
             }
             _ => return Err(self.err("bad number")),
         }
-        // frac
         if self.peek() == Some(b'.') {
             self.i += 1;
             if !matches!(self.peek(), Some(b'0'..=b'9')) {
@@ -410,7 +358,6 @@ impl<'a> Parser<'a> {
                 self.i += 1;
             }
         }
-        // exp
         if matches!(self.peek(), Some(b'e') | Some(b'E')) {
             self.i += 1;
             if matches!(self.peek(), Some(b'+') | Some(b'-')) {
@@ -430,7 +377,6 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Byte length of a UTF-8 sequence from its lead byte.
 fn utf8_len(lead: u8) -> usize {
     match lead {
         0x00..=0x7f => 1,
@@ -440,9 +386,6 @@ fn utf8_len(lead: u8) -> usize {
     }
 }
 
-// ==== SERIALIZER ====
-
-/// Serialize a value to compact JSON, matching `JSON.stringify` output.
 pub fn stringify(v: &Json) -> String {
     let mut out = String::new();
     write_value(&mut out, v);
@@ -481,10 +424,6 @@ fn write_value(out: &mut String, v: &Json) {
     }
 }
 
-/// Write a JSON string literal, escaping exactly what `JSON.stringify` escapes.
-///
-/// Control characters below 0x20 become `\u00XX` unless they have a short
-/// form; everything else (including non-ASCII) is emitted as raw UTF-8.
 fn write_string(out: &mut String, sv: &str) {
     out.push('"');
     for ch in sv.chars() {
@@ -505,11 +444,6 @@ fn write_string(out: &mut String, sv: &str) {
     out.push('"');
 }
 
-/// Format a number the way `JSON.stringify` does.
-///
-/// Key parity point: JS has one number type, so an integral `f64` prints
-/// without a fractional part (`100`, not `100.0`). Non-finite values become
-/// `null`, matching `JSON.stringify(NaN)`.
 pub fn format_number(x: f64) -> String {
     if !x.is_finite() {
         return "null".to_string();
@@ -521,8 +455,6 @@ pub fn format_number(x: f64) -> String {
     if x.fract() == 0.0 && x.abs() < 1e21 {
         return format!("{}", x as i128);
     }
-    // Shortest round-trip representation; Rust's Display for f64 already
-    // produces the shortest string that parses back to the same value.
     let repr = format!("{x}");
     if repr.contains('e') {
         // Rust prints exponents as `1e21`; JS prints `1e+21`.

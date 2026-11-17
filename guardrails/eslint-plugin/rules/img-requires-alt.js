@@ -1,6 +1,5 @@
 import { findAttr, hasSpread, jsxName } from '../lib/jsx.js';
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

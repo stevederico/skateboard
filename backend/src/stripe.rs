@@ -1,19 +1,3 @@
-//! Stripe REST client and webhook signature verification.
-//!
-//! Zero-crate replacement for the `stripe` npm package. HTTPS is provided by
-//! the **system libcurl** through a small FFI shim — no TLS is hand-rolled and
-//! certificate verification is always on, with no option to turn it off.
-//!
-//! Only the six operations the Node backend performs are implemented:
-//! webhook verification, customer retrieve, subscription retrieve, price
-//! lookup, Checkout session create, and Billing Portal session create.
-//!
-//! # Secret handling
-//! The API key is sent only in the `Authorization: Bearer …` request header.
-//! It is never logged, never placed in a URL, and never included in any
-//! [`StripeError`] message. [`StripeClient`]'s `Debug` impl is written by hand
-//! so the key cannot leak through `{:?}` formatting.
-
 use std::ffi::{c_char, c_int, c_long, c_void, CString};
 use std::sync::{Mutex, Once};
 #[cfg(test)]
@@ -25,64 +9,36 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::crypto::{ct_eq, hex_encode, hmac_sha256, random_uuid_v4};
 use crate::json::{self, Json};
 
-/// Stripe API version pinned by the Node client this port replaces.
-///
-/// Taken from `stripe@18.5.0`'s generated `apiVersion.js`
-/// (`exports.ApiVersion = '2025-08-27.basil'`). Pinning the same string keeps
-/// the response shapes identical — in particular the basil-era move of
-/// `current_period_end` onto `items.data[0]`, which the caller relies on.
 pub const STRIPE_API_VERSION: &str = "2025-08-27.basil";
 
-/// Base URL for every Stripe REST call.
 const API_BASE: &str = "https://api.stripe.com";
 
-/// Stripe's default webhook timestamp tolerance, in seconds.
 pub const DEFAULT_WEBHOOK_TOLERANCE_SECS: i64 = 300;
 
-/// Total request timeout, matching the Node client's 30s default.
 const TIMEOUT_MS: c_long = 30_000;
 
-/// TCP connect timeout — a slice of the total budget so a dead host fails fast.
 const CONNECT_TIMEOUT_MS: c_long = 10_000;
 
-/// Retries after the first attempt (5 attempts total).
 const MAX_RETRIES: u32 = 4;
 
-/// First backoff delay; doubles per retry (1s, 2s, 4s, 8s).
 const BASE_BACKOFF_MS: u64 = 1_000;
 
-/// Upper bound applied to a server-supplied `Retry-After`, so a hostile or
-/// mistaken header cannot stall a request handler for minutes.
 const MAX_RETRY_AFTER_SECS: u64 = 60;
 
-/// Consecutive whole-operation failures that trip the circuit breaker.
 const CIRCUIT_FAILURE_THRESHOLD: u32 = 3;
 
-/// How long the circuit stays open before another attempt is allowed.
 const CIRCUIT_COOLDOWN: Duration = Duration::from_secs(30);
 
-// ==== ERRORS ====
-
-/// Why a `Stripe-Signature` header was rejected.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SignatureError {
-    /// The configured endpoint secret was empty.
     EmptySecret,
-    /// The header carried no `v1=` entry (nothing to compare against).
     NoSignatures,
-    /// The header carried no `t=` entry.
     MissingTimestamp,
-    /// The `t=` entry was not a base-10 integer.
     InvalidTimestamp,
-    /// `|now - t|` exceeded the tolerance. Carries the signed age in seconds
-    /// (negative when the timestamp is in the future).
     TimestampOutsideTolerance {
-        /// `now - t`, in seconds.
         age_secs: i64,
-        /// The tolerance that was exceeded.
         tolerance_secs: i64,
     },
-    /// Every `v1=` entry failed the constant-time comparison.
     NoMatchingSignature,
 }
 
@@ -108,33 +64,18 @@ impl std::fmt::Display for SignatureError {
 
 impl std::error::Error for SignatureError {}
 
-/// Anything that can go wrong talking to Stripe.
-///
-/// No variant ever carries the API key: transport messages come from
-/// `curl_easy_strerror` plus our own text, and the key travels in a header
-/// that is never echoed back into an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StripeError {
-    /// libcurl could not complete the request (DNS, TLS, timeout, reset).
     Transport(String),
-    /// Stripe answered with a non-2xx status.
     Http {
-        /// HTTP status code.
         status: u16,
-        /// Stripe's machine-readable `error.code`, when present.
         code: Option<String>,
-        /// Stripe's `error.message`, or a fallback describing the status.
         message: String,
     },
-    /// A webhook signature failed verification.
     Signature(SignatureError),
-    /// A response body (or webhook payload) was not valid JSON.
     Parse(String),
-    /// The circuit breaker is open after repeated failures; no call was made.
     CircuitOpen,
-    /// The Stripe worker did not finish within [`crate::stripe_worker::STRIPE_CALL_TIMEOUT`].
     Timeout,
-    /// The bounded Stripe worker queue was full; the call was not started.
     Busy,
 }
 
@@ -167,14 +108,6 @@ impl From<SignatureError> for StripeError {
     }
 }
 
-// ==== FORM ENCODING ====
-
-/// Percent-encode one component per `application/x-www-form-urlencoded`.
-///
-/// Unreserved characters (`A-Z a-z 0-9 - . _ ~`) pass through; everything else
-/// becomes `%XX` with uppercase hex. Space becomes `%20` rather than `+` —
-/// Stripe decodes both, and `%20` keeps the same routine usable for URL path
-/// and query segments where `+` would be wrong.
 pub fn percent_encode(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for b in input.as_bytes() {
@@ -192,18 +125,11 @@ pub fn percent_encode(input: &str) -> String {
     out
 }
 
-/// Uppercase hex digit for a 4-bit value.
 fn hex_nibble(v: u8) -> char {
     const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
     DIGITS[v as usize] as char
 }
 
-/// Encode Stripe's bracketed form syntax, e.g.
-/// `line_items[0][price]=price_1&line_items[0][quantity]=1&metadata[app]=onyx`.
-///
-/// Both keys and values are percent-encoded by [`percent_encode`], so the
-/// brackets a caller writes into a key are escaped as `%5B` / `%5D` — which is
-/// exactly what Stripe's own clients send and what its parser expects.
 pub fn form_encode(pairs: &[(String, String)]) -> String {
     let mut out = String::new();
     for (k, v) in pairs {
@@ -217,18 +143,11 @@ pub fn form_encode(pairs: &[(String, String)]) -> String {
     out
 }
 
-// ==== WEBHOOK SIGNATURE VERIFICATION ====
-
-/// Parsed `Stripe-Signature` header: the timestamp field and every `v1` entry.
 struct SigHeader<'a> {
     timestamp: Option<&'a str>,
     v1: Vec<&'a str>,
 }
 
-/// Split a `Stripe-Signature` header into its `t` and `v1` fields.
-///
-/// Unknown schemes (`v0`, future `v2`) are ignored. Multiple `v1` entries are
-/// normal during endpoint-secret rotation and are all retained.
 fn parse_sig_header(header: &str) -> SigHeader<'_> {
     let mut out = SigHeader { timestamp: None, v1: Vec::new() };
     for part in header.split(',') {
@@ -242,10 +161,6 @@ fn parse_sig_header(header: &str) -> SigHeader<'_> {
     out
 }
 
-/// Compute Stripe's expected `v1` signature: `hex(HMAC_SHA256(secret, "<t>.<payload>"))`.
-///
-/// The signed payload is assembled from the **raw** request bytes — never from
-/// a re-serialized JSON value, whose key order or spacing would differ.
 fn expected_signature(secret: &str, timestamp: &str, payload: &[u8]) -> String {
     let mut signed = Vec::with_capacity(timestamp.len() + 1 + payload.len());
     signed.extend_from_slice(timestamp.as_bytes());
@@ -254,20 +169,6 @@ fn expected_signature(secret: &str, timestamp: &str, payload: &[u8]) -> String {
     hex_encode(&hmac_sha256(secret.as_bytes(), &signed))
 }
 
-/// Verify a `Stripe-Signature` header against the raw request body.
-///
-/// Returns the parsed event on success. The body is parsed **only after** the
-/// signature verifies, so malformed-JSON handling can never run on unverified
-/// input.
-///
-/// `tolerance_secs` is the allowed `|now - t|` drift;
-/// [`DEFAULT_WEBHOOK_TOLERANCE_SECS`] matches Stripe's own default of 300.
-///
-/// # Errors
-/// [`StripeError::Signature`] for a missing/blank secret, a header with no
-/// usable `t` or `v1`, a timestamp outside tolerance (in either direction), or
-/// no `v1` entry matching the expected HMAC. [`StripeError::Parse`] when a
-/// verified body is not valid JSON.
 pub fn construct_event(
     payload: &[u8],
     sig_header: &str,
@@ -278,7 +179,6 @@ pub fn construct_event(
     json::parse(payload).map_err(|e| StripeError::Parse(e.to_string()))
 }
 
-/// Signature check with an injectable clock, so tolerance can be tested.
 fn verify_signature(
     payload: &[u8],
     sig_header: &str,
@@ -323,7 +223,6 @@ fn verify_signature(
     }
 }
 
-/// Seconds since the Unix epoch; 0 if the system clock predates it.
 fn now_unix() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -331,64 +230,37 @@ fn now_unix() -> i64 {
         .unwrap_or(0)
 }
 
-// ==== TYPED OPERATIONS ====
-
-/// Arguments for [`StripeClient::create_checkout_session`].
 pub struct CheckoutParams<'a> {
-    /// Pre-fills Checkout and is the identity the webhook later resolves.
     pub customer_email: &'a str,
-    /// Price to subscribe to, from [`StripeClient::price_id_for_lookup_key`].
     pub price_id: &'a str,
-    /// Redirect target after a completed payment.
     pub success_url: &'a str,
-    /// Redirect target when the customer abandons Checkout.
     pub cancel_url: &'a str,
-    /// Stamps `metadata[app]` and `subscription_data[metadata][app]` for
-    /// stripe-proxy routing. `None` omits both keys entirely.
     pub app_name: Option<&'a str>,
-    /// Reuse a caller-supplied `Idempotency-Key` instead of generating one.
-    /// Supply this when the same logical checkout may be retried across
-    /// process restarts; otherwise leave `None`.
     pub idempotency_key: Option<&'a str>,
 }
 
-/// The fields the backend reads off a created Checkout Session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckoutSession {
-    /// Hosted Checkout URL to redirect the browser to.
     pub url: Option<String>,
-    /// Session id (`cs_…`).
     pub id: String,
-    /// Customer id Stripe created or matched, when present.
     pub customer: Option<String>,
 }
 
-/// The fields the backend reads off a created Billing Portal Session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PortalSession {
-    /// Hosted portal URL to redirect the browser to.
     pub url: Option<String>,
-    /// Session id (`bps_…`).
     pub id: String,
 }
 
-/// In-memory Stripe stand-in used by route tests. Never compiled into release.
 #[cfg(test)]
 #[derive(Default)]
 pub struct StripeMock {
-    /// `cus_…` → email.
     pub customers: std::collections::HashMap<String, String>,
-    /// `sub_…` → raw subscription JSON object body.
     pub subscriptions: std::collections::HashMap<String, String>,
-    /// Price lookup_key → `price_…` id.
     pub prices: std::collections::HashMap<String, String>,
-    /// Fixed Checkout Session response.
     pub checkout: Option<CheckoutSession>,
-    /// Fixed Billing Portal Session response.
     pub portal: Option<PortalSession>,
-    /// Artificial delay applied before every mocked response (worker / pool tests).
     pub delay_ms: u64,
-    /// How many mock HTTP operations ran.
     pub call_count: Arc<AtomicU32>,
 }
 
@@ -424,7 +296,6 @@ impl StripeMock {
             };
         }
         if url.starts_with(&format!("{API_BASE}/v1/prices?")) {
-            // lookup_keys[0]=KEY — form-encoded brackets become %5B0%5D
             let key = url
                 .split("lookup_keys%5B0%5D=")
                 .nth(1)
@@ -492,7 +363,6 @@ impl StripeMock {
     }
 }
 
-/// Decode the small set of percent-escapes used in Stripe path/query tests.
 #[cfg(test)]
 fn percent_decode_basic(s: &str) -> String {
     let bytes = s.as_bytes();
@@ -524,9 +394,6 @@ fn percent_decode_basic(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Build a valid `Stripe-Signature` header for `payload` (route / integration tests).
-///
-/// Uses the real HMAC scheme so [`construct_event`] accepts the request.
 pub fn sign_webhook_header(secret: &str, payload: &[u8], timestamp: i64) -> String {
     format!(
         "t={timestamp},v1={}",
@@ -534,26 +401,19 @@ pub fn sign_webhook_header(secret: &str, payload: &[u8], timestamp: i64) -> Stri
     )
 }
 
-/// Authenticated Stripe REST client.
-///
-/// Holds the secret key. `Debug` is implemented by hand to print
-/// `StripeClient { .. }`, so the key cannot escape through logging.
 pub struct StripeClient {
     secret_key: String,
-    /// Test-only stand-in for libcurl. Production builds omit this field.
     #[cfg(test)]
     mock: Option<std::sync::Arc<std::sync::Mutex<StripeMock>>>,
 }
 
 impl std::fmt::Debug for StripeClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Deliberately opaque: never render the secret key.
         f.write_str("StripeClient { .. }")
     }
 }
 
 impl StripeClient {
-    /// Build a client from a secret key (`sk_…` or a restricted `rk_…`).
     pub fn new(secret_key: String) -> Self {
         StripeClient {
             secret_key,
@@ -562,7 +422,6 @@ impl StripeClient {
         }
     }
 
-    /// Build a client that never touches the network (unit / route tests only).
     #[cfg(test)]
     pub fn with_mock(mock: StripeMock) -> Self {
         StripeClient {
@@ -571,42 +430,17 @@ impl StripeClient {
         }
     }
 
-    /// Fetch a customer and return its lowercase email.
-    ///
-    /// `Ok(None)` when the customer has no email — mirroring the Node
-    /// `resolveCustomerEmail`, which treats that as a soft miss rather than an
-    /// error.
-    ///
-    /// # Errors
-    /// Any [`StripeError`] from the underlying `GET /v1/customers/{id}`.
     pub fn customer_email(&self, customer_id: &str) -> Result<Option<String>, StripeError> {
         let url = format!("{API_BASE}/v1/customers/{}", percent_encode(customer_id));
         let body = self.get(&url)?;
         Ok(body.get_str("email").map(str::to_lowercase))
     }
 
-    /// Fetch a subscription.
-    ///
-    /// Returned as raw [`Json`] because the caller reads several fields off it
-    /// (`status`, `current_period_end`, `items.data[0].current_period_end`)
-    /// and must apply the same pre-basil/basil fallback as the Node backend.
-    ///
-    /// # Errors
-    /// Any [`StripeError`] from `GET /v1/subscriptions/{id}`.
     pub fn retrieve_subscription(&self, sub_id: &str) -> Result<Json, StripeError> {
         let url = format!("{API_BASE}/v1/subscriptions/{}", percent_encode(sub_id));
         self.get(&url)
     }
 
-    /// Resolve a price lookup key to a price id.
-    ///
-    /// `Ok(None)` when no price matches, which the caller turns into a 400.
-    /// `expand[0]=data.product` matches the Node call exactly; the expansion is
-    /// unused here but kept so the request (and Stripe's response caching and
-    /// rate accounting) is identical.
-    ///
-    /// # Errors
-    /// Any [`StripeError`] from `GET /v1/prices`.
     pub fn price_id_for_lookup_key(&self, lookup_key: &str) -> Result<Option<String>, StripeError> {
         let query = form_encode(&[
             ("lookup_keys[0]".to_string(), lookup_key.to_string()),
@@ -622,11 +456,6 @@ impl StripeClient {
             .map(str::to_string))
     }
 
-    /// Create a subscription-mode Checkout Session.
-    ///
-    /// # Errors
-    /// Any [`StripeError`] from `POST /v1/checkout/sessions`, or
-    /// [`StripeError::Parse`] if the response omits `id`.
     pub fn create_checkout_session(
         &self,
         p: CheckoutParams<'_>,
@@ -673,11 +502,6 @@ impl StripeClient {
         })
     }
 
-    /// Create a Billing Portal Session for an existing customer.
-    ///
-    /// # Errors
-    /// Any [`StripeError`] from `POST /v1/billing_portal/sessions`, or
-    /// [`StripeError::Parse`] if the response omits `id`.
     pub fn create_portal_session(
         &self,
         customer: &str,
@@ -697,7 +521,6 @@ impl StripeClient {
         })
     }
 
-    /// Issue an authenticated GET and decode the JSON body.
     fn get(&self, url: &str) -> Result<Json, StripeError> {
         #[cfg(test)]
         if let Some(mock) = &self.mock {
@@ -716,11 +539,6 @@ impl StripeClient {
         decode(res)
     }
 
-    /// Issue an authenticated form POST and decode the JSON body.
-    ///
-    /// POSTs always carry an `Idempotency-Key` so the retry loop cannot create
-    /// a duplicate session. The key is generated once per logical operation and
-    /// reused across every attempt.
     fn post(
         &self,
         url: &str,
@@ -750,14 +568,11 @@ impl StripeClient {
         decode(res)
     }
 
-    /// Build the bearer header. The returned string holds the secret — it is
-    /// passed straight to libcurl and never logged.
     fn auth_header(&self) -> String {
         format!("Bearer {}", self.secret_key)
     }
 }
 
-/// Turn a completed HTTP response into JSON, mapping Stripe's error envelope.
 fn decode(res: HttpResponse) -> Result<Json, StripeError> {
     if (200..300).contains(&res.status) {
         return json::parse(&res.body).map_err(|e| StripeError::Parse(e.to_string()));
@@ -765,7 +580,6 @@ fn decode(res: HttpResponse) -> Result<Json, StripeError> {
     Err(http_error(&res))
 }
 
-/// Map a `{"error":{"type","code","message"}}` body onto [`StripeError::Http`].
 fn http_error(res: &HttpResponse) -> StripeError {
     let parsed = json::parse(&res.body).ok();
     let err = parsed.as_ref().and_then(|j| j.get("error"));
@@ -780,28 +594,21 @@ fn http_error(res: &HttpResponse) -> StripeError {
     StripeError::Http { status: res.status, code, message }
 }
 
-// ==== RETRY, BACKOFF, CIRCUIT BREAKER ====
-
-/// Circuit-breaker state shared by every Stripe call in the process.
 struct CircuitState {
     consecutive_failures: u32,
     open_until: Option<Instant>,
 }
 
 impl CircuitState {
-    /// True when calls should fail fast without touching the network.
     fn is_open(&self, now: Instant) -> bool {
         matches!(self.open_until, Some(until) if now < until)
     }
 
-    /// Record a completed operation: a reached API resets the breaker.
     fn record_success(&mut self) {
         self.consecutive_failures = 0;
         self.open_until = None;
     }
 
-    /// Record a whole-operation failure (transport, or exhausted retries).
-    /// A non-retryable 4xx is *not* a failure — Stripe answered.
     fn record_failure(&mut self, now: Instant) {
         self.consecutive_failures = self.consecutive_failures.saturating_add(1);
         if self.consecutive_failures >= CIRCUIT_FAILURE_THRESHOLD {
@@ -813,27 +620,20 @@ impl CircuitState {
 static CIRCUIT: Mutex<CircuitState> =
     Mutex::new(CircuitState { consecutive_failures: 0, open_until: None });
 
-/// Lock the breaker, recovering from poisoning (state is advisory, not data).
 fn circuit() -> std::sync::MutexGuard<'static, CircuitState> {
     CIRCUIT.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// True for statuses worth retrying: rate limits and server-side faults.
 fn is_retryable_status(status: u16) -> bool {
     status == 429 || (500..600).contains(&status)
 }
 
-/// Read a `Retry-After` header in seconds form, clamped to a sane ceiling.
-///
-/// Stripe sends the seconds form; the HTTP-date form is not parsed and simply
-/// falls back to exponential backoff.
 fn retry_after_ms(headers: &[(String, String)]) -> Option<u64> {
     let v = header_value(headers, "retry-after")?;
     let secs: u64 = v.trim().parse().ok()?;
     Some(secs.min(MAX_RETRY_AFTER_SECS) * 1_000)
 }
 
-/// Case-insensitive header lookup.
 fn header_value<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
     headers
         .iter()
@@ -841,8 +641,6 @@ fn header_value<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a s
         .map(|(_, v)| v.as_str())
 }
 
-/// Emit Stripe's rate-limit headers when it sends them, so an approaching
-/// quota is visible before requests start failing.
 fn log_rate_limit(headers: &[(String, String)]) {
     for name in ["stripe-ratelimit-remaining", "x-ratelimit-remaining", "ratelimit-remaining"] {
         if let Some(v) = header_value(headers, name) {
@@ -851,12 +649,6 @@ fn log_rate_limit(headers: &[(String, String)]) {
     }
 }
 
-/// Perform a request with exponential backoff, `Retry-After` support, and a
-/// process-wide circuit breaker.
-///
-/// Retries transport errors, 429, and 5xx up to [`MAX_RETRIES`] times with
-/// 1s/2s/4s/8s delays. POST callers must supply an `Idempotency-Key` header so
-/// a retried create cannot duplicate.
 fn send_with_retry(
     method: Method,
     url: &str,
@@ -898,38 +690,28 @@ fn send_with_retry(
     Err(last.unwrap_or_else(|| StripeError::Transport("request failed".into())))
 }
 
-// ==== HTTP OVER SYSTEM libcurl ====
-
-/// HTTP verbs this client needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Method {
     Get,
     Post,
 }
 
-/// A completed HTTP response.
 struct HttpResponse {
-    /// HTTP status code.
     status: u16,
-    /// Raw response body.
     body: Vec<u8>,
-    /// Response headers as received, name and value trimmed.
     headers: Vec<(String, String)>,
 }
 
-/// Opaque libcurl easy handle.
 #[repr(C)]
 struct CURL {
     _private: [u8; 0],
 }
 
-/// Opaque libcurl string list (used for request headers).
 #[repr(C)]
 struct CurlSlist {
     _private: [u8; 0],
 }
 
-/// libcurl write/header callback shape.
 type CurlCb = extern "C" fn(*mut c_char, usize, usize, *mut c_void) -> usize;
 
 const CURL_GLOBAL_DEFAULT: c_long = 3;
@@ -952,7 +734,6 @@ const CURLOPT_NOSIGNAL: c_int = 99;
 const CURLOPT_TIMEOUT_MS: c_int = 155;
 const CURLOPT_CONNECTTIMEOUT_MS: c_int = 156;
 
-/// `CURLINFO_RESPONSE_CODE` = `CURLINFO_LONG (0x200000) + 2`.
 const CURLINFO_RESPONSE_CODE: c_int = 2_097_154;
 
 #[link(name = "curl")]
@@ -978,10 +759,8 @@ extern "C" {
     fn curl_easy_getinfo(handle: *mut CURL, info: c_int, ...) -> c_int;
 }
 
-/// `curl_global_init` must run exactly once before any easy handle is created.
 static CURL_INIT: Once = Once::new();
 
-/// Run libcurl's one-time global initialization.
 fn global_init() {
     CURL_INIT.call_once(|| {
         // SAFETY: called exactly once, before any curl_easy_init, per libcurl's
@@ -992,11 +771,6 @@ fn global_init() {
     });
 }
 
-/// libcurl write callback: append the chunk to the `Vec<u8>` behind `userdata`.
-///
-/// Must not unwind across the FFI boundary, so the body runs inside
-/// `catch_unwind`; a panic is reported as a short write, which makes libcurl
-/// abort the transfer with `CURLE_WRITE_ERROR` instead of aborting the process.
 extern "C" fn write_cb(ptr: *mut c_char, size: usize, nmemb: usize, userdata: *mut c_void) -> usize {
     let len = size.saturating_mul(nmemb);
     if ptr.is_null() || userdata.is_null() {
@@ -1015,9 +789,6 @@ extern "C" fn write_cb(ptr: *mut c_char, size: usize, nmemb: usize, userdata: *m
     result.unwrap_or(0)
 }
 
-/// libcurl header callback: collect `Name: value` lines (status line skipped).
-///
-/// Panic-safe for the same reason as [`write_cb`].
 extern "C" fn header_cb(
     ptr: *mut c_char,
     size: usize,
@@ -1045,7 +816,6 @@ extern "C" fn header_cb(
     result.unwrap_or(0)
 }
 
-/// Owns a libcurl easy handle and frees it on drop, including on early return.
 struct EasyHandle(*mut CURL);
 
 impl Drop for EasyHandle {
@@ -1058,7 +828,6 @@ impl Drop for EasyHandle {
     }
 }
 
-/// Owns a libcurl header list and frees it on drop.
 struct HeaderList(*mut CurlSlist);
 
 impl Drop for HeaderList {
@@ -1071,10 +840,6 @@ impl Drop for HeaderList {
     }
 }
 
-/// Translate a libcurl result code into a transport error message.
-///
-/// Uses `curl_easy_strerror`, whose strings are static and never contain
-/// request headers — so the API key cannot leak through this path.
 fn curl_message(code: c_int) -> String {
     // SAFETY: curl_easy_strerror returns a pointer to a static NUL-terminated
     // string for any code, valid for the program's lifetime; we only read it.
@@ -1089,12 +854,6 @@ fn curl_message(code: c_int) -> String {
     text.unwrap_or_else(|| format!("curl error {code}"))
 }
 
-/// Perform one HTTP request through the system libcurl.
-///
-/// Certificate verification is forced on (`SSL_VERIFYPEER=1`,
-/// `SSL_VERIFYHOST=2`) and there is deliberately no parameter to relax it.
-/// Redirects are not followed, so a redirect cannot replay the `Authorization`
-/// header to another host.
 fn request(
     method: Method,
     url: &str,
@@ -1158,7 +917,6 @@ fn request(
         // NOSIGNAL is required for thread safety: without it libcurl uses
         // SIGALRM/alarm() for DNS timeouts, which is process-global.
         rc |= curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1 as c_long);
-        // Certificate verification: never relaxed, no knob to relax it.
         rc |= curl_easy_setopt(h, CURLOPT_SSL_VERIFYPEER, 1 as c_long);
         rc |= curl_easy_setopt(h, CURLOPT_SSL_VERIFYHOST, 2 as c_long);
         if !list.0.is_null() {
@@ -1167,7 +925,6 @@ fn request(
         if method == Method::Post {
             let payload = body.unwrap_or(&[]);
             rc |= curl_easy_setopt(h, CURLOPT_POST, 1 as c_long);
-            // Size first, then the buffer: libcurl then never scans for a NUL.
             rc |= curl_easy_setopt(h, CURLOPT_POSTFIELDSIZE, payload.len() as c_long);
             rc |= curl_easy_setopt(h, CURLOPT_POSTFIELDS, payload.as_ptr().cast::<c_void>());
         }
@@ -1209,8 +966,6 @@ mod tests {
     fn signed_header(secret: &str, t: i64, payload: &[u8]) -> String {
         format!("t={t},v1={}", expected_signature(secret, &t.to_string(), payload))
     }
-
-    // ---- form encoding ----
 
     #[test]
     fn percent_encodes_space_as_pct20() {
@@ -1275,12 +1030,8 @@ mod tests {
         );
     }
 
-    // ---- signature scheme ----
-
     #[test]
     fn expected_signature_matches_known_vector() {
-        // Cross-checked against Node:
-        // crypto.createHmac('sha256', secret).update(`${t}.${payload}`).digest('hex')
         assert_eq!(
             expected_signature(SECRET, "1700000000", PAYLOAD),
             "d1e4aa90551919f198c22ba0a9691b35338d4b631d54ce1f1465e93b1d41c430"
@@ -1420,7 +1171,6 @@ mod tests {
         let now = now_unix();
         let header = signed_header(SECRET, now, b"not json");
         let err = construct_event(b"not json", &header, SECRET, 300).unwrap_err();
-        // Verification passes, so the failure must come from the parser.
         assert!(matches!(err, StripeError::Parse(_)));
     }
 
@@ -1429,8 +1179,6 @@ mod tests {
         let err = construct_event(b"not json", "t=1,v1=ff", SECRET, 300).unwrap_err();
         assert!(matches!(err, StripeError::Signature(_)));
     }
-
-    // ---- error mapping ----
 
     #[test]
     fn maps_stripe_error_envelope() {
@@ -1481,8 +1229,6 @@ mod tests {
         assert_eq!(decode(res).unwrap().get_str("id"), Some("cus_1"));
     }
 
-    // ---- retry policy ----
-
     #[test]
     fn retries_rate_limits_and_server_errors_only() {
         assert!(is_retryable_status(429));
@@ -1523,8 +1269,6 @@ mod tests {
         assert_eq!(header_value(&headers, "stripe-ratelimit-remaining"), Some("7"));
     }
 
-    // ---- circuit breaker ----
-
     #[test]
     fn circuit_opens_after_three_consecutive_failures() {
         let now = Instant::now();
@@ -1556,8 +1300,6 @@ mod tests {
         assert!(!c.is_open(now));
     }
 
-    // ---- secret hygiene ----
-
     #[test]
     fn debug_never_prints_the_secret_key() {
         let client = StripeClient::new("sk_live_SUPERSECRET".to_string());
@@ -1579,17 +1321,8 @@ mod tests {
         );
     }
 
-    // ---- libcurl argument passing ----
-
-    /// `curl_easy_setopt` is variadic, so a wrong declaration silently drops
-    /// every value while still returning `CURLE_OK` — which would leave
-    /// certificate verification and the timeouts unset. Connecting to a closed
-    /// local port separates the two outcomes without a network or a key: if the
-    /// URL arrived, libcurl fails to connect; if it was dropped, libcurl reports
-    /// a malformed URL instead.
     #[test]
     fn setopt_values_reach_libcurl() {
-        // Port 1 is privileged and never listening, so this cannot hang.
         let result = request(Method::Get, "http://127.0.0.1:1/", &[], None);
         let Err(StripeError::Transport(message)) = result else {
             panic!("expected a transport error connecting to a closed port");
@@ -1605,9 +1338,6 @@ mod tests {
         );
     }
 
-    // ---- live network (opt-in only) ----
-
-    /// Requires `STRIPE_TEST_KEY` and real network access; never run in CI.
     #[test]
     #[ignore = "makes a live Stripe API call"]
     fn live_customer_lookup() {

@@ -1,4 +1,3 @@
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',
@@ -22,12 +21,6 @@ export default {
   create(context) {
     const sourceCode = context.sourceCode;
 
-    /**
-     * True for `module.exports` or `exports.x` member expressions.
-     *
-     * @param {any} node - MemberExpression
-     * @returns {boolean} Whether it is a CommonJS export target
-     */
     function isCommonJsExport(node) {
       if (node.type !== 'MemberExpression') return false;
       const { object, property } = node;

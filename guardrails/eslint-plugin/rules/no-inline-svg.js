@@ -1,10 +1,8 @@
 import { jsxName } from '../lib/jsx.js';
 import { repoRelative } from '../lib/paths.js';
 
-/** The single icon module: the only place vendored SVG components may live. */
 const ICON_FUNNEL = /^src\/icons\.tsx?$/;
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',

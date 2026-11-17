@@ -1,4 +1,3 @@
-/** Built-in types too loose to describe a value, with the precise replacement for each. */
 const LOOSE_REFERENCES = {
   Function: '`(event: MouseEvent) => void` or the exact call signature',
   Object: '`Record<string, unknown>` or a named interface',
@@ -7,7 +6,6 @@ const LOOSE_REFERENCES = {
   Boolean: '`boolean`',
 };
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

@@ -1,23 +1,11 @@
 #!/usr/bin/env node
-/**
- * Fail if markdown links to missing local files or broken in-repo anchors.
- *
- * Scans README.md, AGENTS.md, SECURITY.md, docs/, and skills/.
- * External http(s) links are skipped (no network in CI).
- */
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/**
- * @param {string} dir
- * @param {(n: string) => boolean} pred
- * @returns {string[]}
- */
 function walk(dir, pred) {
-  /** @type {string[]} */
   const out = [];
   for (const name of readdirSync(dir)) {
     if (name === 'node_modules' || name === 'dist' || name === 'target' || name === '.git') continue;
@@ -29,10 +17,6 @@ function walk(dir, pred) {
   return out;
 }
 
-/**
- * GitHub-style heading slug.
- * @param {string} heading
- */
 function slugify(heading) {
   return heading
     .trim()
@@ -41,10 +25,6 @@ function slugify(heading) {
     .replace(/\s+/g, '-');
 }
 
-/**
- * @param {string} file
- * @returns {{ text: string, anchors: Set<string> }}
- */
 function loadMarkdown(file) {
   const text = readFileSync(file, 'utf8');
   const anchors = new Set();
@@ -61,12 +41,10 @@ const files = [
   ...walk(join(ROOT, 'skills'), (n) => n.endsWith('.md')),
 ].filter((f) => existsSync(f) && !f.includes('node_modules'));
 
-/** @type {Map<string, { text: string, anchors: Set<string> }>} */
 const cache = new Map();
 for (const f of files) cache.set(f, loadMarkdown(f));
 
 const linkRe = /\[([^\]]*)\]\(([^)]+)\)/g;
-/** @type {string[]} */
 const errors = [];
 let checked = 0;
 
@@ -94,7 +72,6 @@ for (const file of files) {
     if (hash) {
       const doc = cache.get(targetFile) ?? (existsSync(targetFile) && targetFile.endsWith('.md') ? loadMarkdown(targetFile) : null);
       if (doc && !doc.anchors.has(hash.toLowerCase()) && !doc.anchors.has(hash)) {
-        // GitHub sometimes keeps punctuation differently — try slugify of hash as-is
         const want = hash.toLowerCase();
         if (![...doc.anchors].some((a) => a === want)) {
           errors.push(`${relative(ROOT, file)}: missing anchor #${hash} (in ${relative(ROOT, targetFile)})`);

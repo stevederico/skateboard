@@ -1,6 +1,5 @@
 const REQUIRED = ['loading', 'error'];
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

@@ -1,18 +1,11 @@
 const GROUP_NAMES = ['external package', 'internal (@/) module', 'relative path'];
 
-/**
- * Group index for an import specifier: 0 external (incl. `node:`), 1 internal `@/`, 2 relative.
- *
- * @param {string} source - Import specifier
- * @returns {number} Group index
- */
 function groupOf(source) {
   if (source.startsWith('@/')) return 1;
   if (source.startsWith('.') || source.startsWith('/')) return 2;
   return 0;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',

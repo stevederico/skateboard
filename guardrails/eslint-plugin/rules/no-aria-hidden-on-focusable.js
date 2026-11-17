@@ -1,20 +1,12 @@
 import { findAttr, jsxName, staticAttrValue } from '../lib/jsx.js';
 
-/** Elements that are focusable by default. */
 const FOCUSABLE_TAGS = new Set(['button', 'input', 'select', 'textarea', 'iframe', 'summary']);
 
-/** skateboard-ui components that render a focusable control. */
 const FOCUSABLE_COMPONENTS = new Set([
   'Button', 'Input', 'Textarea', 'Switch', 'Checkbox', 'SelectTrigger', 'Link',
   'DialogTrigger', 'SheetTrigger', 'PopoverTrigger', 'DropdownMenuTrigger', 'TooltipTrigger',
 ]);
 
-/**
- * True when the element can receive keyboard focus.
- *
- * @param {any} node - JSXOpeningElement
- * @returns {boolean} Whether it is focusable
- */
 function isFocusable(node) {
   const name = jsxName(node.name);
   if (FOCUSABLE_TAGS.has(name) || FOCUSABLE_COMPONENTS.has(name)) {
@@ -27,7 +19,6 @@ function isFocusable(node) {
   return value === undefined || Number(value) >= 0;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

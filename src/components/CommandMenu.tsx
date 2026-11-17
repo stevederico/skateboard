@@ -11,7 +11,6 @@ import {
   CommandItem,
 } from '@stevederico/skateboard-ui/ui/command';
 
-/** Page entry from constants.json's pages array. */
 interface PageEntry {
   title: string;
   url: string;
@@ -42,10 +41,6 @@ export default function CommandMenu() {
   const pages: PageEntry[] = state.constants?.pages || [];
 
   useEffect(() => {
-    /**
-     * Toggle command menu on Cmd+K / Ctrl+K keydown.
-     * @param e - Native keyboard event
-     */
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
@@ -57,10 +52,6 @@ export default function CommandMenu() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  /**
-   * Navigate to the selected page and close the menu.
-   * @param url - Route path relative to /app/
-   */
   const handleSelect = useCallback(
     (url: string) => {
       navigate(`/app/${url}`);

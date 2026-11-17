@@ -7,12 +7,6 @@ const FIXES = {
   prompt: 'use `<Dialog>` from `@stevederico/skateboard-ui/ui/dialog` with a `<Label>` + `<Input>` from `@stevederico/skateboard-ui/ui/input` and a submit `<Button>`',
 };
 
-/**
- * Dialog name called by this expression (`alert(...)`, `window.confirm(...)`), or null.
- *
- * @param {any} callee - CallExpression callee
- * @returns {string | null} `alert`, `confirm`, `prompt`, or null
- */
 function dialogName(callee) {
   if (callee.type === 'Identifier' && DIALOGS.has(callee.name)) return callee.name;
   if (
@@ -23,7 +17,6 @@ function dialogName(callee) {
   return null;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

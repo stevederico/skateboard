@@ -1,13 +1,6 @@
 import { moduleSourceVisitors, packageName } from './moduleSources.js';
 
 /**
- * @typedef {object} BannedEntry
- * @property {(source: string, pkg: string) => boolean} match - True when the specifier is banned
- * @property {string} why - Root cause: why the repo forbids this import
- * @property {string} fix - Exact replacement the author should use
- */
-
-/**
  * Build a rule that bans a family of imports. Every report names the specifier, the
  * reason, and the replacement, because the reader is usually an agent that will act on
  * the message verbatim.

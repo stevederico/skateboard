@@ -2,7 +2,6 @@ import { moduleSourceVisitors, mergeVisitors } from '../lib/moduleSources.js';
 
 const UI = '@stevederico/skateboard-ui';
 
-/** Utilities exports removed in late 4.x, with what replaced each. */
 const REMOVED_UTILITIES = {
   useForm: 'React `useState` per field with the validation pattern in skills/skateboard/rules/forms.md',
   logEvent: 'nothing in the shell; call your own analytics endpoint with `apiRequest` inside the event handler',
@@ -10,7 +9,6 @@ const REMOVED_UTILITIES = {
   setTabBarVisible: '`showTabBar()` / `hideTabBar()` (or `setUIVisibility({ tabBar })`) from "@stevederico/skateboard-ui/Utilities"',
 };
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',
@@ -42,7 +40,6 @@ export default {
           context.report({ node, messageId: 'icons', data: { source } });
         } else if (source === `${UI}/shadcn` || source.startsWith(`${UI}/shadcn/`)) {
           const rest = source.slice(`${UI}/shadcn/`.length);
-          // Only lib/utils (cn) was ever exported from shadcn/lib.
           const sub = rest.startsWith('ui/') || rest.startsWith('hooks/') ? rest : 'lib/utils';
           context.report({ node, messageId: 'shadcn', data: { source, replacement: `${UI}/${sub}` } });
         } else if (source === `${UI}/DynamicIcon` || source.startsWith(`${UI}/DynamicIcon/`)) {

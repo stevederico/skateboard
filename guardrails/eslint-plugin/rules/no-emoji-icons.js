@@ -1,10 +1,8 @@
 // Pictographic emoji, excluding the typographic symbols © ® ™ (also Extended_Pictographic).
 const EMOJI = /(?![©®™])\p{Extended_Pictographic}/u;
 
-/** JSX attributes that name an icon. */
 const ICON_ATTRS = new Set(['icon', 'leftIcon', 'rightIcon', 'startIcon', 'endIcon']);
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',
@@ -20,12 +18,6 @@ export default {
     },
   },
   create(context) {
-    /**
-     * Report the first emoji in a rendered string.
-     *
-     * @param {any} node - Node holding the text
-     * @param {string} text - Rendered text
-     */
     function check(node, text) {
       const match = EMOJI.exec(text);
       if (match) context.report({ node, messageId: 'emoji', data: { emoji: match[0] } });

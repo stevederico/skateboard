@@ -1,6 +1,5 @@
 import { createBannedImportRule } from '../lib/bannedImports.js';
 
-/** Icon packages other than Lucide. Scoped families match every package in the scope. */
 const ICON_PACKAGES = new Set(['react-icons', '@tabler/icons-react', '@tabler/icons', '@heroicons/react', '@radix-ui/react-icons', 'react-feather', 'phosphor-react', '@mui/icons-material', 'ionicons', 'bootstrap-icons', 'feather-icons']);
 const ICON_SCOPES = ['@fortawesome/', '@phosphor-icons/', '@iconify/', '@iconify-icons/'];
 

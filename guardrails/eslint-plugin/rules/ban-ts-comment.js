@@ -1,10 +1,7 @@
-/** Minimum length of the reason after `@ts-expect-error`, so "fix" or "todo" do not count. */
 const MIN_REASON_LENGTH = 10;
 
-// A ts directive at the start of a line comment, block comment, or JSDoc line.
 const DIRECTIVE = /^\s*(?:\*\s*)?@ts-(ignore|nocheck|expect-error)\b(.*)$/m;
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

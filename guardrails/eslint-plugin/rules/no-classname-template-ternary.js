@@ -2,7 +2,6 @@ import { CLASS_ATTRIBUTES } from '../lib/classStrings.js';
 
 const CONDITIONAL = new Set(['ConditionalExpression', 'LogicalExpression']);
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',

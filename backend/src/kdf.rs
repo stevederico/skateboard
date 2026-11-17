@@ -1,54 +1,19 @@
-//! Password hashing — PBKDF2, scrypt, and legacy bcrypt verification.
-//!
-//! New hashes are always scrypt, in the self-describing format
-//! `scrypt$<n>$<r>$<p>$<base64url salt>$<base64url key>`, currently produced
-//! with Node's `crypto.scrypt` defaults (N=16384, r=8, p=1, 64-byte key,
-//! 16-byte salt).
-//!
-//! Recording the parameters is what makes the cost adjustable. The older
-//! parameterless form `scrypt$<salt>$<key>`, written by the Node backend and by
-//! earlier versions of this crate, still verifies — at Node's defaults, which
-//! are hard-coded for that form and must not be changed. Raising the cost
-//! therefore only affects new writes, and existing users are migrated by
-//! [`needs_rehash`] on their next sign-in rather than locked out.
-//!
-//! Legacy bcrypt hashes (`$2a$` / `$2b$` / `$2y$`) predate the scrypt
-//! migration and must still verify or those accounts are locked out. Bcrypt
-//! here is **verify-only**; it is a port of the vendored `bcryptjs` at
-//! `backend/vendor/legacy-bcrypt.js`, so it reproduces that implementation's
-//! behavior rather than canonical OpenBSD bcrypt where the two differ.
-
 use crate::crypto::{base64url_decode, base64url_encode, ct_eq, hmac_sha256, random_bytes};
 
-/// Length of a scrypt salt in bytes (Node `SCRYPT_SALTLEN`).
 pub const SCRYPT_SALT_LEN: usize = 16;
 
-/// Length of a derived scrypt key in bytes (Node `SCRYPT_KEYLEN`).
 pub const SCRYPT_KEY_LEN: usize = 64;
 
-/// Cost parameter N used for new hashes — Node's `crypto.scrypt` default.
 pub const SCRYPT_N: u32 = 16384;
 
-/// Block size parameter r used for new hashes — Node's `crypto.scrypt` default.
 pub const SCRYPT_R: u32 = 8;
 
-/// Parallelization parameter p used for new hashes — Node's `crypto.scrypt` default.
 pub const SCRYPT_P: u32 = 1;
 
-/// Largest scrypt working set a *stored* hash may demand, in bytes.
-///
-/// A parameterized hash tells the verifier how much work to do, so a row that
-/// an attacker could write would otherwise let them pick the cost and exhaust
-/// memory on every sign-in attempt. scrypt's working set is `128 * N * r`, so
-/// this cap bounds it at 256 MiB regardless of what a row claims. The
-/// compiled-in defaults need 16 MiB, leaving plenty of headroom to raise cost.
 const SCRYPT_MAX_STORED_MEMORY: u64 = 256 * 1024 * 1024;
 
-/// Largest parallelization factor accepted from a stored hash. `p` multiplies
-/// CPU time without bound, so it is capped separately from memory.
 const SCRYPT_MAX_STORED_P: u32 = 16;
 
-/// The `N`, `r`, `p` triple a stored hash was produced with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ScryptParams {
     n: u32,
@@ -56,7 +21,6 @@ struct ScryptParams {
     p: u32,
 }
 
-/// The parameters new hashes are written with.
 const CURRENT_PARAMS: ScryptParams = ScryptParams {
     n: SCRYPT_N,
     r: SCRYPT_R,
@@ -64,8 +28,6 @@ const CURRENT_PARAMS: ScryptParams = ScryptParams {
 };
 
 impl ScryptParams {
-    /// Reject a triple whose cost is outside what this build is willing to
-    /// spend, so a hostile or corrupt row cannot dictate the work factor.
     fn within_limits(&self) -> bool {
         if self.p == 0 || self.p > SCRYPT_MAX_STORED_P {
             return false;
@@ -80,30 +42,16 @@ impl ScryptParams {
     }
 }
 
-/// A parsed scrypt hash: its parameters, salt, and expected key.
 struct ParsedHash {
     params: ScryptParams,
     salt: Vec<u8>,
     key: Vec<u8>,
 }
 
-/// Parse a stored scrypt hash in either supported encoding.
-///
-/// Two layouts exist, told apart by field count so they cannot be confused:
-/// - `scrypt$<salt>$<key>` — written by the Node backend and by this crate
-///   before parameters were recorded. Its parameters are implicitly Node's
-///   defaults, which is why [`CURRENT_PARAMS`] must never be read as the
-///   meaning of this form; the constant is hard-coded here instead.
-/// - `scrypt$<n>$<r>$<p>$<salt>$<key>` — self-describing, written today.
-///
-/// Returns `None` for anything malformed or outside the cost limits, which
-/// callers treat as a failed verification.
 fn parse_scrypt_hash(stored: &str) -> Option<ParsedHash> {
     let rest = stored.strip_prefix("scrypt$")?;
     let fields: Vec<&str> = rest.split('$').collect();
     let (params, salt_b64, key_b64) = match fields.as_slice() {
-        // The legacy form's parameters are fixed for all time: they are what
-        // Node used, not whatever this build currently prefers.
         [salt, key] => (
             ScryptParams {
                 n: 16384,
@@ -134,30 +82,12 @@ fn parse_scrypt_hash(stored: &str) -> Option<ParsedHash> {
     })
 }
 
-// ---------------------------------------------------------------------------
-// PBKDF2
-// ---------------------------------------------------------------------------
-
-/// PBKDF2 with HMAC-SHA-256 as the PRF (RFC 2898 §5.2).
-///
-/// # Arguments
-///
-/// * `password` - Password bytes, used as the HMAC key.
-/// * `salt` - Salt bytes.
-/// * `iterations` - Iteration count; `0` is treated as `1`, since RFC 2898
-///   requires at least one iteration.
-/// * `dk_len` - Desired derived-key length in bytes.
-///
-/// # Returns
-///
-/// The derived key, exactly `dk_len` bytes long.
 pub fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32, dk_len: usize) -> Vec<u8> {
     let iterations = iterations.max(1);
     let mut out = Vec::with_capacity(dk_len);
     let mut block_index: u32 = 1;
 
     while out.len() < dk_len {
-        // U1 = PRF(P, S || INT_BE(i))
         let mut msg = Vec::with_capacity(salt.len() + 4);
         msg.extend_from_slice(salt);
         msg.extend_from_slice(&block_index.to_be_bytes());
@@ -178,23 +108,11 @@ pub fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32, dk_len:
     out
 }
 
-// ---------------------------------------------------------------------------
-// scrypt
-// ---------------------------------------------------------------------------
-
-/// Why a scrypt call could not be performed.
-///
-/// Returned instead of panicking so a malformed stored hash can never take the
-/// process down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScryptError {
-    /// `n` was not a power of two greater than 1.
     InvalidN,
-    /// `r` or `p` was zero.
     InvalidBlockOrParallelism,
-    /// `dk_len` was zero.
     InvalidKeyLength,
-    /// The requested parameters overflow `usize` or exceed addressable memory.
     Overflow,
 }
 
@@ -212,14 +130,10 @@ impl std::fmt::Display for ScryptError {
 
 impl std::error::Error for ScryptError {}
 
-/// The Salsa20/8 core (RFC 7914 §3) over 16 little-endian 32-bit words.
-///
-/// Operates in place: `x` is replaced by `x + doubleround^4(x)` word-wise.
 fn salsa20_8(x: &mut [u32; 16]) {
     let input = *x;
     let mut t = input;
     for _ in 0..4 {
-        // Column round
         t[4] ^= t[0].wrapping_add(t[12]).rotate_left(7);
         t[8] ^= t[4].wrapping_add(t[0]).rotate_left(9);
         t[12] ^= t[8].wrapping_add(t[4]).rotate_left(13);
@@ -240,7 +154,6 @@ fn salsa20_8(x: &mut [u32; 16]) {
         t[11] ^= t[7].wrapping_add(t[3]).rotate_left(13);
         t[15] ^= t[11].wrapping_add(t[7]).rotate_left(18);
 
-        // Row round
         t[1] ^= t[0].wrapping_add(t[3]).rotate_left(7);
         t[2] ^= t[1].wrapping_add(t[0]).rotate_left(9);
         t[3] ^= t[2].wrapping_add(t[1]).rotate_left(13);
@@ -266,10 +179,6 @@ fn salsa20_8(x: &mut [u32; 16]) {
     }
 }
 
-/// `scryptBlockMix` (RFC 7914 §4) over `2 * r` 64-byte blocks held as words.
-///
-/// Reads `input` (length `32 * r` words) and writes the shuffled result to
-/// `output`, which must be the same length.
 fn block_mix(input: &[u32], output: &mut [u32], r: usize) {
     let two_r = 2 * r;
     let mut x = [0u32; 16];
@@ -280,16 +189,11 @@ fn block_mix(input: &[u32], output: &mut [u32], r: usize) {
             x[j] ^= input[i * 16 + j];
         }
         salsa20_8(&mut x);
-        // Even-indexed results go to the first half, odd to the second.
         let dst = if i % 2 == 0 { i / 2 } else { r + i / 2 } * 16;
         output[dst..dst + 16].copy_from_slice(&x);
     }
 }
 
-/// `scryptROMix` (RFC 7914 §5) in place over one `128 * r`-byte block.
-///
-/// `v` and `scratch` are caller-supplied working buffers, reused across the
-/// `p` iterations so the 128·r·N allocation happens once.
 fn ro_mix(b: &mut [u32], n: u32, r: usize, v: &mut [u32], scratch: &mut [u32]) {
     let block_words = 32 * r;
     let n = n as usize;
@@ -300,7 +204,6 @@ fn ro_mix(b: &mut [u32], n: u32, r: usize, v: &mut [u32], scratch: &mut [u32]) {
         b.copy_from_slice(scratch);
     }
     for _ in 0..n {
-        // Integerify: first little-endian word of the last 64-byte block.
         let j = (b[block_words - 16] as usize) & (n - 1);
         for k in 0..block_words {
             b[k] ^= v[j * block_words + k];
@@ -310,25 +213,6 @@ fn ro_mix(b: &mut [u32], n: u32, r: usize, v: &mut [u32], scratch: &mut [u32]) {
     }
 }
 
-/// scrypt (RFC 7914 §6).
-///
-/// # Arguments
-///
-/// * `password` - Password bytes.
-/// * `salt` - Salt bytes.
-/// * `n` - CPU/memory cost; must be a power of two greater than 1.
-/// * `r` - Block size factor; must be non-zero.
-/// * `p` - Parallelization factor; must be non-zero.
-/// * `dk_len` - Derived key length in bytes; must be non-zero.
-///
-/// # Returns
-///
-/// The derived key, `dk_len` bytes long.
-///
-/// # Errors
-///
-/// Returns a [`ScryptError`] for out-of-range parameters or a working-set size
-/// that would overflow `usize`. Never panics on bad input.
 pub fn scrypt(
     password: &[u8],
     salt: &[u8],
@@ -358,10 +242,8 @@ pub fn scrypt(
         .checked_mul(n as usize)
         .ok_or(ScryptError::Overflow)?;
     let b_bytes = b_words.checked_mul(4).ok_or(ScryptError::Overflow)?;
-    // Guard against an allocation request that cannot succeed anyway.
     v_words.checked_mul(4).ok_or(ScryptError::Overflow)?;
 
-    // B = PBKDF2(P, S, 1, p * 128 * r)
     let b_init = pbkdf2_hmac_sha256(password, salt, 1, b_bytes);
     let mut b: Vec<u32> = b_init
         .chunks_exact(4)
@@ -375,7 +257,6 @@ pub fn scrypt(
         ro_mix(slice, n, r_us, &mut v, &mut scratch);
     }
 
-    // DK = PBKDF2(P, B, 1, dkLen)
     let mut b_bytes_out = Vec::with_capacity(b_bytes);
     for word in &b {
         b_bytes_out.extend_from_slice(&word.to_le_bytes());
@@ -383,18 +264,9 @@ pub fn scrypt(
     Ok(pbkdf2_hmac_sha256(password, &b_bytes_out, 1, dk_len))
 }
 
-// ---------------------------------------------------------------------------
-// Password hashing
-// ---------------------------------------------------------------------------
-
-/// Why a password could not be hashed.
 #[derive(Debug)]
 pub enum HashError {
-    /// The system random source was unavailable — hashing fails closed rather
-    /// than salting from a weak source.
     Random(std::io::Error),
-    /// The scrypt parameters were rejected. Unreachable with the compiled-in
-    /// constants; present so the error path is total.
     Scrypt(ScryptError),
 }
 
@@ -409,32 +281,6 @@ impl std::fmt::Display for HashError {
 
 impl std::error::Error for HashError {}
 
-/// Hash a password for storage.
-///
-/// Produces `scrypt$<n>$<r>$<p>$<base64url(salt)>$<base64url(key)>` with a
-/// fresh 16-byte random salt and a 64-byte key, at the parameters in
-/// [`CURRENT_PARAMS`] (currently Node's `crypto.scrypt` defaults: N=16384, r=8,
-/// p=1).
-///
-/// The parameters are recorded in the hash so they can be raised later without
-/// locking anyone out: hashes written at the old cost keep verifying at their
-/// own cost, and [`needs_rehash`] reports them for upgrade on next sign-in.
-/// Hashes in the older parameterless form still verify; only new writes use
-/// this encoding.
-///
-/// # Arguments
-///
-/// * `password` - Plain-text password. Hashed as UTF-8 bytes, matching Node's
-///   default string handling.
-///
-/// # Returns
-///
-/// The encoded hash string, safe to store verbatim.
-///
-/// # Errors
-///
-/// [`HashError::Random`] if `/dev/urandom` is unavailable, or
-/// [`HashError::Scrypt`] if key derivation is rejected.
 pub fn hash_password(password: &str) -> Result<String, HashError> {
     let salt = random_bytes(SCRYPT_SALT_LEN).map_err(HashError::Random)?;
     let ScryptParams { n, r, p } = CURRENT_PARAMS;
@@ -447,33 +293,12 @@ pub fn hash_password(password: &str) -> Result<String, HashError> {
     ))
 }
 
-/// Verify a password against a stored hash.
-///
-/// Dispatches on the stored prefix, exactly like Node's `verifyPassword`:
-/// `scrypt$` re-derives and compares in constant time; `$2` falls through to
-/// the legacy bcrypt verifier; anything else is rejected.
-///
-/// Malformed stored hashes return `false` — this function never panics, so a
-/// corrupted database row cannot crash a request.
-///
-/// # Arguments
-///
-/// * `password` - Plain-text password supplied by the client.
-/// * `stored` - Hash as stored in the database.
-///
-/// # Returns
-///
-/// `true` only if the password matches.
 pub fn verify_password(password: &str, stored: &str) -> bool {
     if stored.starts_with("scrypt$") {
         let Some(parsed) = parse_scrypt_hash(stored) else {
             return false;
         };
-        // Each hash is verified at the parameters it was created with, which is
-        // what lets the compiled-in cost change without invalidating old rows.
         let ScryptParams { n, r, p } = parsed.params;
-        // Node derives SCRYPT_KEYLEN bytes regardless of the stored length,
-        // then requires the lengths to match before comparing.
         let Ok(candidate) = scrypt(password.as_bytes(), &parsed.salt, n, r, p, SCRYPT_KEY_LEN)
         else {
             return false;
@@ -486,61 +311,30 @@ pub fn verify_password(password: &str, stored: &str) -> bool {
     false
 }
 
-/// Whether a stored hash should be rewritten on the next successful sign-in.
-///
-/// True for legacy bcrypt (and anything unrecognized), and also for a scrypt
-/// hash whose recorded parameters differ from [`CURRENT_PARAMS`] — which is how
-/// a cost increase rolls out: each user is migrated the next time they sign in,
-/// while their existing hash keeps working until then.
-///
-/// # Arguments
-///
-/// * `stored` - Hash as stored in the database.
-///
-/// # Returns
-///
-/// `true` if the caller should replace the stored hash with a fresh
-/// [`hash_password`] result.
 pub fn needs_rehash(stored: &str) -> bool {
     parse_scrypt_hash(stored).is_none_or(|parsed| parsed.params != CURRENT_PARAMS)
 }
 
-// ---------------------------------------------------------------------------
-// Legacy bcrypt (verify only)
-// ---------------------------------------------------------------------------
-
-/// Legacy bcrypt verification, ported from the vendored `bcryptjs`.
-///
-/// Verify-only by design: new passwords are always scrypt, so there is no
-/// hashing entry point here. The port is deliberately faithful to
-/// `backend/vendor/legacy-bcrypt.js` rather than to canonical OpenBSD bcrypt —
-/// see [`verify`] for where the two differ.
 mod bcrypt {
     use crate::crypto::ct_eq;
 
-    /// bcrypt's non-standard base64 alphabet.
     const B64_CODE: &[u8; 64] =
         b"./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
-    /// Salt length in bytes, fixed by the bcrypt format.
     const BCRYPT_SALT_LEN: usize = 16;
 
-    /// The 192-bit magic value encrypted 64 times: "OrpheanBeholderScryDoubt".
     const C_ORIG: [u32; 6] = [
         0x4f727068, 0x65616e42, 0x65686f6c, 0x64657253, 0x63727944, 0x6f756274,
     ];
 
-    /// Total characters in a bcrypt hash string (`$2b$10$` + 22 + 31).
     const HASH_LEN: usize = 60;
 
-    /// Blowfish P-array initial state — fractional digits of pi.
     const P_ORIG: [u32; 18] = [
         0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344, 0xa4093822, 0x299f31d0,
         0x082efa98, 0xec4e6c89, 0x452821e6, 0x38d01377, 0xbe5466cf, 0x34e90c6c,
         0xc0ac29b7, 0xc97c50dd, 0x3f84d5b5, 0xb5470917, 0x9216d5d9, 0x8979fb1b,
     ];
 
-    /// Blowfish S-boxes initial state — four 256-entry boxes, laid out flat.
     const S_ORIG: [u32; 1024] = [
         0xd1310ba6, 0x98dfb5ac, 0x2ffd72db, 0xd01adfb7, 0xb8e1afed, 0x6a267e96,
         0xba7c9045, 0xf12c7f99, 0x24a19947, 0xb3916cf7, 0x0801f2e2, 0x858efc16,
@@ -715,7 +509,6 @@ mod bcrypt {
         0xb74e6132, 0xce77e25b, 0x578fdfe3, 0x3ac372e6,
     ];
 
-    /// Map one bcrypt-base64 character to its 6-bit value.
     fn b64_val(c: u8) -> Option<u32> {
         match c {
             b'.' => Some(0),
@@ -727,10 +520,6 @@ mod bcrypt {
         }
     }
 
-    /// Encode up to `len` bytes with the bcrypt alphabet and no padding.
-    ///
-    /// Mirrors `base64_encode` in the vendored JS, including its handling of a
-    /// trailing partial group.
     fn b64_encode(b: &[u8], len: usize) -> String {
         let mut out = String::with_capacity(len.div_ceil(3) * 4);
         let mut off = 0usize;
@@ -761,11 +550,6 @@ mod bcrypt {
         out
     }
 
-    /// Decode bcrypt-base64 text to at most `len` bytes.
-    ///
-    /// Stricter than the vendored JS, which lets an invalid trailing character
-    /// produce a garbage byte; here any invalid character yields `None`. Such
-    /// input cannot come from a real bcrypt hash.
     fn b64_decode(s: &str, len: usize) -> Option<Vec<u8>> {
         let b = s.as_bytes();
         let slen = b.len();
@@ -792,10 +576,6 @@ mod bcrypt {
         Some(out)
     }
 
-    /// One Blowfish encryption of the 64-bit block `(l, r)`.
-    ///
-    /// Sixteen Feistel rounds with the standard bcrypt F function. All
-    /// arithmetic wraps, matching the `Int32Array` math in the vendored JS.
     fn encipher(mut l: u32, mut r: u32, p: &[u32; 18], s: &[u32; 1024]) -> (u32, u32) {
         l ^= p[0];
         let mut i = 0usize;
@@ -817,11 +597,6 @@ mod bcrypt {
         (r ^ p[17], l)
     }
 
-    /// Read the next big-endian 32-bit word from `data`, wrapping at the end.
-    ///
-    /// Returns the word and the next offset. The wrap (rather than truncation)
-    /// is bcryptjs behavior and is why passwords longer than 72 bytes hash
-    /// differently here than under canonical bcrypt.
     fn stream_to_word(data: &[u8], mut offp: usize) -> (u32, usize) {
         let mut word: u32 = 0;
         for _ in 0..4 {
@@ -831,7 +606,6 @@ mod bcrypt {
         (word, offp)
     }
 
-    /// Standard Blowfish key schedule over `key`.
     fn key_schedule(key: &[u8], p: &mut [u32; 18], s: &mut [u32; 1024]) {
         let mut offset = 0usize;
         for item in p.iter_mut() {
@@ -860,8 +634,6 @@ mod bcrypt {
         }
     }
 
-    /// Expensive key schedule (EksBlowfish) mixing both `data` (the salt) and
-    /// `key` (the password).
     fn eks_key(data: &[u8], key: &[u8], p: &mut [u32; 18], s: &mut [u32; 1024]) {
         let mut offp = 0usize;
         for item in p.iter_mut() {
@@ -901,10 +673,6 @@ mod bcrypt {
         }
     }
 
-    /// Run the bcrypt core and return the 24 raw ciphertext bytes.
-    ///
-    /// `log_rounds` is the cost exponent; the caller has already checked it is
-    /// in 4..=31. `salt` must be exactly [`BCRYPT_SALT_LEN`] bytes.
     fn crypt_raw(password: &[u8], salt: &[u8], log_rounds: u32) -> Option<[u8; 24]> {
         if salt.len() != BCRYPT_SALT_LEN || password.is_empty() {
             return None;
@@ -937,24 +705,6 @@ mod bcrypt {
         Some(out)
     }
 
-    /// Verify a password against a legacy bcrypt hash.
-    ///
-    /// Accepts `$2a$`, `$2b$` and `$2y$`. The three are handled identically,
-    /// exactly as the vendored `bcryptjs` does: all three append the trailing
-    /// NUL byte and share one code path. The documented `$2a$` / `$2b$`
-    /// divergence only appears for passwords of 255 bytes or more, and the
-    /// backend caps passwords at 72 characters. Bare `$2$` is rejected because
-    /// such a hash cannot be 60 characters long.
-    ///
-    /// # Arguments
-    ///
-    /// * `password` - Plain-text password; hashed as UTF-8.
-    /// * `stored` - Full 60-character bcrypt hash.
-    ///
-    /// # Returns
-    ///
-    /// `true` only if the hash recomputes byte-identically. Any malformed
-    /// input returns `false` rather than panicking.
     pub fn verify(password: &str, stored: &str) -> bool {
         let b = stored.as_bytes();
         if b.len() != HASH_LEN || !stored.is_ascii() {
@@ -1002,16 +752,10 @@ mod bcrypt {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::crypto::hex_encode;
-
-    // --- PBKDF2-HMAC-SHA-256 (RFC 6070 inputs, SHA-256 outputs) ---
 
     #[test]
     fn pbkdf2_one_iteration() {
@@ -1058,8 +802,6 @@ mod tests {
         );
     }
 
-    // --- scrypt (RFC 7914 §12) ---
-
     #[test]
     fn scrypt_rfc7914_vector_1() {
         let dk = scrypt(b"", b"", 16, 1, 1, 64).unwrap();
@@ -1086,7 +828,6 @@ mod tests {
 
     #[test]
     fn scrypt_rfc7914_vector_3_node_defaults() {
-        // N=16384, r=8, p=1 — exactly the parameters hash_password uses.
         let dk = scrypt(b"pleaseletmein", b"SodiumChloride", 16384, 8, 1, 64).unwrap();
         assert_eq!(
             hex_encode(&dk),
@@ -1124,18 +865,8 @@ mod tests {
         );
     }
 
-    // --- hash_password / verify_password ---
-
-    /// A real hash for `"hunter2"` in the parameterless form, produced by the
-    /// Node backend this crate replaced:
-    ///   `node -e 'import("./lib/auth.ts").then(m=>m.hashPassword("hunter2").then(console.log))'`
-    ///
-    /// Rows like this exist in deployed databases, so it is a compatibility
-    /// fixture: it must keep verifying forever.
     const NODE_HASH: &str = "scrypt$XnQgSiWEOZl_T9WK3hisbA$IQQOk7Kk1Q-OxcBjTy9W8b3bffUc7uCq_JzBXMLMocZB8_HDFmmZZucFb1e_g7zAdiWSDsHWL_Q831nuhK_OSw";
 
-    /// Encode a hash at arbitrary parameters, standing in for one written by a
-    /// build configured differently from this one.
     fn hash_at(password: &str, params: ScryptParams) -> String {
         let salt = random_bytes(SCRYPT_SALT_LEN).unwrap();
         let key = scrypt(
@@ -1173,8 +904,6 @@ mod tests {
 
     #[test]
     fn verify_password_accepts_a_hash_made_at_other_parameters() {
-        // The whole point of recording parameters: a hash from a build with a
-        // different cost must still verify, at its own cost.
         let weaker = hash_at("hunter2", ScryptParams { n: 1024, r: 8, p: 1 });
         assert!(verify_password("hunter2", &weaker));
         assert!(!verify_password("wrong", &weaker));
@@ -1191,15 +920,13 @@ mod tests {
 
     #[test]
     fn verify_password_refuses_parameters_beyond_the_cost_limit() {
-        // A row demanding a huge working set must be rejected outright rather
-        // than served by allocating gigabytes on an unauthenticated attempt.
         let salt = base64url_encode(b"0123456789abcdef");
         let key = base64url_encode(&[0u8; SCRYPT_KEY_LEN]);
         for (n, r, p) in [
-            (1 << 30, 8, 1),  // ~1 TiB working set
+            (1 << 30, 8, 1),
             (16384, 100_000, 1),
             (16384, 8, SCRYPT_MAX_STORED_P + 1),
-            (16383, 8, 1), // not a power of two
+            (16383, 8, 1),
             (16384, 0, 1),
             (16384, 8, 0),
         ] {
@@ -1253,8 +980,6 @@ mod tests {
         let h = hash_password("hunter2").unwrap();
         let parts: Vec<&str> = h.split('$').collect();
         let key = parts[2];
-        // Flip the first key character (not the last: leftover base64 bits
-        // at the end can decode to the same 64 bytes).
         let flipped = format!(
             "{}{}",
             if key.as_bytes()[0] == b'A' { 'B' } else { 'A' },
@@ -1289,7 +1014,6 @@ mod tests {
 
     #[test]
     fn verify_password_with_short_salt_is_still_safe() {
-        // A truncated salt still derives a key; it simply will not match.
         let h = hash_password("hunter2").unwrap();
         let parts: Vec<&str> = h.split('$').collect();
         let short = format!(
@@ -1302,8 +1026,6 @@ mod tests {
         );
         assert!(!verify_password("hunter2", &short));
     }
-
-    // --- needs_rehash ---
 
     #[test]
     fn needs_rehash_is_true_for_legacy_and_unknown() {
@@ -1320,9 +1042,6 @@ mod tests {
 
     #[test]
     fn needs_rehash_leaves_node_written_hashes_alone() {
-        // The parameterless form carries Node's defaults, which are still the
-        // current parameters — so upgrading this backend must not force every
-        // existing user through a rehash.
         assert!(!needs_rehash(NODE_HASH));
         assert_eq!(
             CURRENT_PARAMS,
@@ -1341,13 +1060,6 @@ mod tests {
         assert!(needs_rehash("scrypt$a$b"));
         assert!(needs_rehash("scrypt$"));
     }
-
-    // --- legacy bcrypt ---
-    //
-    // Vectors generated from the vendored implementation the Node backend
-    // still uses:
-    //   cd backend && node -e 'import("./vendor/legacy-bcrypt.js")
-    //     .then(async m => console.log(await m.hash("abc", 10)))'
 
     #[test]
     fn bcrypt_verifies_cost_10_vector() {

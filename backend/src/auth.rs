@@ -1,59 +1,28 @@
-//! JWT signing/verification and session token helpers.
-//!
-//! Zero-crate port of the JWT half of `backend/lib/auth.ts`. Tokens are
-//! byte-compatible with the Node backend (HS256 over
-//! `base64url(header).base64url(payload)`), so a cookie issued by either
-//! server verifies against the other.
-
 use crate::crypto::{base64url_decode, base64url_encode, ct_eq, hmac_sha256};
 use crate::json::{self, Json};
 
-/// Default JWT lifetime in days.
 pub const TOKEN_EXPIRATION_DAYS: i64 = 30;
 
-/// Largest `exp` accepted, as seconds. Beyond 2^53 a JSON number cannot even
-/// represent whole seconds exactly, so such a claim is treated as malformed.
 const MAX_SAFE_EXP: f64 = 9_007_199_254_740_992.0;
 
-/// Decoded JWT body.
 #[derive(Debug, Clone, PartialEq)]
 pub struct JwtPayload {
-    /// Authenticated user id.
     pub user_id: String,
-    /// Expiry as Unix seconds, when present.
     pub exp: Option<i64>,
 }
 
-/// Why a token failed verification.
-///
-/// `Expired` is kept distinct because the Node server returns a different
-/// error body (`"Token expired"` vs `"Invalid token"`) for it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum JwtError {
-    /// Wrong segment count, bad base64, or a payload missing `userID`.
     Malformed,
-    /// Signature did not match the secret.
     BadSignature,
-    /// `exp` is in the past.
     Expired,
 }
 
-/// Unix-seconds timestamp `expiration_days` in the future.
-///
-/// Matches `tokenExpireTimestamp()`.
 pub fn token_expire_timestamp(expiration_days: i64) -> i64 {
     crate::config::now_secs() + expiration_days * 24 * 60 * 60
 }
 
-/// Sign an HS256 JWT.
-///
-/// Produces the same bytes as the Node implementation: a fixed
-/// `{"alg":"HS256","typ":"JWT"}` header, then the payload, joined with `.` and
-/// signed over the first two segments.
 pub fn jwt_sign(payload: &JwtPayload, secret: &str) -> String {
-    // Written literally rather than via the JSON serializer: the key order of
-    // both the header and the payload is part of the token bytes, and the
-    // serializer sorts keys.
     let head = base64url_encode(br#"{"alg":"HS256","typ":"JWT"}"#);
     let body_json = match payload.exp {
         Some(exp) => format!(
@@ -69,14 +38,6 @@ pub fn jwt_sign(payload: &JwtPayload, secret: &str) -> String {
     format!("{signing_input}.{sig}")
 }
 
-/// Verify an HS256 JWT and return its payload.
-///
-/// Checks the signature in constant time before parsing the body, then
-/// enforces `exp`. A payload without a string `userID` is rejected, matching
-/// the `isJwtPayload` guard in the Node backend.
-///
-/// # Errors
-/// [`JwtError::Malformed`], [`JwtError::BadSignature`], or [`JwtError::Expired`].
 pub fn jwt_verify(token: &str, secret: &str) -> Result<JwtPayload, JwtError> {
     let parts: Vec<&str> = token.split('.').collect();
     if parts.len() != 3 {
@@ -89,8 +50,6 @@ pub fn jwt_verify(token: &str, secret: &str) -> Result<JwtPayload, JwtError> {
 
     let signing_input = format!("{head}.{body}");
     let expected = base64url_encode(&hmac_sha256(secret.as_bytes(), signing_input.as_bytes()));
-    // Node compares the base64url *text*, and bails on a length mismatch
-    // before calling timingSafeEqual. Replicated exactly.
     if sig.len() != expected.len() || !ct_eq(sig.as_bytes(), expected.as_bytes()) {
         return Err(JwtError::BadSignature);
     }
@@ -100,15 +59,10 @@ pub fn jwt_verify(token: &str, secret: &str) -> Result<JwtPayload, JwtError> {
     let user_id = decoded.get_str("userID").ok_or(JwtError::Malformed)?.to_string();
     let exp = match decoded.get("exp") {
         None | Some(Json::Null) => None,
-        // A fractional or out-of-range `exp` is rejected rather than cast: `as i64`
-        // saturates, so a claim like `1e30` would otherwise become i64::MAX and never expire.
         Some(Json::Num(v)) if v.abs() < MAX_SAFE_EXP && v.fract() == 0.0 => Some(*v as i64),
-        // A non-numeric `exp` fails the Node guard outright.
         Some(_) => return Err(JwtError::Malformed),
     };
 
-    // Node tests `if (payload.exp && ...)`, so an `exp` of 0 is falsy and
-    // skips the expiry check entirely. Replicated.
     if let Some(exp) = exp {
         if exp != 0 && crate::config::now_secs() > exp {
             return Err(JwtError::Expired);
@@ -168,7 +122,6 @@ mod tests {
         assert_eq!(jwt_verify(&format!("{input}.{sig}"), SECRET), Err(JwtError::Malformed));
     }
 
-    /// Build a signed token around an arbitrary payload JSON body.
     fn signed_with_body(body_json: &str) -> String {
         let head = base64url_encode(br#"{"alg":"HS256","typ":"JWT"}"#);
         let body = base64url_encode(body_json.as_bytes());

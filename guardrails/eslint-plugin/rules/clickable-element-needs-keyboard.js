@@ -1,9 +1,7 @@
 import { findAttr, hasSpread, jsxName } from '../lib/jsx.js';
 
-/** Intrinsic elements that are already interactive (or forward clicks, like `<label>`). */
 const INTERACTIVE = new Set(['a', 'button', 'input', 'select', 'textarea', 'label', 'summary', 'details', 'option', 'form', 'video', 'audio']);
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

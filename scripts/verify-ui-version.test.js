@@ -15,8 +15,6 @@ const existingPaths = new Set([
   join(ROOT, 'node_modules', '@stevederico', 'skateboard-ui', 'package.json')
 ]);
 
-// Inject an in-memory filesystem instead of mocking node:fs — closes over the live
-// fixtures so beforeEach/it mutations take effect.
 __setFsForTests({
   existsSync(path) {
     return existingPaths.has(path);

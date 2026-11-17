@@ -1,5 +1,3 @@
-//! Shared server state and its construction from config + environment.
-
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -10,16 +8,8 @@ use crate::stores::{LockoutStore, RateLimitStore};
 use crate::stripe::StripeClient;
 use crate::stripe_worker::StripeWorker;
 
-/// How long startup keeps trying to reach the shared libSQL server.
-///
-/// Inside Railway's 5-minute healthcheck window, so a slow start still deploys.
 const REMOTE_OPEN_RETRY: Duration = Duration::from_secs(180);
 
-/// Open the shared libSQL pool, waiting out a server that is not reachable yet.
-///
-/// When a whole project restarts at once (a restore, a full redeploy), the
-/// database's private hostname can take a minute to resolve. Exiting on the
-/// first failure used up the restart policy and left every app down.
 fn open_remote_with_retry(
     log: &Logger,
     url: &str,
@@ -48,46 +38,24 @@ fn open_remote_with_retry(
     }
 }
 
-/// Everything a request handler needs, shared across worker threads.
-///
-/// Held behind an `Arc`; every field is either immutable after startup or
-/// internally synchronized.
 pub struct AppState {
-    /// Resolved `config.json`.
     pub cfg: BackendConfig,
-    /// Structured logger.
     pub log: Logger,
-    /// SQLite connection pool.
     pub pool: Pool,
-    /// Failed-sign-in counters.
     pub lockout: LockoutStore,
-    /// Per-IP sliding window on signup/signin.
     pub auth_rate: RateLimitStore,
-    /// Stripe worker handle, or `None` when `STRIPE_KEY` is unset (routes 503).
     pub stripe: Option<StripeWorker>,
-    /// Sellable `lookup_key`s from `src/constants.json` `stripeProducts`.
     pub stripe_lookup_keys: Vec<String>,
-    /// Webhook signing secret, or `None` when unset (webhook 503s).
     pub stripe_endpoint_secret: Option<String>,
-    /// JWT signing secret, or `None` when unset (auth routes 503).
     pub jwt_secret: Option<String>,
-    /// Allowed CORS origins.
     pub cors_origins: Vec<String>,
-    /// Absolute path of the built frontend assets.
     pub static_dir: PathBuf,
-    /// Listen port, used to build the dev fallback origin for Stripe redirects.
     pub port: u16,
-    /// Monthly operation allowance for non-subscribers.
     pub free_usage_limit: i64,
-    /// Cached production flag; `NODE_ENV` does not change after startup.
     pub prod: bool,
 }
 
 impl AppState {
-    /// Resolve CORS origins from `CORS_ORIGINS`, falling back to the dev list.
-    ///
-    /// Matches `__testResolveCorsOrigins`: a comma-separated list, each entry
-    /// trimmed.
     pub fn resolve_cors_origins() -> Vec<String> {
         match config::env("CORS_ORIGINS") {
             Some(v) => v.split(',').map(|o| o.trim().to_string()).collect(),
@@ -100,50 +68,24 @@ impl AppState {
         }
     }
 
-    /// Resolve the listen port from `PORT`, defaulting to 8000.
-    ///
-    /// Node's `parseInt` accepts a leading-numeric string such as `"8000x"`;
-    /// this mirrors that leniency rather than rejecting it, so a typo produces
-    /// the same port on both servers.
     pub fn resolve_port() -> u16 {
         let raw = config::env("PORT").unwrap_or_default();
         let digits: String = raw.trim_start().chars().take_while(char::is_ascii_digit).collect();
         digits.parse::<u16>().unwrap_or(8000)
     }
 
-    /// Resolve `FREE_USAGE_LIMIT`, defaulting to 20.
     pub fn resolve_free_usage_limit() -> i64 {
         let raw = config::env("FREE_USAGE_LIMIT").unwrap_or_default();
         let digits: String = raw.trim_start().chars().take_while(char::is_ascii_digit).collect();
         digits.parse::<i64>().unwrap_or(20)
     }
 
-    /// The origin used for Stripe success/cancel/return URLs.
-    ///
-    /// `FRONTEND_URL` wins, then the request's `Origin` header *if it is an
-    /// allowed origin*, then a localhost fallback.
-    ///
-    /// The allow-list check is what keeps this from being an open redirect.
-    /// These origins are pasted into URLs that Stripe sends the user back to,
-    /// so taking the `Origin` header on trust lets an attacker hand a victim a
-    /// checkout link that returns them to an attacker-controlled site wearing
-    /// the trust of a payment flow. `Origin` is attacker-settable on a
-    /// non-browser request, so it cannot be used unchecked.
-    ///
-    /// # Arguments
-    ///
-    /// * `request_origin` - Value of the request's `Origin` header, if present.
     pub fn redirect_origin(&self, request_origin: Option<&str>) -> String {
         config::env_nonempty("FRONTEND_URL")
             .or_else(|| allowed_origin(&self.cors_origins, request_origin))
             .unwrap_or_else(|| format!("http://localhost:{}", self.port))
     }
 
-    /// Boot state: load `.env` outside production, then open the database.
-    ///
-    /// # Errors
-    /// Returns a human-readable message when `dbType` is not `sqlite` or the
-    /// database file cannot be opened.
     pub fn open() -> Result<AppState, String> {
         let prod = config::is_prod();
         let log = Logger::new(prod);
@@ -154,20 +96,12 @@ impl AppState {
         AppState::open_in(&dir, http::Config::default().threads, log)
     }
 
-    /// Build state from `dir` (the folder holding `config.json` and `.env`).
-    ///
-    /// Skips `.env` loading so tests can inject environment variables first.
-    ///
-    /// # Errors
-    /// Same as [`AppState::open`].
     pub fn open_in(dir: &Path, pool_size: usize, log: Logger) -> Result<AppState, String> {
         let prod = config::is_prod();
         let cfg = config::load_config(dir, &log);
         if config::validate_environment(&cfg, &log) {
             log.info("Environment variables validated successfully", &[]);
         }
-        // Development tolerates a missing secret (auth routes answer 503); production
-        // must not start, or it would serve sessions nobody can trust.
         if prod {
             config::check_prod_jwt_secret(config::env_nonempty("JWT_SECRET").as_deref())?;
         }
@@ -178,8 +112,6 @@ impl AppState {
             ));
         }
 
-        // LIBSQL_URL points at a shared libSQL (sqld) server; the namespace is
-        // config.json's database.db. Unset, the app uses its local file.
         let pool = if let Some(url) = config::env_nonempty("LIBSQL_URL") {
             let namespace = cfg.database.db.clone();
             log.info(
@@ -226,7 +158,6 @@ impl AppState {
         })
     }
 
-    /// Lowercased app name stamped on Stripe Checkout metadata, when set.
     pub fn app_name() -> Option<String> {
         config::env_nonempty("APP_NAME")
             .or_else(|| config::env_nonempty("RAILWAY_SERVICE_NAME"))
@@ -235,11 +166,6 @@ impl AppState {
     }
 }
 
-/// `request_origin` if it exactly matches one of `cors_origins`.
-///
-/// Matching is exact, never prefix or substring: both `https://evil.com` and
-/// `https://app.example.com.evil.com` have to fail, and a `contains`-style
-/// test would admit the second.
 fn allowed_origin(cors_origins: &[String], request_origin: Option<&str>) -> Option<String> {
     let candidate = request_origin?.trim();
     if candidate.is_empty() {
@@ -257,7 +183,6 @@ mod tests {
 
     #[test]
     fn remote_open_retries_then_gives_up() {
-        // Nothing listens on port 1, so every attempt fails fast.
         let start = Instant::now();
         let result = open_remote_with_retry(
             &Logger::new(false),
@@ -297,7 +222,6 @@ mod tests {
         assert_eq!(AppState::resolve_cors_origins().len(), 4);
     }
 
-    /// The origins a deployment would configure.
     fn origins() -> Vec<String> {
         vec![
             "https://app.example.com".to_string(),
@@ -315,7 +239,6 @@ mod tests {
 
     #[test]
     fn allowed_origin_refuses_anything_unlisted() {
-        // Each of these would otherwise be pasted into a Stripe return URL.
         for hostile in [
             "https://evil.com",
             "https://app.example.com.evil.com",

@@ -2,36 +2,20 @@ import { collectStrings, tokenize } from '../lib/classStrings.js';
 import { findAttr, hasSpread, jsxName } from '../lib/jsx.js';
 import { resolveSpecifier } from '../lib/paths.js';
 
-/** Repo path of the app icon module, with or without extension. */
 const ICON_FUNNEL = /^src\/icons(\.tsx?)?$/;
 
-/**
- * True when an import specifier points at the icon funnel, the vendored skateboard-ui icon
- * set, or lucide-react.
- *
- * @param {import('eslint').Rule.RuleContext} context - Rule context
- * @param {string} source - Import specifier
- * @returns {boolean} Whether the imported names are icons
- */
 function isIconSource(context, source) {
   if (source === 'lucide-react' || source === '@stevederico/skateboard-ui/icons') return true;
   const target = resolveSpecifier(context, source);
   return target !== null && ICON_FUNNEL.test(target);
 }
 
-/**
- * True when the element's className includes a `size-*` utility.
- *
- * @param {any} node - JSXOpeningElement
- * @returns {boolean} Whether a size class is present
- */
 function hasSizeClass(node) {
   const attr = findAttr(node, 'className');
   if (!attr?.value) return false;
   return tokenize(collectStrings(attr.value, new Set())).some((t) => t.utility.startsWith('size-'));
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',

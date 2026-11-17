@@ -5,20 +5,12 @@ const PASCAL_TSX = /^[A-Z][A-Za-z0-9]*(\.test)?\.tsx$/;
 const CAMEL_TS = /^[a-z][A-Za-z0-9]*(\.test|\.d)?\.ts$/;
 const JS_EXT = /\.(js|jsx|mjs|cjs)$/;
 
-/**
- * Convert a file stem to PascalCase or camelCase (`home-view` → `HomeView` / `homeView`).
- *
- * @param {string} stem - File name without extension
- * @param {boolean} pascal - PascalCase when true, camelCase otherwise
- * @returns {string} Converted stem
- */
 function recase(stem, pascal) {
   const words = stem.split(/[-_\s]+/).filter(Boolean);
   const joined = words.map((w) => w[0].toUpperCase() + w.slice(1)).join('');
   return pascal ? joined : joined[0].toLowerCase() + joined.slice(1);
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',

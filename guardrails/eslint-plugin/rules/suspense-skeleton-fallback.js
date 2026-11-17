@@ -1,11 +1,5 @@
 import { findAttr, jsxName, walkJsx } from '../lib/jsx.js';
 
-/**
- * True when a fallback expression is, or contains, a `<Spinner>`.
- *
- * @param {any} expr - Fallback expression
- * @returns {boolean} Whether a spinner is rendered
- */
 function rendersSpinner(expr) {
   if (expr?.type !== 'JSXElement' && expr?.type !== 'JSXFragment') return false;
   if (expr.type === 'JSXElement' && jsxName(expr.openingElement.name) === 'Spinner') return true;
@@ -16,7 +10,6 @@ function rendersSpinner(expr) {
   return found;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

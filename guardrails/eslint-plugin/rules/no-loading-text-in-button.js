@@ -2,13 +2,6 @@ import { jsxName } from '../lib/jsx.js';
 
 const LOADING_TEXT = /^\s*loading\b/i;
 
-/**
- * True when a string expression is rendered as a JSX child (directly or as a branch of
- * `cond ? a : b` / `cond && a`), not used as a comparison operand or argument.
- *
- * @param {any} node - Literal or TemplateLiteral
- * @returns {boolean} Whether the string is rendered
- */
 function isRenderedChild(node) {
   let current = node;
   while (
@@ -18,7 +11,6 @@ function isRenderedChild(node) {
   return current.parent.type === 'JSXExpressionContainer' && current.parent.parent.type === 'JSXElement';
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',
@@ -34,16 +26,9 @@ export default {
     },
   },
   create(context) {
-    /**
-     * Report a loading string when it sits inside a Button element.
-     *
-     * @param {any} node - Literal or JSXText node
-     * @param {string} text - Its text
-     */
     function check(node, text) {
       if (!LOADING_TEXT.test(text)) return;
       const ancestors = context.sourceCode.getAncestors(node);
-      // Attribute values (aria-label="Loading") are not rendered text.
       if (ancestors.some((a) => a.type === 'JSXAttribute')) return;
       const inButton = ancestors.some((a) => a.type === 'JSXElement' && jsxName(a.openingElement.name) === 'Button');
       if (inButton) context.report({ node, messageId: 'loadingText', data: { text: text.trim() } });

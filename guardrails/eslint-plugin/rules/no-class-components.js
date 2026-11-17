@@ -1,11 +1,5 @@
 const BASES = new Set(['Component', 'PureComponent', 'React.Component', 'React.PureComponent']);
 
-/**
- * Name of a class's superclass (`Component`, `React.Component`), or '' when not static.
- *
- * @param {any} node - Superclass expression
- * @returns {string} Dotted name
- */
 function superName(node) {
   if (!node) return '';
   if (node.type === 'Identifier') return node.name;
@@ -15,7 +9,6 @@ function superName(node) {
   return '';
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

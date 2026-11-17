@@ -2,7 +2,6 @@ import { classGroupVisitors } from '../lib/classStrings.js';
 
 const MOTION_VARIANTS = new Set(['motion-safe', 'motion-reduce']);
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

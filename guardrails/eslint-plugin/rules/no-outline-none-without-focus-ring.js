@@ -3,20 +3,12 @@ import { classGroupVisitors } from '../lib/classStrings.js';
 const REMOVES_OUTLINE = new Set(['outline-none', 'outline-hidden', 'outline-0']);
 const FOCUS_VARIANTS = new Set(['focus-visible', 'focus', 'focus-within']);
 
-/**
- * True when the token draws a visible focus indicator (`focus-visible:ring-2`,
- * `focus:outline-2`, `focus-visible:border-ring`, `focus-visible:shadow-...`).
- *
- * @param {import('../lib/classStrings.js').ClassToken} t - Class token
- * @returns {boolean} Whether the token is a focus replacement
- */
 function isFocusReplacement(t) {
   if (!t.variants.some((v) => FOCUS_VARIANTS.has(v))) return false;
   if (REMOVES_OUTLINE.has(t.utility)) return false;
   return /^(ring|outline|border|shadow)(-|$)/.test(t.utility);
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

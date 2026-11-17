@@ -1,8 +1,6 @@
-/** Database / broker URL with something after the scheme (a host, credentials, or path). */
 const CONNECTION_URL =
   /\b(mongodb(?:\+srv)?|postgres(?:ql)?|mysql|mariadb|mssql|sqlserver|redis|rediss|libsql|cockroachdb|amqps?):\/\/[^\s'"`]+/i;
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',
@@ -18,12 +16,6 @@ export default {
     },
   },
   create(context) {
-    /**
-     * Report the node when its text contains a connection URL.
-     *
-     * @param {any} node - Literal or TemplateLiteral
-     * @param {string} text - String content
-     */
     function check(node, text) {
       const match = CONNECTION_URL.exec(text);
       if (match) context.report({ node, messageId: 'connection', data: { scheme: match[1].toLowerCase() } });

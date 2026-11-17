@@ -37,5 +37,4 @@ export function resolveSpecifier(context, source) {
   return toPosix(path.relative(context.cwd, absolute));
 }
 
-/** Matches test files by the repo convention (`*.test.js`, `*.test.tsx`, ...). */
 export const TEST_FILE = /\.test\.[cm]?[jt]sx?$/;

@@ -1,9 +1,3 @@
-/**
- * True for `as const` / `<const>x`, which narrows a literal instead of overriding a type.
- *
- * @param {any} typeAnnotation - Assertion target type
- * @returns {boolean} Whether this is a const assertion
- */
 function isConstAssertion(typeAnnotation) {
   return (
     typeAnnotation.type === 'TSTypeReference' &&
@@ -12,13 +6,6 @@ function isConstAssertion(typeAnnotation) {
   );
 }
 
-/**
- * True when the asserted expression is untrusted input: `JSON.parse(...)`,
- * `await res.json()`, `res.json()`, or `apiRequest(...)`.
- *
- * @param {any} expr - Expression being asserted
- * @returns {boolean} Whether the value crosses a system boundary
- */
 function isBoundaryValue(expr) {
   const inner = expr.type === 'AwaitExpression' ? expr.argument : expr;
   if (inner.type !== 'CallExpression') return false;
@@ -29,7 +16,6 @@ function isBoundaryValue(expr) {
   return isJsonParse || callee.property.name === 'json';
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',
@@ -55,14 +41,8 @@ export default {
   create(context) {
     const sourceCode = context.sourceCode;
 
-    /**
-     * Report one assertion node with the most specific message.
-     *
-     * @param {any} node - TSAsExpression or TSTypeAssertion
-     */
     function check(node) {
       if (isConstAssertion(node.typeAnnotation)) return;
-      // The outer `as X` of `as unknown as X` reports once, as a double cast.
       if (node.parent.type === 'TSAsExpression' && node.typeAnnotation.type === 'TSUnknownKeyword') return;
       const type = sourceCode.getText(node.typeAnnotation);
       const inner = node.expression;

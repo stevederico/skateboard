@@ -3,7 +3,6 @@ import { findAttr, hasSpread, jsxName } from '../lib/jsx.js';
 
 const HEADING = /^h[1-6]$/;
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',

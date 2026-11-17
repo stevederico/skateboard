@@ -2,30 +2,16 @@ import path from 'node:path';
 import { moduleSourceVisitors, mergeVisitors, packageName } from '../lib/moduleSources.js';
 import { repoRelative } from '../lib/paths.js';
 
-/** The one module allowed to import the icon package. `.tsx` once it holds local SVG components. */
 export const ICON_FUNNEL = /^src\/icons\.tsx?$/;
 
-/** The vendored Lucide icon set the app re-exports (skateboard-ui 5.13+). */
 export const ICON_PACKAGE = '@stevederico/skateboard-ui/icons';
 
-/**
- * Relative specifier from the linted file to src/icons, e.g. `../icons` from src/components.
- *
- * @param {import('eslint').Rule.RuleContext} context - Rule context
- * @returns {string} Specifier to suggest in the message
- */
 function funnelSpecifier(context) {
   const fromDir = path.dirname(repoRelative(context));
   const rel = path.posix.relative(fromDir, 'src/icons');
   return rel.startsWith('.') ? rel : `./${rel}`;
 }
 
-/**
- * Names imported or re-exported by a declaration, for the suggested fix.
- *
- * @param {any} node - Declaration node, or the source/call node inside one
- * @returns {string} Comma-separated names, or a placeholder
- */
 function importedNames(node) {
   const decl = node.specifiers ? node : node.parent;
   const names = (decl?.specifiers ?? [])
@@ -37,7 +23,6 @@ function importedNames(node) {
   return names.length ? names.join(', ') : 'IconName';
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

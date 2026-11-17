@@ -1,24 +1,3 @@
-/**
- * Architectural layers of the skateboard template and the import edges allowed between
- * them. This table is the single source for both boundary checkers: the
- * `skateboard/layer-boundaries` lint rule (one file at a time) and the root
- * `.dependency-cruiser.js` (whole graph), which generates one `forbidden` rule per pair
- * that is NOT in ALLOWED_EDGES plus the special cases below (entry module, Node builtins
- * in src/, paths out of src/). Patterns must stay safe-regex clean (no nested
- * quantifiers) or dependency-cruiser refuses the config.
- *
- * Paths are repo-relative with forward slashes. The first matching layer wins, so the
- * more specific `ui` pattern must stay above `app`.
- */
-
-/**
- * @typedef {object} Layer
- * @property {string} name - Short layer id used in messages and ALLOWED_EDGES
- * @property {RegExp} pattern - Matches repo-relative paths in the layer
- * @property {string} description - What lives there (shown in lint messages)
- */
-
-/** @type {Layer[]} */
 export const LAYERS = [
   { name: 'ui', pattern: /^src\/components\//, description: 'src/components: browser React views' },
   {
@@ -36,15 +15,6 @@ export const LAYERS = [
   },
 ];
 
-/**
- * Allowed import edges: layer -> layers it may import from. Anything else is forbidden.
- * - ui and app are one bundle, so they may import each other (except the entry, below).
- * - tooling and build may read app data (src/constants.json) but never UI components.
- * - server is Rust; listed for completeness, it never imports JS.
- * - guardrails depends on nothing in the app.
- *
- * @type {Record<string, string[]>}
- */
 export const ALLOWED_EDGES = {
   ui: ['ui', 'app'],
   app: ['app', 'ui'],
@@ -54,17 +24,10 @@ export const ALLOWED_EDGES = {
   guardrails: ['guardrails'],
 };
 
-/** The app entry. It bootstraps the app on import, so no module may import it. */
 export const ENTRY_MODULE = /^src\/main(?:|\.ts|\.tsx)$/;
 
-/** Layers that are bundled for the browser: no Node builtins, no paths outside src/. */
 export const BROWSER_LAYERS = new Set(['ui', 'app']);
 
-/**
- * Why each layer is off-limits and what to do instead, keyed by the TARGET layer.
- *
- * @type {Record<string, { why: string, fix: string }>}
- */
 export const TARGET_GUIDANCE = {
   ui: {
     why: 'src/components are browser React views (JSX, CSS, skateboard-ui context); Node code that imports them drags React and the DOM into tools that run without one.',

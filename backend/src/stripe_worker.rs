@@ -1,13 +1,3 @@
-//! Dedicated OS threads for blocking Stripe (libcurl) calls.
-//!
-//! HTTP workers must not sit inside a 30s Stripe round-trip — the pool has only
-//! a handful of threads, and one slow checkout would stall health checks and
-//! unrelated API traffic. Each job is handed to a Stripe-owned thread; the
-//! request thread waits with a hard timeout and answers 504 if Stripe stalls.
-//!
-//! The job queue is bounded. A caller that times out stamps a deadline on the
-//! `Job`; workers drop expired work instead of still hitting Stripe.
-
 use std::sync::mpsc::{self, Receiver, SyncSender, RecvTimeoutError, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -18,42 +8,28 @@ use crate::stripe::{
     CheckoutParams, CheckoutSession, PortalSession, StripeClient, StripeError,
 };
 
-/// How long a request thread waits for a Stripe worker to finish one call.
 #[cfg(not(test))]
 pub const STRIPE_CALL_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(test)]
 pub const STRIPE_CALL_TIMEOUT: Duration = Duration::from_millis(200);
 
-/// Worker threads draining the Stripe job queue.
 const STRIPE_WORKERS: usize = 2;
 
-/// Jobs that may sit waiting for a worker before new ones are rejected.
 #[cfg(not(test))]
 const STRIPE_QUEUE_CAP: usize = 32;
 #[cfg(test)]
 const STRIPE_QUEUE_CAP: usize = 2;
 
-/// Handle that submits Stripe work to a background thread.
-///
-/// Clone-free and `Send`+`Sync`: the channel sender is behind a mutex so every
-/// HTTP worker can enqueue without racing.
 pub struct StripeWorker {
     tx: Mutex<SyncSender<Job>>,
 }
 
-/// Owned arguments for [`StripeClient::create_checkout_session`].
 pub struct OwnedCheckoutParams {
-    /// Customer email prefill.
     pub customer_email: String,
-    /// Resolved Stripe price id.
     pub price_id: String,
-    /// Success redirect URL.
     pub success_url: String,
-    /// Cancel redirect URL.
     pub cancel_url: String,
-    /// Optional app metadata stamp.
     pub app_name: Option<String>,
-    /// Optional idempotency key.
     pub idempotency_key: Option<String>,
 }
 
@@ -87,7 +63,6 @@ enum JobKind {
 }
 
 impl StripeWorker {
-    /// Spawn worker threads that own `client` and drain the bounded job queue.
     pub fn spawn(client: StripeClient) -> Self {
         let (tx, rx) = mpsc::sync_channel::<Job>(STRIPE_QUEUE_CAP.max(1));
         let rx = Arc::new(Mutex::new(rx));
@@ -105,7 +80,6 @@ impl StripeWorker {
         }
     }
 
-    /// Resolve a price lookup key on the worker thread.
     pub fn price_id_for_lookup_key(&self, lookup_key: &str) -> Result<Option<String>, StripeError> {
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         self.enqueue(JobKind::PriceId {
@@ -115,7 +89,6 @@ impl StripeWorker {
         wait(reply_rx)
     }
 
-    /// Create a Checkout Session on the worker thread.
     pub fn create_checkout_session(
         &self,
         params: OwnedCheckoutParams,
@@ -128,7 +101,6 @@ impl StripeWorker {
         wait(reply_rx)
     }
 
-    /// Create a Billing Portal Session on the worker thread.
     pub fn create_portal_session(
         &self,
         customer: &str,
@@ -143,7 +115,6 @@ impl StripeWorker {
         wait(reply_rx)
     }
 
-    /// Fetch a subscription on the worker thread.
     pub fn retrieve_subscription(&self, sub_id: &str) -> Result<Json, StripeError> {
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         self.enqueue(JobKind::RetrieveSub {
@@ -153,7 +124,6 @@ impl StripeWorker {
         wait(reply_rx)
     }
 
-    /// Fetch a customer email on the worker thread.
     pub fn customer_email(&self, customer_id: &str) -> Result<Option<String>, StripeError> {
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
         self.enqueue(JobKind::CustomerEmail {

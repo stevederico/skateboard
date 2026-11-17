@@ -2,7 +2,6 @@ import { classGroupVisitors } from '../lib/classStrings.js';
 
 const SPACE_RE = /^-?space-([xy])-/;
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

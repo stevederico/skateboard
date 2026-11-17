@@ -1,8 +1,3 @@
-//! HTTP route handlers — zero-crate port of `backend/server.ts`.
-//!
-//! One function per route. Status codes, JSON error bodies, and cookie
-//! attributes match the Node server so a parity harness can byte-diff them.
-
 use std::collections::BTreeMap;
 
 use crate::auth::{self, JwtError, JwtPayload, TOKEN_EXPIRATION_DAYS};
@@ -19,7 +14,6 @@ use crate::stripe;
 use crate::stripe_worker::OwnedCheckoutParams;
 use crate::validation;
 
-/// Dispatch one request: CORS, security headers, routes, access log.
 pub fn handle(state: &AppState, req: Request) -> Response {
     let start = config::now_ms();
     middleware::dev_request_log(&state.log, &req, state.prod);
@@ -61,8 +55,6 @@ fn dispatch(state: &AppState, req: &Request) -> Response {
     }
 }
 
-/// Liveness plus a real database round-trip, so a container healthcheck fails when
-/// SQLite is unreachable instead of reporting a process that cannot serve anything.
 fn health(state: &AppState) -> Response {
     let (status, database) = match state.pool.ping() {
         Ok(()) => (200, "connected"),
@@ -95,10 +87,6 @@ fn err_json(status: u16, msg: &str) -> Response {
     json_res(status, &json::obj([("error", json::s(msg))]))
 }
 
-/// Map a Stripe worker / client error to an HTTP response.
-///
-/// Timeouts answer 504 so a slow Stripe cannot look like an application bug;
-/// every other failure stays 500 with a generic body.
 fn stripe_err(state: &AppState, log_msg: &str, e: crate::stripe::StripeError) -> Response {
     state
         .log
@@ -135,10 +123,6 @@ fn parse_json_body(req: &Request) -> Result<Json, Response> {
     json::parse(&req.body).map_err(|_| err_json(400, "Invalid request body"))
 }
 
-/// Mint a CSRF token for `user_id`: `<issued ms>.<hex HMAC-SHA256>`.
-///
-/// The token is signed with `JWT_SECRET` instead of kept in server memory, so
-/// it survives restarts and deploys and every replica accepts it.
 fn generate_csrf_token(state: &AppState, user_id: &str) -> Result<String, Response> {
     let Some(secret) = state.jwt_secret.as_deref() else {
         return Err(err_json(500, "Server error"));
@@ -147,14 +131,11 @@ fn generate_csrf_token(state: &AppState, user_id: &str) -> Result<String, Respon
     Ok(format!("{issued}.{}", csrf_mac(secret, user_id, issued)))
 }
 
-/// HMAC over the user and issue time. The `csrf:` prefix keeps these apart
-/// from JWT signatures made with the same secret.
 fn csrf_mac(secret: &str, user_id: &str, issued: i64) -> String {
     let msg = format!("csrf:{user_id}:{issued}");
     crypto::hex_encode(&crypto::hmac_sha256(secret.as_bytes(), msg.as_bytes()))
 }
 
-/// Result of checking a presented CSRF token.
 #[derive(Debug, PartialEq)]
 enum CsrfCheck {
     Valid,
@@ -173,7 +154,6 @@ fn check_csrf_token(secret: &str, user_id: &str, token: &str, now_ms: i64) -> Cs
     if mac.len() != expected.len() || !ct_eq(mac.as_bytes(), expected.as_bytes()) {
         return CsrfCheck::Invalid;
     }
-    // A minute of slack for clock skew between replicas.
     if now_ms - issued > CSRF_TOKEN_EXPIRY_MS || issued - now_ms > 60_000 {
         return CsrfCheck::Expired;
     }
@@ -224,16 +204,6 @@ fn require_auth(state: &AppState, req: &Request) -> Result<String, Response> {
     }
 }
 
-/// CSRF check for a state-changing request.
-///
-/// A token that is missing, forged, signed for another user, or expired is
-/// refused with 403. The refusal carries a freshly minted token as a cookie
-/// whenever the caller's identity is known, so a client holding a stale token
-/// can retry once and succeed. The refusal itself never accepts the request.
-///
-/// # Errors
-/// A 403 [`Response`], ready to return, with a replacement cookie when one
-/// could be issued.
 fn require_csrf(state: &AppState, req: &Request, user_id: &str) -> Result<(), Response> {
     if req.method == "GET" || req.path == "/api/signup" || req.path == "/api/signin" {
         return Ok(());
@@ -281,9 +251,6 @@ fn require_csrf(state: &AppState, req: &Request, user_id: &str) -> Result<(), Re
     Ok(())
 }
 
-/// Build a 403 that also hands the caller a usable token for one retry.
-///
-/// Falls back to a plain 403 when a token cannot be minted.
 fn csrf_retry(state: &AppState, user_id: &str, message: &str) -> Response {
     match generate_csrf_token(state, user_id) {
         Ok(token) => err_json(403, message).cookie(&csrf_cookie(state, &token)),
@@ -424,9 +391,6 @@ fn signup(state: &AppState, req: &Request) -> Response {
         password: hash,
         user_id: insert_id.clone(),
     };
-    // One transaction, so a failure cannot leave a user row with no credentials
-    // — an account nobody can sign in to, holding an email address that can
-    // never be registered again.
     if let Err(e) = state.pool.create_account(&user, &auth_rec) {
         if is_duplicate(&e) {
             state.log.warn("Signup failed - duplicate account", &[]);
@@ -558,9 +522,6 @@ fn signout(state: &AppState, req: &Request) -> Response {
         Ok(id) => id,
         Err(r) => return r,
     };
-    // Sign-out changes server state, so it is CSRF-protected like any other
-    // mutation. A refusal still hands back a usable token, so a client holding a
-    // stale one can retry immediately rather than being stuck signed in.
     if let Err(res) = require_csrf(state, req, &user_id) {
         return res;
     }
@@ -579,8 +540,6 @@ fn me_get(state: &AppState, req: &Request) -> Response {
     match state.pool.find_user(&UserQuery::Id(user_id.clone())) {
         Ok(Some(u)) => {
             let res = json_res(200, &user_json(&u));
-            // Re-mint when the client's token is missing, expired, or from an
-            // older scheme, so its next POST succeeds without a 403.
             let current = req.cookie("csrf_token").unwrap_or_default();
             let secret = state.jwt_secret.as_deref().unwrap_or_default();
             if check_csrf_token(secret, &user_id, &current, config::now_ms()) == CsrfCheck::Valid {
@@ -604,8 +563,6 @@ fn me_put(state: &AppState, req: &Request) -> Response {
     if let Err(res) = require_csrf(state, req, &user_id) {
         return res;
     }
-    // A malformed body is the caller's mistake, so it answers 400 like every other
-    // JSON route — not the 500 an earlier revision returned.
     let body = match parse_json_body(req) {
         Ok(v) => v,
         Err(r) => return r,
@@ -660,9 +617,6 @@ fn resolve_usage(user: &User) -> Usage {
     })
 }
 
-/// Subscription statuses that count as paid. A Stripe trial (`trialing`) gets
-/// the full plan, exactly like `active`; `past_due`, `canceled`, `incomplete`,
-/// `incomplete_expired`, `unpaid` and `paused` do not.
 const PAID_STATUSES: &[&str] = &["active", "trialing"];
 
 fn is_subscriber(sub: &Subscription) -> bool {
@@ -677,10 +631,8 @@ fn sub_expires_iso(sub: &Subscription) -> Json {
     }
 }
 
-/// Length of a free-tier usage window, in seconds (30 days).
 const USAGE_WINDOW_SECS: i64 = 30 * 24 * 60 * 60;
 
-/// The 429 body returned when a free-tier caller has no quota left.
 fn usage_limit_reached(limit: i64) -> Response {
     json_res(
         429,
@@ -698,9 +650,6 @@ fn usage(state: &AppState, req: &Request) -> Response {
         Ok(id) => id,
         Err(r) => return r,
     };
-    // `operation: "track"` increments a stored counter, so this is a mutation.
-    // The body is parsed as JSON regardless of Content-Type, which means a
-    // cross-site form post could otherwise reach it without a preflight.
     if let Err(res) = require_csrf(state, req, &user_id) {
         return res;
     }
@@ -742,15 +691,11 @@ fn usage(state: &AppState, req: &Request) -> Response {
     let now = config::now_secs();
     let mut usage = resolve_usage(&user);
     let is_tracking = operation == "track";
-    // A limit below 1 admits nothing, including the first request of a new
-    // window — which the window reset below would otherwise wave through.
     if is_tracking && limit < 1 {
         return usage_limit_reached(limit);
     }
     if usage.reset_at.map(|r| now > r).unwrap_or(true) {
         let new_reset = now + USAGE_WINDOW_SECS;
-        // Reset and first increment together: a separate increment could be
-        // issued by a concurrent request and then erased by this reset.
         match state
             .pool
             .reset_usage_window(&user_id, new_reset, is_tracking)
@@ -764,8 +709,6 @@ fn usage(state: &AppState, req: &Request) -> Response {
             Err(e) => return db_err(state, "Usage tracking error", &e),
         }
     } else if is_tracking {
-        // The limit is enforced inside the UPDATE, so concurrent requests
-        // cannot both be admitted at the boundary.
         match state.pool.consume_usage(&user_id, limit) {
             Ok(Some(count)) => usage.count = count,
             Ok(None) => return usage_limit_reached(limit),
@@ -901,11 +844,6 @@ fn portal(state: &AppState, req: &Request) -> Response {
             return err_json(500, "Stripe portal failed");
         }
     };
-    // The caller may only manage the Stripe customer recorded against their own
-    // account. Anything else — no user, no subscription, a blank stored id, or a
-    // mismatch — is refused. Defaulting to "allow" when the account has no
-    // subscription would let any signed-in user open a billing portal for an
-    // arbitrary customer id and read or cancel someone else's subscription.
     let stored_id = user
         .as_ref()
         .and_then(|u| u.subscription.as_ref())
@@ -945,19 +883,8 @@ fn period_end(obj: &Json) -> Option<i64> {
     })
 }
 
-/// Subscription statuses under which a different subscription may replace the
-/// one a user already has: a new paid or trialing subscription takes over.
 const TAKEOVER_STATUSES: &[&str] = &["active", "trialing"];
 
-/// True when `patch` describes some other, non-paying subscription than the
-/// one stored in `current`, so writing it would demote the user.
-///
-/// One email can own several subscriptions over time (each checkout makes a
-/// new Stripe customer), and Stripe keeps sending events for the old ones: a
-/// `customer.subscription.deleted` for a lapsed plan, or `incomplete_expired`
-/// for an abandoned checkout. Those must not overwrite a newer subscription.
-/// Rows written before `subscription_id` existed have no stored ID and accept
-/// any patch, which then records one.
 fn is_superseded(current: Option<&Subscription>, patch: &Subscription) -> bool {
     let current_id = current.and_then(|c| c.subscription_id.as_deref());
     let (Some(current_id), Some(incoming_id)) = (current_id, patch.subscription_id.as_deref())
@@ -967,14 +894,6 @@ fn is_superseded(current: Option<&Subscription>, patch: &Subscription) -> bool {
     current_id != incoming_id && !TAKEOVER_STATUSES.contains(&patch.status.as_str())
 }
 
-/// Write a webhook's subscription state to the user with `email`.
-///
-/// Returns `Ok(true)` when written, `Ok(false)` when there is nothing to do (no
-/// such user, or the patch is for a superseded subscription).
-///
-/// # Errors
-/// `Err(())` on a database failure, already logged. The caller must answer
-/// 500 without recording the event, so Stripe retries it.
 fn apply_sub_patch(state: &AppState, email: &str, sub: &Subscription) -> Result<bool, ()> {
     let user = match state.pool.find_user(&UserQuery::Email(email.to_string())) {
         Ok(Some(u)) => u,
@@ -1012,14 +931,6 @@ fn apply_sub_patch(state: &AppState, email: &str, sub: &Subscription) -> Result<
     }
 }
 
-/// Mask an email address for logging.
-///
-/// Webhook logs are verbose, shipped off-host, and retained far longer than the
-/// request that produced them, so writing full addresses turns the log into a
-/// copy of the customer list. Keeping the first character and the domain leaves
-/// enough to match a support report against a log line without storing the
-/// address itself. Anything without an `@` is dropped entirely rather than
-/// guessed at.
 fn redact_email(email: &str) -> String {
     let Some((local, domain)) = email.split_once('@') else {
         return "[redacted]".to_string();
@@ -1097,22 +1008,10 @@ fn payment(state: &AppState, req: &Request) -> Response {
     if let Err(e) = process_webhook(state, &event_id, &event_type, &obj) {
         return e;
     }
-    // Recorded only after the effect has been applied, so the record can never
-    // claim an event was handled when it was not. Recording first and deleting
-    // on failure only covers a returned error: a crash, timeout, or kill
-    // between the insert and the update would leave the event marked as
-    // processed forever, and the retry Stripe sends would be skipped.
-    //
-    // This ordering trades that for the possibility of applying an event twice,
-    // which is safe here because every write these handlers perform sets
-    // subscription columns to absolute values read from Stripe rather than
-    // mutating them relative to what is already stored.
     if let Err(e) = state
         .pool
         .insert_webhook_event(&event_id, &event_type, config::now_ms())
     {
-        // The effect is already applied. Asking Stripe to retry would only
-        // repeat idempotent work, so acknowledge and keep the error visible.
         state.log.error(
             "Applied webhook event but failed to record it - a retry would be reprocessed",
             &[
@@ -1328,14 +1227,8 @@ fn static_or_spa(state: &AppState, req: &Request) -> Response {
     spa_fallback(state)
 }
 
-/// Production-only cache of `index.html`, which never changes while the process runs.
 static INDEX_HTML: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
 
-/// Serve the SPA shell for any non-API path.
-///
-/// In production the file is read once and kept in memory — every client-side route
-/// lands here, so re-reading it per request is pure syscall overhead. Development
-/// reads from disk each time so a rebuild shows up without restarting the server.
 fn spa_fallback(state: &AppState) -> Response {
     let read_index = || {
         std::fs::read(state.static_dir.join("index.html"))
@@ -1353,11 +1246,8 @@ fn spa_fallback(state: &AppState) -> Response {
     }
 }
 
-/// Days a processed Stripe webhook id is remembered for replay protection.
-/// Stripe stops retrying an event after ~3 days, so 30 is generous.
 const WEBHOOK_RETENTION_DAYS: i64 = 30;
 
-/// Drop webhook records past [`WEBHOOK_RETENTION_DAYS`]. Called from the hourly thread.
 pub fn run_webhook_cleanup(state: &AppState) {
     let cutoff = config::now_ms() - WEBHOOK_RETENTION_DAYS * 24 * 60 * 60 * 1000;
     match state.pool.prune_webhook_events(cutoff) {
@@ -1371,7 +1261,6 @@ pub fn run_webhook_cleanup(state: &AppState) {
     }
 }
 
-/// Drop expired lockout and auth-rate entries. Called from the 15-minute cleanup thread.
 pub fn run_lockout_cleanup(state: &AppState) {
     let now = config::now_ms();
     let cleaned = state.lockout.cleanup(now);
@@ -1390,20 +1279,6 @@ pub fn run_lockout_cleanup(state: &AppState) {
     }
 }
 
-/// Client IP used for auth rate limiting and lockout keys.
-///
-/// Transport `peer_ip` by default. `TRUST_PROXY` is the number of reverse
-/// proxies in front of this process (`TRUST_PROXY=1` for a single proxy such as
-/// Railway); set it only when every one of those hops is trusted.
-///
-/// Proxies **append** to `X-Forwarded-For`, so the leftmost entry is whatever
-/// the client sent and must never be trusted — rotating it would mint a fresh
-/// rate-limit and lockout bucket per request. Index `hops` from the right
-/// instead: with one trusted proxy that is the address it observed.
-///
-/// Falls back to `peer_ip` when the header is absent or carries fewer entries
-/// than `hops` (a spoofed-short chain then shares the proxy's bucket rather
-/// than escaping into one of its own).
 fn client_ip(req: &Request) -> String {
     let hops = config::env("TRUST_PROXY")
         .and_then(|v| v.trim().parse::<usize>().ok())
@@ -1423,7 +1298,6 @@ fn client_ip(req: &Request) -> String {
     req.peer_ip.clone()
 }
 
-/// Refuse the request when this IP has exhausted the auth sliding window.
 fn enforce_auth_rate_limit(state: &AppState, req: &Request) -> Result<(), Response> {
     let ip = client_ip(req);
     let status = state.auth_rate.check_and_record(&ip, config::now_ms());
@@ -1446,7 +1320,6 @@ mod tests {
 
     static TEST_DIR_SEQ: AtomicU64 = AtomicU64::new(0);
 
-    /// Tests mutate process env; serialize them so they cannot clobber each other.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn test_state() -> (AppState, std::path::PathBuf) {
@@ -1454,7 +1327,6 @@ mod tests {
         test_state_locked()
     }
 
-    /// Like [`test_state`] but assumes the caller already holds [`ENV_LOCK`].
     fn test_state_locked() -> (AppState, std::path::PathBuf) {
         let n = TEST_DIR_SEQ.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("sk-rs-{}-{n}", std::process::id()));
@@ -1498,12 +1370,6 @@ mod tests {
         }
     }
 
-    /// Replay the cookies set by `sources`, in order, with later responses
-    /// overriding earlier ones by cookie name — so an auth cookie from signup
-    /// can be combined with a replacement CSRF cookie from a later response.
-    ///
-    /// `send_csrf` controls whether the matching `x-csrf-token` header is sent,
-    /// which is what separates "client has no token" from "token is stale".
     fn replay_cookies(req: &mut Request, sources: &[&Response], send_csrf: bool) {
         let mut jar: Vec<(String, String)> = Vec::new();
         for res in sources {
@@ -1596,8 +1462,6 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// Sign up, then return the state and the signup response (which carries
-    /// the auth cookies and the CSRF token).
     fn signed_up(state: &AppState, email: &str) -> Response {
         let mut req = Request::for_test("POST", "/api/signup");
         req.set_test_body(
@@ -1608,7 +1472,6 @@ mod tests {
         res
     }
 
-    /// POST `/api/portal` with `customer_id`, carrying the cookies from `signup`.
     fn portal_request(state: &AppState, signup: &Response, customer_id: &str) -> Response {
         let mut req = Request::for_test("POST", "/api/portal");
         cookie_header(&mut req, signup);
@@ -1654,8 +1517,6 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// A response that only sets a CSRF cookie, standing in for a token the
-    /// client kept from before a restart or from the old random-token scheme.
     fn stale_csrf(token: &str) -> Response {
         Response::text(200, "").header("Set-Cookie", &format!("csrf_token={token}; Path=/"))
     }
@@ -1686,7 +1547,6 @@ mod tests {
         let (state, dir) = test_state();
         let signup = signed_up(&state, "restart@example.com");
         drop(state);
-        // Same dir and JWT_SECRET, fresh process state.
         let restarted = {
             let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
             AppState::open_in(&dir, 2, Logger::new(true)).expect("reopen")
@@ -1760,7 +1620,6 @@ mod tests {
             "a stale token must not accept the request: {}",
             String::from_utf8_lossy(&res.body)
         );
-        // The name must be unchanged, proving the mutation did not run.
         let after = state
             .pool
             .find_user(&UserQuery::Id(user_id))
@@ -1782,7 +1641,6 @@ mod tests {
         let refused = handle(&state, first);
         assert_eq!(refused.status, 403);
 
-        // Retry with the replacement token the refusal set.
         let mut second = Request::for_test("PUT", "/api/me");
         replay_cookies(&mut second, &[&signup, &stale, &refused], true);
         second.set_test_body(br#"{"name":"Renamed"}"#.to_vec());
@@ -1795,14 +1653,11 @@ mod tests {
     #[test]
     fn portal_refuses_a_customer_id_the_caller_does_not_own() {
         let (mut state, dir) = test_state();
-        // A configured client makes the route reach the authorization check; the
-        // check itself is local, so a refusal never touches the network.
         state.stripe = Some(crate::stripe_worker::StripeWorker::spawn(
             crate::stripe::StripeClient::new("sk_test_unused".into()),
         ));
         let signup = signed_up(&state, "noone@example.com");
 
-        // This account has no subscription, so it owns no Stripe customer.
         let res = portal_request(&state, &signup, "cus_someoneElsesCustomer");
         assert_eq!(res.status, 403, "{}", String::from_utf8_lossy(&res.body));
         assert_eq!(json_body(&res).get_str("error"), Some("Unauthorized customerID"));
@@ -1850,8 +1705,6 @@ mod tests {
 
         let mut put = Request::for_test("PUT", "/api/me");
         cookie_header(&mut put, &signed);
-        // cookie_header also copies x-csrf-token from Set-Cookie; strip it to
-        // prove a missing header is rejected.
         put.headers = crate::http::Headers::from_pairs(
             put.headers
                 .iter()
@@ -1899,7 +1752,6 @@ mod tests {
         req.set_test_header("x-forwarded-for", "198.51.100.10");
         req.set_test_body(br#"{"email":"xff-over@example.com","password":"secret1","name":"R"}"#.to_vec());
         assert_eq!(handle(&state, req).status, 429);
-        // Different forwarded IP still allowed (socket peer is the same proxy).
         let mut req = Request::for_test("POST", "/api/signup");
         req.peer_ip = "10.0.0.1".into();
         req.set_test_header("x-forwarded-for", "198.51.100.11");
@@ -1920,12 +1772,9 @@ mod tests {
         }
         let (state, dir) = test_state_locked();
         let now = config::now_ms();
-        // Exhaust the window for the address the single trusted proxy observed.
         for _ in 0..crate::stores::AUTH_RATE_LIMIT {
             assert!(!state.auth_rate.check_and_record("198.51.100.10", now).limited);
         }
-        // The client prepends junk; the proxy appends the address it saw. Taking
-        // the leftmost hop would hand the attacker an unused bucket every time.
         for (i, spoof) in ["203.0.113.1", "203.0.113.2", "203.0.113.3"].iter().enumerate() {
             let mut req = Request::for_test("POST", "/api/signup");
             req.peer_ip = "10.0.0.1".into();
@@ -1951,8 +1800,6 @@ mod tests {
         }
         let (state, dir) = test_state_locked();
         let now = config::now_ms();
-        // Only one hop present but two are configured: fail closed to the socket
-        // peer rather than trusting the client-supplied entry.
         for _ in 0..crate::stores::AUTH_RATE_LIMIT {
             assert!(!state.auth_rate.check_and_record("10.0.0.1", now).limited);
         }
@@ -2208,7 +2055,6 @@ mod tests {
         assert_eq!(handle(&state, signed_webhook(checkout)).status, 200);
         assert_eq!(user_subscription(&state, "late@example.com").expect("sub").status, "active");
 
-        // A retried `created` whose snapshot predates the first payment.
         let stale = br#"{
             "id":"evt_late_created",
             "type":"customer.subscription.created",
@@ -2234,7 +2080,6 @@ mod tests {
         let mut mock = crate::stripe::StripeMock::default();
         mock.customers
             .insert("cus_miss".into(), "miss@example.com".into());
-        // No `sub_miss` in the mock: the re-fetch fails with a 404.
         let (state, dir) = stripe_state_with_mock(mock);
         let _ = signed_up(&state, "miss@example.com");
 
@@ -2279,7 +2124,6 @@ mod tests {
     #[test]
     fn payment_old_subscription_deleted_after_resubscribe_keeps_user_subscribed() {
         let mut mock = crate::stripe::StripeMock::default();
-        // Each checkout makes a new Stripe customer for the same email.
         mock.customers
             .insert("cus_old".into(), "again@example.com".into());
         mock.customers
@@ -2301,11 +2145,9 @@ mod tests {
                 "data":{{"object":{{"id":"sub_old","customer":"cus_old","status":"canceled"}}}}}}"#
             )
         };
-        // The first plan lapses.
         assert_eq!(handle(&state, signed_webhook(deleted("evt_old_del").as_bytes())).status, 200);
         assert_eq!(user_subscription(&state, "again@example.com").expect("sub").status, "canceled");
 
-        // The user subscribes again: the new subscription takes over.
         let checkout = br#"{
             "id":"evt_again_cs",
             "type":"checkout.session.completed",
@@ -2318,7 +2160,6 @@ mod tests {
         assert_eq!(handle(&state, signed_webhook(checkout)).status, 200);
         assert_eq!(user_subscription(&state, "again@example.com").expect("sub").status, "active");
 
-        // A late redelivery of the old plan's deletion must not re-lock them.
         let res = handle(&state, signed_webhook(deleted("evt_old_del_retry").as_bytes()));
         assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
 
@@ -2340,7 +2181,6 @@ mod tests {
         let (state, dir) = stripe_state_with_mock(mock);
         let _ = signed_up(&state, "dbfail@example.com");
 
-        // Fail only the subscription write; the dedupe lookup and user read work.
         state
             .pool
             .with(|db| {
@@ -2367,7 +2207,6 @@ mod tests {
             .expect("find")
             .is_none());
 
-        // Once the database recovers, Stripe's retry of the same event applies.
         state
             .pool
             .with(|db| db.exec("DROP TRIGGER fail_sub_write"))
@@ -2407,7 +2246,6 @@ mod tests {
         assert_eq!(sub.status, "active");
         assert_eq!(sub.expires, Some(1_910_000_000));
 
-        // payment_failed only logs when the user exists — still 200.
         let failed = br#"{
             "id":"evt_inv_fail",
             "type":"invoice.payment_failed",
@@ -2441,7 +2279,6 @@ mod tests {
         }"#;
         assert_eq!(handle(&state, signed_webhook(payload)).status, 200);
         assert_eq!(handle(&state, signed_webhook(payload)).status, 200);
-        // Still one row, still active.
         assert!(state
             .pool
             .find_webhook_event("evt_idem_1")
@@ -2548,7 +2385,6 @@ mod tests {
             .expect("subscribe");
     }
 
-    /// `POST /api/usage` `check` for the signed-up caller `who`.
     fn usage_check_body(state: &AppState, who: &Response) -> Json {
         let mut req = Request::for_test("POST", "/api/usage");
         cookie_header(&mut req, who);

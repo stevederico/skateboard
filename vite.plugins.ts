@@ -1,16 +1,12 @@
 import { readFileSync } from 'node:fs';
 import type { Plugin, ViteDevServer } from 'vite';
 
-/**
- * Shape of the fields read from src/constants.json by these plugins.
- */
 interface AppConstants {
   appName: string;
   tagline: string;
   companyWebsite: string;
 }
 
-/** Sources the raw constants.json text. Overridable in tests via {@link __setConstantsReaderForTests}. */
 let constantsReader: () => string = () => readFileSync('src/constants.json', 'utf8');
 
 /**
@@ -24,12 +20,6 @@ export function __setConstantsReaderForTests(reader: () => string): void {
   constantsReader = reader;
 }
 
-/**
- * Read and validate src/constants.json at the filesystem boundary.
- *
- * @returns Parsed app constants
- * @throws If constants.json is missing required string fields
- */
 function readConstants(): AppConstants {
   const parsed: unknown = JSON.parse(constantsReader());
   if (
@@ -52,27 +42,10 @@ function readConstants(): AppConstants {
   return { appName, tagline, companyWebsite };
 }
 
-/**
- * Normalize a website value to an absolute https URL when no scheme is present.
- *
- * @param website - Raw companyWebsite value from constants.json
- * @returns Fully-qualified URL
- */
 function toAbsoluteUrl(website: string): string {
   return website.startsWith('http') ? website : `https://${website}`;
 }
 
-/**
- * Serve a build-time generated file from the dev server on the same path it ships at.
- *
- * Keeps `npm run start` and `npm run build` byte-identical for robots.txt, sitemap.xml,
- * and manifest.json — without committing stale copies under `public/`.
- *
- * @param server - Vite dev server
- * @param route - Absolute request path to intercept (e.g. `/robots.txt`)
- * @param contentType - Value for the `Content-Type` response header
- * @param build - Generator returning the file body
- */
 function serveGenerated(
   server: ViteDevServer,
   route: string,

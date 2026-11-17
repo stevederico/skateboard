@@ -98,7 +98,6 @@ export function walkJsx(element, visit) {
     } else if (node.type === 'ArrayExpression') {
       stack.push(...node.elements);
     } else if (node.type === 'CallExpression') {
-      // `items.map((x) => <Row />)`: look into callback bodies that return JSX.
       for (const arg of node.arguments) {
         if (arg.type === 'ArrowFunctionExpression' || arg.type === 'FunctionExpression') stack.push(arg.body);
       }

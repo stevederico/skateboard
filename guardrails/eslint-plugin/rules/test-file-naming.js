@@ -2,7 +2,6 @@ import path from 'node:path';
 
 const SPEC_RE = /\.spec(\.[cm]?[jt]sx?)$/;
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

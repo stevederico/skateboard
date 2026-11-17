@@ -1,5 +1,3 @@
-//! Skateboard backend process entry: bind HTTP, serve, shut down on SIGTERM.
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
@@ -72,12 +70,11 @@ extern "C" fn on_signal(sig: i32) {
     STOP.store(true, Ordering::SeqCst);
 }
 
-/// Install SIGINT/SIGTERM handlers. System `signal(3)`, not a crate.
 fn install_signals() {
     #[cfg(unix)]
     unsafe {
-        libc_signal(2, on_signal); // SIGINT
-        libc_signal(15, on_signal); // SIGTERM
+        libc_signal(2, on_signal);
+        libc_signal(15, on_signal);
     }
 }
 
@@ -92,10 +89,6 @@ fn spawn_cleanup(state: Arc<AppState>) {
     spawn_periodic(&state, "webhook-cleanup", 60 * 60, routes::run_webhook_cleanup);
 }
 
-/// Run `task` against shared state forever, every `period_secs`.
-///
-/// A failed spawn is logged rather than dropped silently — losing a janitor
-/// thread means a store grows unbounded, which is worth an operator's attention.
 fn spawn_periodic(
     state: &Arc<AppState>,
     name: &str,

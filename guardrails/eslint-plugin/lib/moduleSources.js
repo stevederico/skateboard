@@ -1,13 +1,3 @@
-/**
- * @typedef {(node: import('estree').Node, source: string) => void} SourceCallback
- */
-
-/**
- * Read a static string out of a specifier node (`'x'` or a template with no expressions).
- *
- * @param {any} node - Specifier AST node
- * @returns {string | null} The specifier, or null when it is computed at runtime
- */
 function staticString(node) {
   if (!node) return null;
   if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
@@ -65,7 +55,6 @@ export function packageName(source) {
  * @returns {import('eslint').Rule.RuleListener} Combined visitors
  */
 export function mergeVisitors(...listeners) {
-  /** @type {Record<string, Array<(node: any) => void>>} */
   const byType = {};
   for (const listener of listeners) {
     for (const [type, fn] of Object.entries(listener)) {

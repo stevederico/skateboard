@@ -2,46 +2,25 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { parseToken } from '../lib/classStrings.js';
 
-/** skateboard-ui 5.18.0+ ships plain CSS; the classes it defines are the shipped list. */
 const DEFAULT_UI_CSS = 'node_modules/@stevederico/skateboard-ui/styles.css';
 
-/** Folder scanned (recursively) for the app's own plain-CSS classes. */
 const DEFAULT_CSS_DIR = 'src';
 
-/** clsx-style helpers: every argument is a class value (strings, arrays, conditionals, object keys). */
 const CLSX_FUNCTIONS = new Set(['cn', 'clsx', 'cx', 'classNames', 'twMerge']);
 
-/** Marker classes: they style nothing themselves; `group-*` / `peer-*` variants read them. */
 const MARKER = /^(?:group|peer)(?:\/[\w-]+)?$/;
 
-/** JSX attributes whose values are class lists. */
 const CLASS_ATTRIBUTES = new Set(['className', 'class']);
 
-/** CSS escape: `\3a ` / `\31 0` (hex + optional whitespace) or `\:` (any other char). */
 const CSS_ESCAPE = String.raw`\\[0-9a-fA-F]{1,6}[ \t\n\r\f]?|\\[^\n\r\f0-9a-fA-F]`;
 
-/** A `.class` selector: ident start (letter, `_`, non-ASCII or escape), then ident chars. */
 const CLASS_SELECTOR_RE = new RegExp(
   `\\.(-?(?:[A-Za-z_]|[^\\x00-\\x7f]|${CSS_ESCAPE})(?:[\\w-]|[^\\x00-\\x7f]|${CSS_ESCAPE})*)`,
   'g',
 );
 
-/**
- * @typedef {object} AllowedClasses
- * @property {Set<string> | null} shipped - Classes skateboard-ui's styles.css defines, or null when it ships no plain CSS
- * @property {Set<string>} own - Class selectors defined in the app's own CSS
- * @property {string} listPath - Where the class list was looked for (for messages)
- */
-
-/** Loaded class lists, keyed by cwd + options, so each lint run reads the files once. */
 const CACHE = new Map();
 
-/**
- * Undo CSS escapes in an identifier (`hover\:glow` → `hover:glow`, `\32 xl` → `2xl`).
- *
- * @param {string} ident - Identifier as written in the stylesheet
- * @returns {string} Unescaped identifier
- */
 function unescapeCss(ident) {
   return ident.replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\(.)/g, (_, hex, ch) =>
     hex ? String.fromCodePoint(Number.parseInt(hex, 16)) : ch,
@@ -87,13 +66,6 @@ export function cssClassNames(text) {
   return out;
 }
 
-/**
- * Classes defined by skateboard-ui's styles.css. A missing file, or the Tailwind source
- * that skateboard-ui 5.17.0 and older shipped (`@import "tailwindcss"`), → null.
- *
- * @param {string} file - Absolute path to skateboard-ui's styles.css
- * @returns {Set<string> | null} Shipped classes
- */
 function readUiCss(file) {
   if (!existsSync(file)) return null;
   const text = readFileSync(file, 'utf8');
@@ -101,12 +73,6 @@ function readUiCss(file) {
   return cssClassNames(text);
 }
 
-/**
- * Class names from every `*.css` file under a folder (recursive, node_modules skipped).
- *
- * @param {string} dir - Absolute folder path
- * @returns {Set<string>} Class names defined there
- */
 function readCssDir(dir) {
   const out = new Set();
   if (!existsSync(dir)) return out;
@@ -118,15 +84,6 @@ function readCssDir(dir) {
   return out;
 }
 
-/**
- * Allowed classes for this lint run: skateboard-ui's CSS classes plus the app's own.
- * Options replace the real files (used by tests); without options the real
- * node_modules/@stevederico/skateboard-ui/styles.css and src/**\/*.css are read.
- *
- * @param {string} cwd - ESLint working directory (repo root)
- * @param {{ classes?: string[], uiCssPath?: string, cssFiles?: Array<{ path: string, text: string }>, cssDir?: string }} options - Rule options
- * @returns {AllowedClasses} Allowed classes
- */
 function loadAllowed(cwd, options) {
   const key = `${cwd}\0${JSON.stringify(options)}`;
   const cached = CACHE.get(key);
@@ -141,12 +98,6 @@ function loadAllowed(cwd, options) {
   return allowed;
 }
 
-/**
- * Name of a property key (`variants`, `'class'`), or null for computed keys.
- *
- * @param {any} prop - Property node
- * @returns {string | null} Key name
- */
 function keyName(prop) {
   if (prop.type !== 'Property' || prop.computed) return null;
   if (prop.key.type === 'Identifier') return prop.key.name;
@@ -154,39 +105,17 @@ function keyName(prop) {
   return null;
 }
 
-/**
- * Flatten a `'a ' + b + ' c'` chain into its operands.
- *
- * @param {any} node - Expression
- * @returns {any[]} Operands left to right
- */
 function flattenConcat(node) {
   if (node.type === 'BinaryExpression' && node.operator === '+') return [...flattenConcat(node.left), ...flattenConcat(node.right)];
   return [node];
 }
 
-/**
- * Collects whole, static class tokens from class expressions. A token that touches a
- * `${}` (or `+ expr`) boundary is partial (`bg-${tone}-500`) and skipped; an
- * interpolated expression is followed only when whitespace isolates it.
- */
 class TokenCollector {
   constructor() {
-    /** @type {Set<any>} Class-helper calls already walked (no double reports). */
     this.seenCalls = new Set();
-    /** @type {Array<{ node: any, token: string, where: string }>} */
     this.tokens = [];
   }
 
-  /**
-   * Add the whole tokens of a static string.
-   *
-   * @param {any} node - Report target
-   * @param {string} text - Static text
-   * @param {string} where - Context for the message (`className`, `cn()`)
-   * @param {boolean} openStart - Text is glued to a dynamic part on the left
-   * @param {boolean} openEnd - Text is glued to a dynamic part on the right
-   */
   addText(node, text, where, openStart = false, openEnd = false) {
     for (const m of text.matchAll(/\S+/g)) {
       if (openStart && m.index === 0) continue;
@@ -195,12 +124,6 @@ class TokenCollector {
     }
   }
 
-  /**
-   * Walk static and dynamic segments (template literal or `+` chain) in order.
-   *
-   * @param {Array<{ text: string, node: any } | { expr: any }>} segments - Alternating parts
-   * @param {string} where - Message context
-   */
   segments(segments, where) {
     segments.forEach((seg, i) => {
       const prev = segments[i - 1];
@@ -215,12 +138,6 @@ class TokenCollector {
     });
   }
 
-  /**
-   * Collect tokens from one class value.
-   *
-   * @param {any} node - Expression node
-   * @param {string} where - Message context
-   */
   value(node, where) {
     if (!node) return;
     switch (node.type) {
@@ -272,7 +189,6 @@ class TokenCollector {
         this.value(node.argument, where);
         break;
       case 'ObjectExpression':
-        // clsx object syntax: keys are classes, values are conditions.
         for (const prop of node.properties) {
           if (prop.type !== 'Property') continue;
           if (prop.computed) this.value(prop.key, where);
@@ -288,11 +204,6 @@ class TokenCollector {
     }
   }
 
-  /**
-   * Collect tokens from a `cn()`/`clsx()`/`cva()` call; other calls are dynamic.
-   *
-   * @param {any} node - CallExpression
-   */
   call(node) {
     if (node.callee.type !== 'Identifier') return;
     const name = node.callee.name;
@@ -306,13 +217,6 @@ class TokenCollector {
     }
   }
 
-  /**
-   * cva(base, { variants: { k: { v: classes } }, compoundVariants: [{ ..., class }] }).
-   * `defaultVariants` values are variant names, not classes, and are not read.
-   *
-   * @param {any} node - cva CallExpression
-   * @param {string} where - Message context
-   */
   cva(node, where) {
     const [base, config] = node.arguments;
     this.value(base, where);
@@ -337,13 +241,6 @@ class TokenCollector {
   }
 }
 
-/**
- * Cheap near-miss hint: the same utility without its variants, or without `!`.
- *
- * @param {string} token - Unknown token
- * @param {(t: string) => boolean} isAllowed - Membership test
- * @returns {string} Hint sentence (leading space) or ''
- */
 function nearMiss(token, isAllowed) {
   const { variants, utility } = parseToken(token);
   if (variants.length && isAllowed(utility)) {
@@ -354,7 +251,6 @@ function nearMiss(token, isAllowed) {
   return '';
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',
@@ -402,7 +298,6 @@ export default {
     const collector = new TokenCollector();
     let missingReported = false;
 
-    /** Report the tokens collected so far and reset the buffer. */
     const flush = () => {
       for (const { node, token, where } of collector.tokens) {
         if (!allowed.shipped) {

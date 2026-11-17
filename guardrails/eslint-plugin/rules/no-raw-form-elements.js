@@ -2,7 +2,6 @@ import { findAttr, jsxName, staticAttrValue } from '../lib/jsx.js';
 
 const UI = '@stevederico/skateboard-ui/ui';
 
-/** Replacement per raw element (and per `<input type>`). */
 const FIXES = {
   button: `\`import { Button } from '${UI}/button'\` and render \`<Button>\` (variants: default, outline, ghost, destructive, link; \`size="icon"\` + aria-label for icon-only)`,
   input: `\`import { Input } from '${UI}/input'\` paired with \`<Label htmlFor>\` from '${UI}/label' inside \`<Field>\``,
@@ -13,7 +12,6 @@ const FIXES = {
   anchor: `\`<Button variant="link" onClick={handleX}>\` from '${UI}/button' for actions, or give the link a real \`href\` (use \`useSafeNavigate()\` from '@stevederico/skateboard-ui/Utilities' in the handler for in-app routes)`,
 };
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

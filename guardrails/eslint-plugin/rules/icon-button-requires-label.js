@@ -1,20 +1,11 @@
 import { findAttr, hasSpread, jsxName, meaningfulChildren, staticAttrValue } from '../lib/jsx.js';
 
-/**
- * True when some child may render text: a text node, an expression (`{label}`), or an
- * element with its own children (`<span className="sr-only">Close</span>`). Self-closing
- * components (`<Trash2 size={18} />`) are icons and render no text.
- *
- * @param {any} element - JSXElement for the Button
- * @returns {boolean} Whether the button may have a visible or sr-only name
- */
 function providesText(element) {
   return meaningfulChildren(element).some((child) =>
     child.type !== 'JSXElement' || meaningfulChildren(child).length > 0,
   );
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',

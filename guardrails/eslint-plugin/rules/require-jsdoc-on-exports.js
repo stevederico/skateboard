@@ -3,27 +3,12 @@ import { TEST_FILE } from '../lib/paths.js';
 const FUNCTION_LIKE = new Set(['ArrowFunctionExpression', 'FunctionExpression', 'ClassExpression']);
 const DECLARATIONS = new Set(['FunctionDeclaration', 'ClassDeclaration']);
 
-/**
- * True when a `/** *\/` block comment sits directly before the node.
- *
- * @param {import('eslint').SourceCode} sourceCode - Source code
- * @param {any} node - Statement to check
- * @returns {boolean} Whether a JSDoc block precedes it
- */
 function hasJsdoc(sourceCode, node) {
   const comments = sourceCode.getCommentsBefore(node);
   const last = comments[comments.length - 1];
   return Boolean(last && last.type === 'Block' && last.value.startsWith('*'));
 }
 
-/**
- * Find the top-level statement that declares `name` as a function or class, so
- * `export { name }` can be checked where the function is written.
- *
- * @param {any} program - Program node
- * @param {string} name - Local binding name
- * @returns {any} Declaring statement, or null when it is not a function/class
- */
 function findLocalDeclaration(program, name) {
   for (const stmt of program.body) {
     const decl = stmt.type === 'ExportNamedDeclaration' || stmt.type === 'ExportDefaultDeclaration' ? stmt.declaration : stmt;
@@ -37,7 +22,6 @@ function findLocalDeclaration(program, name) {
   return null;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'suggestion',

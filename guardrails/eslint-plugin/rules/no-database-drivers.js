@@ -1,6 +1,5 @@
 import { createBannedImportRule, packages } from '../lib/bannedImports.js';
 
-/** Database drivers, ORMs, and query builders. The backend owns SQLite through libsqlite3 FFI. */
 const DATABASE_PACKAGES = [
   'pg',
   'pg-promise',

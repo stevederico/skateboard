@@ -1,15 +1,4 @@
 #!/usr/bin/env bash
-# Optional local Stripe webhook replay — never run in CI.
-#
-# Prerequisites:
-#   - stripe CLI: https://stripe.com/docs/stripe-cli (logged in)
-#   - backend running: cd backend && cargo run
-#   - Put the whsec_ that `stripe listen` prints into backend/.env as
-#     STRIPE_ENDPOINT_SECRET, then restart cargo run
-#
-# Usage:
-#   ./scripts/stripe-cli-replay.sh
-#   ./scripts/stripe-cli-replay.sh checkout.session.completed
 set -euo pipefail
 
 FORWARD_TO="${STRIPE_FORWARD_TO:-localhost:8000/api/payment}"

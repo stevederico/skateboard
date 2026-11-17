@@ -1,23 +1,15 @@
 import { moduleSourceVisitors, packageName } from '../lib/moduleSources.js';
 
-/**
- * Classify a specifier that reaches past a package's public entry points.
- *
- * @param {string} source - Import specifier
- * @returns {'nodeModules' | 'lucide' | 'dist' | null} Kind of deep import, or null when fine
- */
 function deepKind(source) {
   if (/(^|\/)node_modules\//.test(source)) return 'nodeModules';
   if (source.startsWith('.') || source.startsWith('/') || source.startsWith('@/')) return null;
   const pkg = packageName(source);
   const subpath = source.slice(pkg.length);
   if (pkg === 'lucide-react' && subpath) return 'lucide';
-  // `lib/` is left out on purpose: some packages document it as public (highlight.js/lib/core).
   if (/^\/(dist|build|esm|cjs)(\/|$)/.test(subpath)) return 'dist';
   return null;
 }
 
-/** @type {import('eslint').Rule.RuleModule} */
 export default {
   meta: {
     type: 'problem',
@@ -44,7 +36,6 @@ export default {
       const kind = deepKind(source);
       if (!kind) return;
       const last = source.split('/').pop() ?? '';
-      // `lucide-react/dist/esm/icons/trash-2` -> `Trash2` as a hint for the funnel name.
       const hint = last.replace(/\.[cm]?js$/, '').replace(/(^|-)([a-z0-9])/g, (_m, _d, c) => c.toUpperCase()) || 'IconName';
       context.report({ node, messageId: kind, data: { source, hint } });
     });
