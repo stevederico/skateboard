@@ -6,22 +6,37 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { BACKEND_STATE, REPO, SCREENSHOTS } from './paths.js';
 
-export const FRONTEND_PORT = 5173;
-export const BACKEND_PORT = 8000;
+const DEFAULT_FRONTEND_PORT = 5173;
+const DEFAULT_BACKEND_PORT = 8000;
+const MAX_PORT = 65535;
+
+export function envPort(name, fallback, env = process.env) {
+  const raw = env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > MAX_PORT) {
+    throw new Error(`${name} must be a port number from 1 to ${MAX_PORT}, got "${raw}"`);
+  }
+  return port;
+}
+
+export const FRONTEND_PORT = envPort('SKATEBOARD_FRONTEND_PORT', DEFAULT_FRONTEND_PORT);
+export const BACKEND_PORT = envPort('SKATEBOARD_BACKEND_PORT', DEFAULT_BACKEND_PORT);
 export const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`;
-const BACKEND_HEALTH_URL = `http://localhost:${BACKEND_PORT}/api/health`;
+export const BACKEND_API_URL = `http://localhost:${BACKEND_PORT}/api`;
+const BACKEND_HEALTH_URL = `${BACKEND_API_URL}/health`;
 export const BACKEND_BOOT_TIMEOUT_MS = 300_000;
 const FRONTEND_BOOT_TIMEOUT_MS = 60_000;
 const POLL_MS = 250;
 const STDERR_TAIL = 4000;
 
-export function resetArtifacts() {
-  rmSync(BACKEND_STATE, { recursive: true, force: true });
+export function resetArtifacts(backendState = BACKEND_STATE) {
+  rmSync(backendState, { recursive: true, force: true });
   rmSync(SCREENSHOTS, { recursive: true, force: true });
-  mkdirSync(BACKEND_STATE, { recursive: true });
+  mkdirSync(backendState, { recursive: true });
   mkdirSync(SCREENSHOTS, { recursive: true });
   writeFileSync(
-    path.join(BACKEND_STATE, 'config.json'),
+    path.join(backendState, 'config.json'),
     JSON.stringify({
       staticDir: path.join(REPO, 'dist'),
       database: { db: 'Verify', dbType: 'sqlite', connectionString: './databases/verify.db' },
@@ -43,7 +58,7 @@ function isPortTaken(port) {
 export async function assertPortsFree() {
   for (const port of [FRONTEND_PORT, BACKEND_PORT]) {
     if (await isPortTaken(port)) {
-      throw new Error(`port ${port} is already in use. npm run verify boots its own frontend (:${FRONTEND_PORT}) and backend (:${BACKEND_PORT}) against a throwaway database; stop the running dev server first.`);
+      throw new Error(`port ${port} is already in use. npm run verify boots its own frontend (:${FRONTEND_PORT}) and backend (:${BACKEND_PORT}) against a throwaway database; stop the running dev server first, or pick free ports with SKATEBOARD_FRONTEND_PORT and SKATEBOARD_BACKEND_PORT.`);
     }
   }
 }
@@ -81,14 +96,16 @@ async function waitUntilUp(server, url, timeout) {
   throw new Error(`${server.name} did not answer ${url} within ${timeout / 1000}s:\n${server.stderr}`);
 }
 
-export async function startServers() {
+export async function startServers(backendState = BACKEND_STATE) {
+  const ports = { SKATEBOARD_FRONTEND_PORT: String(FRONTEND_PORT), SKATEBOARD_BACKEND_PORT: String(BACKEND_PORT) };
   const backend = start('backend', 'cargo', ['run', '--manifest-path', 'backend/Cargo.toml', '--locked'], {
-    SKATEBOARD_BACKEND_DIR: BACKEND_STATE,
+    ...ports,
+    SKATEBOARD_BACKEND_DIR: backendState,
     JWT_SECRET: randomBytes(32).toString('hex'),
     NODE_ENV: 'development',
     PORT: String(BACKEND_PORT),
   });
-  const frontend = start('frontend', process.execPath, ['node_modules/vite/bin/vite.js', '--mode', 'development', '--port', String(FRONTEND_PORT), '--strictPort']);
+  const frontend = start('frontend', process.execPath, ['node_modules/vite/bin/vite.js', '--mode', 'development', '--port', String(FRONTEND_PORT), '--strictPort'], ports);
   const servers = [backend, frontend];
   try {
     await Promise.all([waitUntilUp(backend, BACKEND_HEALTH_URL, BACKEND_BOOT_TIMEOUT_MS), waitUntilUp(frontend, FRONTEND_URL, FRONTEND_BOOT_TIMEOUT_MS)]);

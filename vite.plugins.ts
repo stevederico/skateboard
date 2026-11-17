@@ -217,3 +217,38 @@ export function buildManifestJson(): string {
     2
   );
 }
+
+const MAX_PORT = 65535;
+const CONSTANTS_MODULE = '/src/constants.json';
+
+export type Env = Record<string, string | undefined>;
+
+export function envPort(env: Env, name: string, fallback: number): number {
+  const raw = env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > MAX_PORT) {
+    throw new Error(`${name} must be a port number from 1 to ${MAX_PORT}, got "${raw}"`);
+  }
+  return port;
+}
+
+export function withDevBackendPort(constantsSource: string, backendPort: number): string {
+  const parsed: unknown = JSON.parse(constantsSource);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('constants.json: expected an object');
+  }
+  return JSON.stringify({ ...parsed, devBackendURL: `http://localhost:${backendPort}/api` });
+}
+
+export const devBackendPortPlugin = (env: Env): Plugin => {
+  return {
+    name: 'dev-backend-port',
+    apply: 'serve',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!env.SKATEBOARD_BACKEND_PORT || !id.split('?')[0].endsWith(CONSTANTS_MODULE)) return null;
+      return { code: withDevBackendPort(code, envPort(env, 'SKATEBOARD_BACKEND_PORT', 0)), map: null };
+    }
+  };
+};

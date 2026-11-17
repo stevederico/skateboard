@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO, SCREENSHOTS } from './paths.js';
-import { BACKEND_BOOT_TIMEOUT_MS, FRONTEND_URL, assertPortsFree, resetArtifacts, startServers, stopServers } from './servers.js';
+import { BACKEND_API_URL, BACKEND_BOOT_TIMEOUT_MS, FRONTEND_PORT, FRONTEND_URL, assertPortsFree, resetArtifacts, startServers, stopServers } from './servers.js';
 import { ab, attribute, click, cookieHeader, drainProblems, expectGone, expectNoText, expectText, expectUrl, fill, findRole, labelledByText, writeBrowserConfig } from './browser.js';
 
 const constants = JSON.parse(readFileSync(path.join(REPO, 'src/constants.json'), 'utf8'));
 const PAGE_TITLES = constants.pages.map((item) => item.title);
 const HOME_TITLE = PAGE_TITLES[0];
 
-const BACKEND_API = constants.devBackendURL;
+const BACKEND_API = BACKEND_API_URL;
 const USER = { name: 'Verify User', email: `verify-${Date.now()}@example.com`, password: 'verify-pass-1' };
 const VIEWPORT = ['1280', '720'];
 const SETUP_TIMEOUT_MS = BACKEND_BOOT_TIMEOUT_MS + 120_000;
@@ -155,7 +155,7 @@ describe('runtime verify', () => {
     await expectText('Are you sure you want to sign out?', { within: confirm });
     await shot('08-sign-out-confirm');
     await click(button('Sign Out'), { within: confirm });
-    await expectUrl(/:5173\/$/);
+    await expectUrl(new RegExp(`:${FRONTEND_PORT}/$`));
     await findRole(heading(constants.tagline, 1));
     const me = await backendMe();
     assert.equal(me.status, 401, 'backend rejects the session after sign out');

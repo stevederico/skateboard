@@ -12,6 +12,19 @@ npm run front          # Same as start
 cd backend && cargo run   # Backend on :8000
 ```
 
+**Ports:** `SKATEBOARD_FRONTEND_PORT` (default 5173) and `SKATEBOARD_BACKEND_PORT` (default 8000) move the whole dev setup, so several copies of an app can run side by side. Export both in the shell that runs the frontend, the backend and `npm run verify`:
+
+```bash
+export SKATEBOARD_FRONTEND_PORT=5301 SKATEBOARD_BACKEND_PORT=8301
+npm run start                # Vite on :5301, strictly (fails rather than moving to another port)
+cd backend && cargo run      # backend on :8301; allows CORS from :5301
+npm run verify               # verify boots its own servers on :5301 and :8301
+```
+
+- Vite: `server.port` and `strictPort` come from `SKATEBOARD_FRONTEND_PORT`; `devBackendPortPlugin` (dev server only) rewrites `devBackendURL` in `src/constants.json` to `http://localhost:$SKATEBOARD_BACKEND_PORT/api`. Builds never read either variable.
+- Backend: listens on `SKATEBOARD_BACKEND_PORT`, else `PORT`, else 8000 (the explicit variable wins over a `PORT` in `backend/.env`). Without `CORS_ORIGINS` it allows `localhost` and `127.0.0.1` on the frontend and backend ports.
+- A value that is not a port from 1 to 65535 stops Vite and verify with a message naming the variable.
+
 **Build Commands:**
 ```bash
 npm run build          # Frontend typecheck + Vite production build
@@ -157,7 +170,7 @@ npm run verify               # agent-browser flows against the running app, scre
 - **Disabling:** only with `// oxlint-disable-next-line skateboard/<rule> -- <reason>` (oxlint also honors `eslint-disable-*`); unused disables fail lint.
 - **Layers:** `guardrails/eslint-plugin/layers.js` is the layer table (`ui` = src/components, `app` = rest of src/, `server` = backend/, `tooling` = scripts/, `build` = vite.*, `guardrails`) and the allowed import edges. `skateboard/layer-boundaries` enforces it per file, and `.dependency-cruiser.js` generates its layer rules from the same table (never hand-copy a layer into either).
 - **Boundaries (`npm run depcruise`):** dependency-cruiser resolves every import on disk, so it proves what one file cannot: the layer table across the graph, no circular dependencies, no orphan modules, no devDependencies or Node builtins in `src/`, no packages missing from `package.json`, no unresolvable imports (including deep paths a package's `exports` map does not expose), no relative paths into `node_modules/`, no imports of test files. Each rule's `comment` states the root cause and the fix. Needs `npm ci` and `npm run guardrails:install` first.
-- **Runtime verify (`npm run verify`):** `guardrails/verify/verify.e2e.js` (run by `node --test`) drives the `agent-browser` CLI through landing, guest entry, sign up, the main view, sidebar, command menu, settings, sign out, sign in, a legal page and the 404, against the real Vite dev server (:5173) and the real Rust backend (`cargo run` on :8000, throwaway SQLite under `verify-artifacts/`; nothing is mocked). Elements are found in agent-browser's accessibility snapshot by role and name (`guardrails/verify/browser.js`), the way a screen reader sees them. It fails on uncaught exceptions, console errors and unexpected failed requests (HTTP 4xx/5xx), and saves full-page screenshots to `verify-artifacts/screenshots/` (gitignored). agent-browser launches its own headless Chrome or Chromium in a private session (`--session skateboard-verify-<pid>`, config `verify-artifacts/agent-browser.json`, so a personal agent-browser config that attaches to a running browser is not used); set `AGENT_BROWSER_EXECUTABLE_PATH` if it cannot find one. Ports 5173 and 8000 must be free. Unit tests stay on `node --test` too, so flow files are named `*.e2e.js`, never `*.test.js` / `*.spec.js`. When you change a view the flows assert, update the flow in the same change.
+- **Runtime verify (`npm run verify`):** `guardrails/verify/verify.e2e.js` (run by `node --test`) drives the `agent-browser` CLI through landing, guest entry, sign up, the main view, sidebar, command menu, settings, sign out, sign in, a legal page and the 404, against the real Vite dev server (:5173, or `SKATEBOARD_FRONTEND_PORT`) and the real Rust backend (`cargo run` on :8000, or `SKATEBOARD_BACKEND_PORT`; throwaway SQLite under `verify-artifacts/`; nothing is mocked). Elements are found in agent-browser's accessibility snapshot by role and name (`guardrails/verify/browser.js`), the way a screen reader sees them. It fails on uncaught exceptions, console errors and unexpected failed requests (HTTP 4xx/5xx), and saves full-page screenshots to `verify-artifacts/screenshots/` (gitignored). agent-browser launches its own headless Chrome or Chromium in a private session (`--session skateboard-verify-<pid>`, config `verify-artifacts/agent-browser.json`, so a personal agent-browser config that attaches to a running browser is not used); set `AGENT_BROWSER_EXECUTABLE_PATH` if it cannot find one. Its ports must be free. `guardrails/verify/ports.e2e.js` then boots both servers on two random free ports and checks the frontend, the backend, the dev backend URL and CORS (the files run one at a time). Unit tests stay on `node --test` too, so flow files are named `*.e2e.js`, never `*.test.js` / `*.spec.js`. When you change a view the flows assert, update the flow in the same change.
 - **CI:** `.github/workflows/ci.yml` job `guardrails` runs lint, rule tests and depcruise; `.github/workflows/verify.yml` runs the flows on every pull request, uploads the screenshots, and keeps one PR comment linking them.
 
 **Written rules that are NOT linted (and why):**
@@ -714,7 +727,7 @@ Backend requires `.env` file with:
 - `FRONTEND_URL` - Frontend URL for Stripe redirects (production)
 - `FREE_USAGE_LIMIT` - Usage limit for free users (default: 20)
 - `NODE_ENV` - `production` enables HSTS, skips `.env` loading, and requires a 32+ character `JWT_SECRET`
-- `PORT` - Listen port (default: 8000)
+- `PORT` - Listen port (default: 8000; `SKATEBOARD_BACKEND_PORT` wins in dev, see **Ports**)
 
 Database connection is SQLite only and lives in `backend/config.json` — there are no
 `DATABASE_URL`, `MONGODB_URL`, or `POSTGRES_URL` variables.
@@ -750,7 +763,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.26.0
+- skateboard@5.27.0
 - skateboard-ui@5.26.0
 
 ## Migrating 4.x → 5.0 (exact checklist)

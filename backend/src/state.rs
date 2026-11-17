@@ -55,27 +55,48 @@ pub struct AppState {
     pub prod: bool,
 }
 
+pub const DEFAULT_BACKEND_PORT: u16 = 8000;
+pub const DEFAULT_FRONTEND_PORT: u16 = 5173;
+
+fn leading_digits_port(raw: Option<String>) -> Option<u16> {
+    let digits: String = raw?
+        .trim_start()
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse::<u16>().ok()
+}
+
+pub fn port_from(skateboard_backend_port: Option<String>, port: Option<String>) -> u16 {
+    leading_digits_port(skateboard_backend_port)
+        .or_else(|| leading_digits_port(port))
+        .unwrap_or(DEFAULT_BACKEND_PORT)
+}
+
+pub fn frontend_port_from(skateboard_frontend_port: Option<String>) -> u16 {
+    leading_digits_port(skateboard_frontend_port).unwrap_or(DEFAULT_FRONTEND_PORT)
+}
+
+pub fn dev_cors_origins(frontend_port: u16, backend_port: u16) -> Vec<String> {
+    ["localhost", "127.0.0.1"]
+        .iter()
+        .flat_map(|host| [frontend_port, backend_port].map(|port| format!("http://{host}:{port}")))
+        .collect()
+}
+
 impl AppState {
     pub fn resolve_cors_origins() -> Vec<String> {
         match config::env("CORS_ORIGINS") {
             Some(v) => v.split(',').map(|o| o.trim().to_string()).collect(),
-            None => vec![
-                "http://localhost:5173".to_string(),
-                "http://localhost:8000".to_string(),
-                "http://127.0.0.1:5173".to_string(),
-                "http://127.0.0.1:8000".to_string(),
-            ],
+            None => dev_cors_origins(
+                frontend_port_from(config::env("SKATEBOARD_FRONTEND_PORT")),
+                Self::resolve_port(),
+            ),
         }
     }
 
     pub fn resolve_port() -> u16 {
-        let raw = config::env("PORT").unwrap_or_default();
-        let digits: String = raw
-            .trim_start()
-            .chars()
-            .take_while(char::is_ascii_digit)
-            .collect();
-        digits.parse::<u16>().unwrap_or(8000)
+        port_from(config::env("SKATEBOARD_BACKEND_PORT"), config::env("PORT"))
     }
 
     pub fn resolve_free_usage_limit() -> i64 {
@@ -221,6 +242,35 @@ mod tests {
         std::env::set_var("PORT", "9123");
         assert_eq!(AppState::resolve_port(), 9123);
         std::env::remove_var("PORT");
+    }
+
+    #[test]
+    fn port_prefers_skateboard_backend_port_then_port_then_8000() {
+        let some = |v: &str| Some(v.to_string());
+        assert_eq!(port_from(some("8100"), some("8000")), 8100);
+        assert_eq!(port_from(None, some("9123")), 9123);
+        assert_eq!(port_from(some(""), some("9123")), 9123);
+        assert_eq!(port_from(None, None), DEFAULT_BACKEND_PORT);
+        assert_eq!(port_from(some("not-a-port"), None), DEFAULT_BACKEND_PORT);
+    }
+
+    #[test]
+    fn frontend_port_defaults_to_5173() {
+        assert_eq!(frontend_port_from(None), 5173);
+        assert_eq!(frontend_port_from(Some("5273".to_string())), 5273);
+    }
+
+    #[test]
+    fn dev_cors_origins_follow_the_configured_ports() {
+        assert_eq!(
+            dev_cors_origins(5273, 8100),
+            vec![
+                "http://localhost:5273".to_string(),
+                "http://localhost:8100".to_string(),
+                "http://127.0.0.1:5273".to_string(),
+                "http://127.0.0.1:8100".to_string(),
+            ]
+        );
     }
 
     #[test]

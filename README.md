@@ -203,7 +203,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.26.0 | Boilerplate (this repo) |
+| **skateboard** | v5.27.0 | Boilerplate (this repo) |
 | **skateboard-ui** | v5.26.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (JSX via tsconfig `react-jsx`) |
 | **CSS** | plain | Styling: skateboard-ui `styles.css` + `src/assets/styles.css`, no Tailwind |
@@ -293,6 +293,7 @@ npm run lint                  # oxlint guardrails (rules from AGENTS.md)
 npm run test:guardrails       # rule tests
 npm run depcruise             # import-graph boundaries
 npm run verify                # click through the running app (needs ports 5173 + 8000 free)
+SKATEBOARD_FRONTEND_PORT=5301 SKATEBOARD_BACKEND_PORT=8301 npm run verify   # same, on other ports
 ```
 
 <br />

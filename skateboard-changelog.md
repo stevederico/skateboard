@@ -15,6 +15,16 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.27.0
+
+  Add SKATEBOARD_FRONTEND_PORT
+  Add SKATEBOARD_BACKEND_PORT
+  Add dev backend plugin
+  Build CORS from ports
+  Port-aware verify servers
+  Add ports e2e test
+  Document ports
+
 5.26.0
 
   Pin skateboard-ui 5.26.0

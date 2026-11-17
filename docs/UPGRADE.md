@@ -7,6 +7,17 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.27.0 — configurable dev and verify ports.** `SKATEBOARD_FRONTEND_PORT`
+(default 5173) and `SKATEBOARD_BACKEND_PORT` (default 8000) move Vite, the
+backend, the dev backend URL, the dev CORS list and `npm run verify` together
+(AGENTS.md → **Ports**). The updater syncs `vite.config.ts`, `vite.plugins.ts`,
+`backend/src/state.rs` and `guardrails/verify/` (`servers.js`, the new
+`ports.e2e.js`). Nothing app-owned changes: `src/constants.json` keeps its
+`devBackendURL`, which the dev server rewrites only when the variable is set. If
+your `verify.e2e.js` builds API URLs from `constants.devBackendURL` or matches
+`:5173`, switch to `BACKEND_API_URL` and `FRONTEND_PORT` from `servers.js`.
+Accept the new `verify` script (it runs both e2e files one at a time).
+
 **5.26.0 — skateboard-ui 5.26.0 status colors, comment-free template, updater stamps.**
 `npm install @stevederico/skateboard-ui@5.26.0 --save-exact`. It adds `success`,
 `warning`, `info` and `danger` tokens with `bg-*`, `bg-*/10`, `text-*` and

@@ -78,6 +78,7 @@ const ALLOWLIST = [
   'guardrails/verify/browser.js',
   'guardrails/verify/servers.js',
   'guardrails/verify/verify.e2e.js',
+  'guardrails/verify/ports.e2e.js',
   'guardrails/package.json',
   'guardrails/package-lock.json',
   'guardrails/eslint-plugin/index.js',
