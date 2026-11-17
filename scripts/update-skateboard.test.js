@@ -1,10 +1,11 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync, symlinkSync, lstatSync, readlinkSync, readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, symlinkSync, lstatSync, readlinkSync, readFileSync, existsSync, readdirSync, copyFileSync } from 'node:fs';
+import { spawnSync, execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { ALLOWLIST, REMOVED, SYMLINKS, RENAMES, ensureSymlink } from './update-skateboard.js';
+import { ALLOWLIST, REMOVED, SYMLINKS, RENAMES, TMP_DIR, ensureSymlink, findMergeDefects, mergeTempFile, threeWayMerge } from './update-skateboard.js';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 function walkRepo(dir, out = []) {
@@ -140,5 +141,191 @@ describe('ensureSymlink', () => {
     const status = await ensureSymlink('CLAUDE.md', 'AGENTS.md', { root });
     assert.equal(status, 'ok');
     assert.ok(!existsSync(join(root, 'CLAUDE.md')));
+  });
+});
+
+describe('REMOVED', () => {
+  it('drops stale ambient declaration copies that would shadow real types', () => {
+    for (const f of ['backend/ambient.d.ts', 'src/skateboard-ui.d.ts']) {
+      assert.ok(REMOVED.includes(f), `${f} must be removed from apps`);
+      assert.ok(!ALLOWLIST.includes(f), `${f} must not be synced back`);
+    }
+  });
+});
+
+describe('per-process temp paths', () => {
+  it('scopes the clone dir and merge temp files to this process', () => {
+    assert.ok(TMP_DIR.endsWith(`-${process.pid}`), TMP_DIR);
+    const roles = ['cur', 'base', 'new'].map(mergeTempFile);
+    for (const p of roles) assert.ok(p.includes(`.${process.pid}.`), p);
+    assert.equal(new Set(roles).size, 3);
+  });
+});
+
+describe('findMergeDefects', () => {
+  it('flags a duplicate declaration that a clean 3-way merge produced', () => {
+    const base = 'export function keep() {}\n\nexport function other() {}\n';
+    const app = `export function helper() {}\n\n${base}`;
+    const incoming = `${base}\nexport function helper() {}\n`;
+    const { merged, conflicts } = threeWayMerge(app, base, incoming);
+    assert.equal(conflicts, 0);
+    assert.deepEqual(findMergeDefects(merged, 'vite.plugins.ts'), [
+      'duplicate top-level declaration "helper" (2×) — likely TS2393'
+    ]);
+  });
+});
+
+const UPDATER = fileURLToPath(new URL('./update-skateboard.js', import.meta.url));
+const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args], { cwd, stdio: 'pipe' });
+
+function writeTree(root, files) {
+  for (const [rel, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    writeFileSync(join(root, rel), content);
+  }
+}
+
+function tagRelease(repo, version, files) {
+  writeTree(repo, files);
+  git(repo, 'add', '-A');
+  git(repo, 'commit', '-q', '-m', version);
+  git(repo, 'tag', version);
+}
+
+const PLUGINS_V1 = 'export function keep() {}\n\nexport function other() {}\n';
+
+function makeTemplate(root) {
+  const repo = join(root, 'template');
+  mkdirSync(repo);
+  git(repo, 'init', '-q', '-b', 'master');
+  tagRelease(repo, '1.0.0', {
+    'package.json': JSON.stringify({ name: 'skateboard', version: '1.0.0', workspaces: ['backend'], scripts: {} }),
+    'AGENTS.md': 'a\nb\nc\n',
+    'vite.plugins.ts': PLUGINS_V1
+  });
+  tagRelease(repo, '2.0.0', {
+    'package.json': JSON.stringify({ name: 'skateboard', version: '2.0.0', scripts: { postinstall: 'git config core.hooksPath .githooks || true' } }),
+    'AGENTS.md': 'a\nB2\nc\n',
+    'vite.plugins.ts': `${PLUGINS_V1}\nexport function helper() {}\n`
+  });
+  return repo;
+}
+
+function makeApp(root, pkg, files = {}) {
+  const app = join(root, 'app');
+  mkdirSync(app);
+  writeTree(app, { 'package.json': JSON.stringify(pkg), 'vite.plugins.ts': PLUGINS_V1, ...files });
+  return app;
+}
+
+function runUpdater(app, repo, ...args) {
+  return spawnSync(process.execPath, [UPDATER, '--yes', ...args], {
+    cwd: app,
+    encoding: 'utf8',
+    env: { ...process.env, SKATEBOARD_REPO: repo, SKATEBOARD_BRANCH: '' }
+  });
+}
+
+const readPkg = (app) => JSON.parse(readFileSync(join(app, 'package.json'), 'utf8'));
+
+describe('updater main against a local template', () => {
+  let root;
+  let repo;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'sk-updater-'));
+    repo = makeTemplate(root);
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('drops the workspaces entry, deletes stale ambient types and warns about hooks the postinstall bypasses', () => {
+    const app = makeApp(root, { name: 'app', skateboardVersion: '1.0.0', workspaces: ['backend'], scripts: {} }, {
+      'AGENTS.md': 'a\nb\nc\n',
+      '.git/hooks/pre-commit': '#!/bin/sh\n',
+      'backend/ambient.d.ts': 'declare module "pg";\n',
+      'src/skateboard-ui.d.ts': 'declare module "x";\n'
+    });
+    const run = runUpdater(app, repo);
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    const pkg = readPkg(app);
+    assert.equal(pkg.workspaces, undefined);
+    assert.equal(pkg.skateboardVersion, '2.0.0');
+    assert.match(run.stdout, /existing git hook\(s\) in \.git\/hooks \(pre-commit\)/);
+    assert.ok(!existsSync(join(app, 'backend/ambient.d.ts')));
+    assert.ok(!existsSync(join(app, 'src/skateboard-ui.d.ts')));
+    assert.equal(readFileSync(join(app, 'AGENTS.md'), 'utf8'), 'a\nB2\nc\n');
+  });
+
+  it('withholds the version stamp and exits 1 when a clean merge ships a duplicate declaration', () => {
+    const app = makeApp(root, { name: 'app', skateboardVersion: '1.0.0', scripts: {} }, {
+      'AGENTS.md': 'a\nb\nc\n',
+      'vite.plugins.ts': `export function helper() {}\n\n${PLUGINS_V1}`
+    });
+    const run = runUpdater(app, repo);
+    assert.equal(run.status, 1, run.stdout + run.stderr);
+    assert.match(run.stdout, /DEFECT/);
+    assert.equal(readPkg(app).skateboardVersion, '1.0.0');
+  });
+
+  it('withholds the version stamp and exits 1 when a file conflicts', () => {
+    const app = makeApp(root, { name: 'app', skateboardVersion: '1.0.0', scripts: {} }, { 'AGENTS.md': 'a\nmine\nc\n' });
+    const run = runUpdater(app, repo);
+    assert.equal(run.status, 1, run.stdout + run.stderr);
+    assert.equal(readPkg(app).skateboardVersion, '1.0.0');
+  });
+
+  it('stops when already on latest, and --baseline forces a re-sync', () => {
+    const app = makeApp(root, { name: 'app', skateboardVersion: '2.0.0', scripts: {} }, { 'AGENTS.md': 'a\nb\nc\n' });
+    const idle = runUpdater(app, repo);
+    assert.equal(idle.status, 0, idle.stdout + idle.stderr);
+    assert.match(idle.stdout, /Already on latest/);
+    assert.equal(readFileSync(join(app, 'AGENTS.md'), 'utf8'), 'a\nb\nc\n');
+
+    const forced = runUpdater(app, repo, '--baseline', '1.0.0');
+    assert.equal(forced.status, 0, forced.stdout + forced.stderr);
+    assert.equal(readFileSync(join(app, 'AGENTS.md'), 'utf8'), 'a\nB2\nc\n');
+  });
+
+  it('migrates a stranded regular CLAUDE.md even when the version already matches', () => {
+    const app = makeApp(root, { name: 'app', skateboardVersion: '2.0.0', scripts: {} }, { 'CLAUDE.md': 'old rules\n' });
+    const run = runUpdater(app, repo);
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+    assert.match(run.stdout, /pre-rename file\(s\) remain/);
+    assert.equal(readFileSync(join(app, 'AGENTS.md'), 'utf8'), 'a\nB2\nc\n');
+    assert.equal(readlinkSync(join(app, 'CLAUDE.md')), 'AGENTS.md');
+  });
+});
+
+function standaloneEnv() {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  return env;
+}
+
+describe('template-only suites', () => {
+  let app;
+  beforeEach(() => {
+    app = mkdtempSync(join(tmpdir(), 'sk-app-suites-'));
+    mkdirSync(join(app, 'scripts'));
+    for (const f of ['version-consistency.test.js', 'update-skateboard.test.js', 'update-skateboard.js']) {
+      copyFileSync(join(REPO, 'scripts', f), join(app, 'scripts', f));
+    }
+    writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'my-app', type: 'module', version: '0.1.0', skateboardVersion: '9.9.9' }));
+  });
+  afterEach(() => {
+    rmSync(app, { recursive: true, force: true });
+  });
+
+  it('skip in an app instead of failing on template-only files', () => {
+    for (const args of [
+      ['scripts/version-consistency.test.js'],
+      ['--test-name-pattern=ALLOWLIST', 'scripts/update-skateboard.test.js']
+    ]) {
+      const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', ...args], { cwd: app, encoding: 'utf8', env: standaloneEnv() });
+      assert.equal(run.status, 0, run.stdout + run.stderr);
+      assert.match(run.stdout, /# fail 0/);
+      assert.match(run.stdout, /# SKIP/);
+    }
   });
 });

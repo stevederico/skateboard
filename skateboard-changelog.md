@@ -15,6 +15,15 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.24.0
+
+  Add invariant tests
+  Name signal constants
+  Name scrypt defaults
+  Rename env loader
+  Test updater main
+  Test vite config
+
 5.23.0
 
   Lint with oxlint

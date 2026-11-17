@@ -50,7 +50,7 @@ fn main() {
         thread::sleep(Duration::from_millis(200));
     }
 
-    let name = if LAST_SIGNAL.load(Ordering::SeqCst) == 2 {
+    let name = if LAST_SIGNAL.load(Ordering::SeqCst) == SIGINT as u8 {
         "SIGINT"
     } else {
         "SIGTERM"
@@ -61,6 +61,9 @@ fn main() {
     eprintln!("Server closed");
     eprintln!("Database connections closed");
 }
+
+const SIGINT: i32 = 2;
+const SIGTERM: i32 = 15;
 
 static STOP: AtomicBool = AtomicBool::new(false);
 static LAST_SIGNAL: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
@@ -73,8 +76,8 @@ extern "C" fn on_signal(sig: i32) {
 fn install_signals() {
     #[cfg(unix)]
     unsafe {
-        libc_signal(2, on_signal);
-        libc_signal(15, on_signal);
+        libc_signal(SIGINT, on_signal);
+        libc_signal(SIGTERM, on_signal);
     }
 }
 

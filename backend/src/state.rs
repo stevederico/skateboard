@@ -91,7 +91,7 @@ impl AppState {
         let log = Logger::new(prod);
         let dir = config::backend_dir();
         if !prod {
-            config::load_local_env(&dir, &log);
+            config::load_local_env_before_any_thread_spawns(&dir, &log);
         }
         AppState::open_in(&dir, http::Config::default().threads, log)
     }

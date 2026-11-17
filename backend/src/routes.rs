@@ -2440,4 +2440,179 @@ mod tests {
         }
         std::fs::remove_dir_all(&dir).ok();
     }
+
+    fn user_id_of(state: &AppState, email: &str) -> String {
+        state
+            .pool
+            .find_user(&UserQuery::Email(email.into()))
+            .expect("query")
+            .expect("user")
+            .id
+    }
+
+    fn set_cookie_value(res: &Response, name: &str) -> Option<String> {
+        res.headers.iter().find_map(|(k, v)| {
+            if !k.eq_ignore_ascii_case("Set-Cookie") {
+                return None;
+            }
+            let pair = v.split(';').next().unwrap_or(v);
+            let (n, value) = pair.split_once('=')?;
+            (n == name).then(|| value.to_string())
+        })
+    }
+
+    #[test]
+    fn csrf_token_issued_up_to_a_minute_ahead_is_valid_and_beyond_is_expired() {
+        let secret = "s";
+        let issued = 10_000_000;
+        let token = format!("{issued}.{}", csrf_mac(secret, "u1", issued));
+        assert_eq!(check_csrf_token(secret, "u1", &token, issued - 60_000), CsrfCheck::Valid);
+        assert_eq!(check_csrf_token(secret, "u1", &token, issued - 60_001), CsrfCheck::Expired);
+        assert_eq!(
+            check_csrf_token(secret, "u1", &token, issued + CSRF_TOKEN_EXPIRY_MS),
+            CsrfCheck::Valid
+        );
+    }
+
+    #[test]
+    fn signout_refusal_reissues_a_csrf_token_so_the_retry_signs_out() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "out-retry@example.com");
+        let stale = stale_csrf(OLD_SCHEME_TOKEN);
+
+        let mut first = Request::for_test("POST", "/api/signout");
+        replay_cookies(&mut first, &[&signup, &stale], true);
+        let refused = handle(&state, first);
+        assert_eq!(refused.status, 403);
+        assert!(set_cookie_value(&refused, "csrf_token").is_some_and(|v| !v.is_empty()));
+
+        let mut second = Request::for_test("POST", "/api/signout");
+        replay_cookies(&mut second, &[&signup, &stale, &refused], true);
+        let res = handle(&state, second);
+        assert_eq!(res.status, 200, "{}", String::from_utf8_lossy(&res.body));
+        assert_eq!(set_cookie_value(&res, "token").as_deref(), Some(""));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn me_mints_a_csrf_token_when_the_cookie_is_missing() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "nocsrf@example.com");
+        let jwt = set_cookie_value(&signup, "token").expect("jwt");
+        let mut me = Request::for_test("GET", "/api/me");
+        me.set_test_header("cookie", &format!("token={jwt}"));
+        let res = handle(&state, me);
+        assert_eq!(res.status, 200);
+        assert!(set_cookie_value(&res, "csrf_token").is_some_and(|v| !v.is_empty()));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn me_replaces_an_expired_csrf_token() {
+        let (state, dir) = test_state();
+        let signup = signed_up(&state, "expired-csrf@example.com");
+        let user_id = user_id_of(&state, "expired-csrf@example.com");
+        let secret = state.jwt_secret.clone().expect("secret");
+        let issued = config::now_ms() - CSRF_TOKEN_EXPIRY_MS - 1;
+        let expired = format!("{issued}.{}", csrf_mac(&secret, &user_id, issued));
+
+        let mut me = Request::for_test("GET", "/api/me");
+        replay_cookies(&mut me, &[&signup, &stale_csrf(&expired)], false);
+        let res = handle(&state, me);
+        assert_eq!(res.status, 200);
+        let fresh = set_cookie_value(&res, "csrf_token").expect("replacement cookie");
+        assert_eq!(check_csrf_token(&secret, &user_id, &fresh, config::now_ms()), CsrfCheck::Valid);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn usage_limit_below_one_admits_no_tracking() {
+        let (mut state, dir) = test_state();
+        state.free_usage_limit = 0;
+        let who = signed_up(&state, "zero-limit@example.com");
+        let mut req = Request::for_test("POST", "/api/usage");
+        cookie_header(&mut req, &who);
+        req.set_test_body(br#"{"operation":"track"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 429, "{}", String::from_utf8_lossy(&res.body));
+        let usage = state
+            .pool
+            .find_user(&UserQuery::Email("zero-limit@example.com".into()))
+            .expect("query")
+            .expect("user")
+            .usage
+            .map(|u| u.count)
+            .unwrap_or(0);
+        assert_eq!(usage, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn signup_with_a_taken_email_is_a_400_not_a_500() {
+        let (state, dir) = test_state();
+        let _ = signed_up(&state, "taken@example.com");
+        let mut req = Request::for_test("POST", "/api/signup");
+        req.set_test_body(br#"{"email":"Taken@example.com","password":"secret1","name":"Q"}"#.to_vec());
+        let res = handle(&state, req);
+        assert_eq!(res.status, 400, "{}", String::from_utf8_lossy(&res.body));
+        assert_eq!(
+            json_body(&res).get_str("error"),
+            Some("Unable to create account with provided credentials")
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn payment_record_failure_after_the_effect_is_still_acknowledged() {
+        let mut mock = crate::stripe::StripeMock::default();
+        mock.subscriptions.insert(
+            "sub_rec".into(),
+            r#"{"id":"sub_rec","status":"active","current_period_end":1900000000}"#.into(),
+        );
+        let (state, dir) = stripe_state_with_mock(mock);
+        let _ = signed_up(&state, "record@example.com");
+        state
+            .pool
+            .with(|db| {
+                db.exec(
+                    "CREATE TRIGGER fail_event_insert BEFORE INSERT ON WebhookEvents
+                     BEGIN SELECT RAISE(ABORT, 'simulated record failure'); END",
+                )
+            })
+            .expect("trigger");
+
+        let payload = br#"{
+            "id":"evt_rec_cs",
+            "type":"checkout.session.completed",
+            "data":{"object":{
+                "customer":"cus_rec",
+                "customer_email":"record@example.com",
+                "subscription":"sub_rec"
+            }}
+        }"#;
+        assert_eq!(handle(&state, signed_webhook(payload)).status, 200);
+        assert_eq!(user_subscription(&state, "record@example.com").expect("sub").status, "active");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn production_refuses_to_open_without_a_jwt_secret() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let (state, dir) = test_state_locked();
+        drop(state);
+        std::env::set_var("NODE_ENV", "production");
+        std::env::remove_var("JWT_SECRET");
+        let refused = AppState::open_in(&dir, 1, Logger::new(true));
+        std::env::set_var("NODE_ENV", "development");
+        let dev = AppState::open_in(&dir, 1, Logger::new(true));
+        std::env::remove_var("NODE_ENV");
+        std::env::set_var("JWT_SECRET", "test-secret-value-at-least-32-chars!!");
+        assert!(refused.is_err(), "production opened without JWT_SECRET");
+        let dev = dev.expect("development tolerates a missing JWT_SECRET");
+        assert!(dev.jwt_secret.is_none());
+        let mut me = Request::for_test("GET", "/api/me");
+        me.set_test_header("cookie", "token=x");
+        assert_eq!(handle(&dev, me).status, 503);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

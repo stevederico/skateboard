@@ -236,3 +236,17 @@ describe('dev server generated files', () => {
     assert.equal(JSON.parse(dev.body).start_url, '/app');
   });
 });
+describe('vite.config.ts', () => {
+  it('leaves HMR at its default so the client follows a 5173 to 5174 port fallback', async () => {
+    const { default: config } = await import('./vite.config.ts');
+    assert.equal(config.server.hmr, undefined);
+    assert.equal(config.server.strictPort, false);
+  });
+
+  it('dedupes react and react-dom only, since react-router is vendored inside skateboard-ui', async () => {
+    const { default: config } = await import('./vite.config.ts');
+    assert.deepEqual(config.resolve.dedupe, ['react', 'react-dom']);
+    const prebundled = config.optimizeDeps.include.join(' ');
+    assert.ok(!prebundled.includes('react-router'), prebundled);
+  });
+});

@@ -236,10 +236,14 @@ function writeSynced(dst, relPath, content) {
   if (relPath.startsWith('.githooks/')) chmodSync(dst, 0o755);
 }
 
+function mergeTempFile(role) {
+  return join(tmpdir(), `sk-mf-${role}.${process.pid}.tmp`);
+}
+
 function threeWayMerge(appContent, baseContent, newContent) {
-  const cur = join(tmpdir(), `sk-mf-cur.${process.pid}.tmp`);
-  const base = join(tmpdir(), `sk-mf-base.${process.pid}.tmp`);
-  const other = join(tmpdir(), `sk-mf-new.${process.pid}.tmp`);
+  const cur = mergeTempFile('cur');
+  const base = mergeTempFile('base');
+  const other = mergeTempFile('new');
   writeFileSync(cur, appContent);
   writeFileSync(base, baseContent);
   writeFileSync(other, newContent);
@@ -666,4 +670,4 @@ const isMain = (() => {
 
 if (isMain) main().catch(e => { console.error(e); process.exit(1); });
 
-export { ALLOWLIST, REMOVED, RENAMES, SYMLINKS, ensureSymlink, findMergeDefects, threeWayMerge };
+export { ALLOWLIST, REMOVED, RENAMES, SYMLINKS, TMP_DIR, ensureSymlink, findMergeDefects, mergeTempFile, threeWayMerge };

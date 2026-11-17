@@ -1762,6 +1762,73 @@ mod tests {
     }
 
     #[test]
+    fn a_connection_returned_after_close_all_is_closed_not_pooled() {
+        let tmp = TempDb::new("late-return");
+        let pool = Pool::open(&tmp.path(), 1).expect("pool opens");
+        pool.with(|_db| {
+            pool.close_all();
+            Ok(())
+        })
+        .expect("checked-out work finishes");
+        assert_eq!(pool.lock().idle.len(), 0);
+        assert!(pool.find_user(&UserQuery::Id("u1".into())).is_err());
+    }
+
+    #[test]
+    fn falsy_columns_read_back_like_node() {
+        let tmp = TempDb::new("falsy");
+        let pool = Pool::open(&tmp.path(), 1).expect("pool opens");
+        pool.insert_user(&sample_user("u1", "u1@example.com")).unwrap();
+        pool.with(|db| {
+            db.exec(
+                "UPDATE Users SET subscription_stripeID = '', subscription_status = 'active', \
+                 usage_count = NULL, usage_reset_at = 0 WHERE _id = 'u1'",
+            )
+        })
+        .unwrap();
+        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        assert_eq!(user.subscription, None, "an empty stripe id means no subscription");
+        assert_eq!(
+            user.usage,
+            Some(Usage {
+                count: 0,
+                reset_at: None
+            })
+        );
+    }
+
+    #[test]
+    fn find_auth_treats_a_row_with_a_null_column_as_missing() {
+        let tmp = TempDb::new("auth-null");
+        let pool = Pool::open(&tmp.path(), 1).expect("pool opens");
+        pool.with(|db| {
+            db.exec("DROP TABLE Auths")?;
+            db.exec("CREATE TABLE Auths (email TEXT PRIMARY KEY, password TEXT, userID TEXT)")?;
+            db.exec("INSERT INTO Auths (email, password, userID) VALUES ('a@example.com', 'scrypt$x$y', NULL)")?;
+            db.exec("INSERT INTO Auths (email, password, userID) VALUES ('b@example.com', NULL, 'u2')")
+        })
+        .unwrap();
+        assert_eq!(pool.find_auth("a@example.com").unwrap(), None);
+        assert_eq!(pool.find_auth("b@example.com").unwrap(), None);
+    }
+
+    #[test]
+    fn foreign_keys_stay_off_like_the_node_adapter() {
+        let tmp = TempDb::new("fk-off");
+        let pool = Pool::open(&tmp.path(), 2).expect("pool opens");
+        for _ in 0..2 {
+            let rows = pool.with(|db| db.query("PRAGMA foreign_keys", &[])).unwrap();
+            assert_eq!(rows.first().and_then(|r| r.int("foreign_keys")), Some(0));
+        }
+        pool.insert_auth(&AuthRecord {
+            email: "orphan@example.com".into(),
+            password: "scrypt$salt$key".into(),
+            user_id: "no-such-user".into(),
+        })
+        .expect("an auth row without its user is accepted, as under Node");
+    }
+
+    #[test]
     fn close_all_rejects_further_use() {
         let tmp = TempDb::new("closed");
         let pool = Pool::open(&tmp.path(), 2).expect("pool opens");

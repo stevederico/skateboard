@@ -432,4 +432,13 @@ mod tests {
         assert_eq!(s.cleanup(AUTH_RATE_WINDOW_MS + 1), 1);
         assert_eq!(s.len(), 0);
     }
+
+    #[test]
+    fn record_failure_keeps_the_map_bounded_without_a_cleanup_pass() {
+        let s = LockoutStore::new();
+        for i in 0..LOCKOUT_MAX_ENTRIES + 25 {
+            s.record_failure(&format!("u{i}@b.co"), IP, i as i64);
+        }
+        assert!(s.len() <= LOCKOUT_MAX_ENTRIES, "{} entries", s.len());
+    }
 }

@@ -135,4 +135,12 @@ mod tests {
         assert!(validate_name(&"🛹".repeat(50)));
         assert!(!validate_name(&"🛹".repeat(51)));
     }
+
+    #[test]
+    fn password_length_counts_utf16_units_up_to_72() {
+        assert!(validate_password(&"🛹".repeat(36)));
+        assert!(!validate_password(&"🛹".repeat(37)));
+        assert!(!validate_password(&"é".repeat(73)));
+        assert!(validate_password(&"é".repeat(72)));
+    }
 }

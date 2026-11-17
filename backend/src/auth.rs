@@ -148,4 +148,41 @@ mod tests {
         let head = token.split('.').next().unwrap();
         assert_eq!(head, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
     }
+
+    #[test]
+    fn payload_segment_puts_user_id_before_exp_like_node() {
+        let with_exp = jwt_sign(&JwtPayload { user_id: "u".into(), exp: Some(1_700_000_000) }, SECRET);
+        assert_eq!(
+            with_exp.split('.').nth(1).unwrap(),
+            base64url_encode(br#"{"userID":"u","exp":1700000000}"#)
+        );
+        let without_exp = jwt_sign(&JwtPayload { user_id: "u".into(), exp: None }, SECRET);
+        assert_eq!(without_exp.split('.').nth(1).unwrap(), base64url_encode(br#"{"userID":"u"}"#));
+    }
+
+    #[test]
+    fn signature_is_compared_as_base64url_text_not_decoded_bytes() {
+        let token = jwt_sign(&JwtPayload { user_id: "u".into(), exp: None }, SECRET);
+        let (input, sig) = token.rsplit_once('.').unwrap();
+        let padded = format!("{input}.{sig}=");
+        assert_eq!(jwt_verify(&padded, SECRET), Err(JwtError::BadSignature));
+        let std_alphabet = crate::crypto::base64_encode(&base64url_decode(sig).unwrap());
+        assert_eq!(
+            jwt_verify(&format!("{input}.{std_alphabet}"), SECRET),
+            Err(JwtError::BadSignature)
+        );
+    }
+
+    #[test]
+    fn rejects_non_numeric_exp() {
+        for body in [r#"{"userID":"u","exp":"9999999999"}"#, r#"{"userID":"u","exp":true}"#] {
+            assert_eq!(jwt_verify(&signed_with_body(body), SECRET), Err(JwtError::Malformed), "{body}");
+        }
+    }
+
+    #[test]
+    fn exp_zero_never_expires_like_node() {
+        let token = signed_with_body(r#"{"userID":"u","exp":0}"#);
+        assert_eq!(jwt_verify(&token, SECRET), Ok(JwtPayload { user_id: "u".into(), exp: Some(0) }));
+    }
 }

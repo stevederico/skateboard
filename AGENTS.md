@@ -704,7 +704,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.23.0
+- skateboard@5.24.0
 - skateboard-ui@5.19.0
 
 ## Migrating 4.x → 5.0 (exact checklist)

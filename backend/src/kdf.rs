@@ -42,6 +42,12 @@ impl ScryptParams {
     }
 }
 
+const PARAMETERLESS_NODE_HASH_PARAMS: ScryptParams = ScryptParams {
+    n: 16384,
+    r: 8,
+    p: 1,
+};
+
 struct ParsedHash {
     params: ScryptParams,
     salt: Vec<u8>,
@@ -52,15 +58,7 @@ fn parse_scrypt_hash(stored: &str) -> Option<ParsedHash> {
     let rest = stored.strip_prefix("scrypt$")?;
     let fields: Vec<&str> = rest.split('$').collect();
     let (params, salt_b64, key_b64) = match fields.as_slice() {
-        [salt, key] => (
-            ScryptParams {
-                n: 16384,
-                r: 8,
-                p: 1,
-            },
-            *salt,
-            *key,
-        ),
+        [salt, key] => (PARAMETERLESS_NODE_HASH_PARAMS, *salt, *key),
         [n, r, p, salt, key] => (
             ScryptParams {
                 n: n.parse().ok()?,
@@ -1053,6 +1051,31 @@ mod tests {
             "if the defaults change, Node-written hashes become rehash candidates \
              and this test should assert that instead"
         );
+    }
+
+    #[test]
+    fn verify_password_derives_the_full_key_length_and_refuses_a_truncated_stored_key() {
+        let h = hash_password("hunter2").unwrap();
+        let parts: Vec<&str> = h.split('$').collect();
+        let key = base64url_decode(parts[5]).unwrap();
+        let truncated = format!(
+            "scrypt${}${}${}${}${}",
+            parts[1],
+            parts[2],
+            parts[3],
+            parts[4],
+            base64url_encode(&key[..32])
+        );
+        assert!(!verify_password("hunter2", &truncated));
+    }
+
+    #[test]
+    fn verify_password_uses_the_cost_recorded_in_the_hash() {
+        let cheap = hash_at("hunter2", ScryptParams { n: 16, r: 1, p: 1 });
+        assert!(verify_password("hunter2", &cheap));
+        let parts: Vec<&str> = cheap.split('$').collect();
+        let relabeled = format!("scrypt$32$1$1${}${}", parts[4], parts[5]);
+        assert!(!verify_password("hunter2", &relabeled));
     }
 
     #[test]

@@ -93,7 +93,7 @@ fn ensure_regular_env_file(env_path: &Path, example_path: &Path, log: &Logger) -
     }
 }
 
-pub fn load_local_env(base_dir: &Path, log: &Logger) {
+pub fn load_local_env_before_any_thread_spawns(base_dir: &Path, log: &Logger) {
     let env_path = base_dir.join(".env");
     let local_path = base_dir.join(".env.local");
     let example_path = base_dir.join(".env.example");
@@ -464,6 +464,18 @@ mod tests {
     fn prod_jwt_secret_rejects_the_example_placeholder() {
         let placeholder = "your_super_secure_jwt_secret_here_make_it_long_and_random";
         assert!(check_prod_jwt_secret(Some(placeholder)).is_err());
+    }
+
+    #[test]
+    fn prod_jwt_secret_rejects_the_value_shipped_in_env_example() {
+        let example = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(".env.example"))
+            .expect(".env.example");
+        let shipped = example
+            .lines()
+            .find_map(|l| l.strip_prefix("JWT_SECRET="))
+            .expect("JWT_SECRET line");
+        assert!(shipped.len() >= MIN_JWT_SECRET_LEN, "the length check alone must not be what refuses it");
+        assert!(check_prod_jwt_secret(Some(shipped)).is_err());
     }
 
     #[test]

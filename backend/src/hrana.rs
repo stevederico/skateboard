@@ -681,4 +681,17 @@ mod tests {
         let res = doc(r#"{"baton":"b6","results":[]}"#);
         assert_eq!(next_baton(Kind::Stmt, true, Some(&res), false), None);
     }
+
+    #[test]
+    fn a_transport_failure_discards_the_curl_handle() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let session = Session::open(&format!("http://127.0.0.1:{port}"), "T");
+        assert!(session.query("SELECT 1", &[]).is_err());
+        assert!(session.curl.lock().unwrap().is_none());
+        assert!(session.baton.lock().unwrap().is_none());
+    }
 }

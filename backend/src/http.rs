@@ -1342,6 +1342,79 @@ mod tests {
     }
 
     #[test]
+    fn differing_duplicate_content_length_is_400() {
+        let s = boot(ok_handler);
+        let raw = b"POST /p HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\nContent-Length: 5\r\n\r\nabcde";
+        let (head, _) = round_trip(&s, raw);
+        assert!(head.starts_with("HTTP/1.1 400 Bad Request"), "{head}");
+        s.shutdown(Duration::from_secs(2));
+    }
+
+    #[test]
+    fn transfer_encoding_other_than_chunked_is_501() {
+        let s = boot(ok_handler);
+        let raw = b"POST /p HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: gzip, chunked\r\n\r\n";
+        let (head, _) = round_trip(&s, raw);
+        assert!(head.starts_with("HTTP/1.1 501 Not Implemented"), "{head}");
+        s.shutdown(Duration::from_secs(2));
+    }
+
+    #[test]
+    fn header_value_with_a_newline_is_dropped_not_split() {
+        let s = boot(|_| {
+            Response::text(200, "ok")
+                .header("X-Name", "a\r\nX-Injected: 1")
+                .header("X-Key\r\nX-Injected", "2")
+                .header("X-Safe", "kept")
+        });
+        let (head, body) = round_trip(&s, b"GET / HTTP/1.1\r\nHost: x\r\n\r\n");
+        assert!(head.starts_with("HTTP/1.1 200 OK"), "{head}");
+        assert!(!head.contains("X-Injected"), "{head}");
+        assert!(!head.contains("X-Name"), "{head}");
+        assert!(head.contains("X-Safe: kept\r\n"), "{head}");
+        assert_eq!(body, b"ok");
+        s.shutdown(Duration::from_secs(2));
+    }
+
+    #[test]
+    fn full_queue_sheds_new_connections_instead_of_stalling_accept() {
+        let (started_tx, started_rx) = mpsc::channel::<()>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+        let started_tx = Mutex::new(started_tx);
+        let release_rx = Mutex::new(release_rx);
+        let mut cfg = test_cfg();
+        cfg.threads = 1;
+        cfg.max_queued_connections = 1;
+        let s = serve(cfg, move |req| {
+            if req.path == "/block" {
+                let _ = lock(&started_tx).send(());
+                let _ = lock(&release_rx).recv_timeout(Duration::from_secs(10));
+            }
+            Response::text(200, "ok")
+        })
+        .expect("bind");
+
+        let mut busy = connect(&s);
+        busy.write_all(b"GET /block HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("worker picked up the blocking request");
+        let _queued = connect(&s);
+        thread::sleep(Duration::from_millis(100));
+        let mut shed = connect(&s);
+        shed.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        let mut buf = [0u8; 16];
+        let outcome = shed.read(&mut buf);
+        let _ = release_tx.send(());
+        assert!(
+            matches!(outcome, Ok(0)) || matches!(&outcome, Err(e) if e.kind() == ErrorKind::ConnectionReset),
+            "a connection past the queue must be closed at once, got {outcome:?}"
+        );
+        s.shutdown(Duration::from_secs(2));
+    }
+
+    #[test]
     fn chunk_size_over_the_body_cap_is_413() {
         let s = boot(ok_handler);
         let raw = b"POST /p HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n\
@@ -1632,10 +1705,32 @@ mod tests {
 
         assert!(serve_file(&sub, "/../secret.txt").is_none());
         assert!(serve_file(&sub, "/%2e%2e/secret.txt").is_none());
+        assert!(
+            serve_file(&sub, "/../assets/app.js").is_none(),
+            "a dot-dot segment is refused even when it lands back inside the root"
+        );
+        assert!(serve_file(&sub, "/%2e%2e/assets/app.js").is_none());
         assert!(serve_file(&root, "/missing.js").is_none());
         assert!(serve_file(&root, "/assets").is_none(), "directory served");
 
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn serve_file_refuses_a_symlink_that_escapes_the_root() {
+        let base = std::env::temp_dir().join(format!("sb-http-link-{}", std::process::id()));
+        let root = base.join("public");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(base.join("outside.txt"), b"secret").unwrap();
+        std::fs::write(root.join("inside.txt"), b"fine").unwrap();
+        std::os::unix::fs::symlink(base.join("outside.txt"), root.join("escape.txt")).unwrap();
+        std::os::unix::fs::symlink(root.join("inside.txt"), root.join("alias.txt")).unwrap();
+
+        assert!(serve_file(&root, "/escape.txt").is_none());
+        assert_eq!(serve_file(&root, "/alias.txt").expect("in-root link").body, b"fine");
+
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]
