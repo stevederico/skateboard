@@ -137,15 +137,29 @@ mod tests {
 
     #[test]
     fn echoes_allowed_origin() {
-        let res = apply_cors(Response::empty(200), &req(Some("http://localhost:5173")), &allowed());
-        assert_eq!(header(&res, "Access-Control-Allow-Origin"), Some("http://localhost:5173"));
+        let res = apply_cors(
+            Response::empty(200),
+            &req(Some("http://localhost:5173")),
+            &allowed(),
+        );
+        assert_eq!(
+            header(&res, "Access-Control-Allow-Origin"),
+            Some("http://localhost:5173")
+        );
     }
 
     #[test]
     fn omits_origin_header_for_disallowed_origin_without_rejecting() {
-        let res = apply_cors(Response::empty(200), &req(Some("https://evil.example")), &allowed());
+        let res = apply_cors(
+            Response::empty(200),
+            &req(Some("https://evil.example")),
+            &allowed(),
+        );
         assert_eq!(header(&res, "Access-Control-Allow-Origin"), None);
-        assert_eq!(res.status, 200, "hono/cors does not reject, it just withholds the header");
+        assert_eq!(
+            res.status, 200,
+            "hono/cors does not reject, it just withholds the header"
+        );
     }
 
     #[test]
@@ -153,8 +167,14 @@ mod tests {
         let res = preflight(&req(Some("http://localhost:5173")), &allowed());
         assert_eq!(res.status, 204);
         assert!(res.body.is_empty());
-        assert_eq!(header(&res, "Access-Control-Allow-Methods"), Some(ALLOW_METHODS));
-        assert_eq!(header(&res, "Access-Control-Allow-Headers"), Some(ALLOW_HEADERS));
+        assert_eq!(
+            header(&res, "Access-Control-Allow-Methods"),
+            Some(ALLOW_METHODS)
+        );
+        assert_eq!(
+            header(&res, "Access-Control-Allow-Headers"),
+            Some(ALLOW_HEADERS)
+        );
     }
 
     #[test]
@@ -166,9 +186,16 @@ mod tests {
 
     #[test]
     fn hsts_only_in_production() {
-        assert!(header(&apply_secure_headers(Response::empty(200), false), "Strict-Transport-Security").is_none());
+        assert!(header(
+            &apply_secure_headers(Response::empty(200), false),
+            "Strict-Transport-Security"
+        )
+        .is_none());
         assert_eq!(
-            header(&apply_secure_headers(Response::empty(200), true), "Strict-Transport-Security"),
+            header(
+                &apply_secure_headers(Response::empty(200), true),
+                "Strict-Transport-Security"
+            ),
             Some(HSTS)
         );
     }

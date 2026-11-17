@@ -24,7 +24,10 @@ cd backend && cargo build --release
 ```bash
 npm run test           # Frontend typecheck + script tests (no vitest)
 cd backend && cargo test --locked
+cd backend && cargo fmt --check   # must pass: CI and the factory pre-push check it
 ```
+
+`npm install` runs `postinstall`, which points `core.hooksPath` at `.githooks/` only when no hooksPath is set at any level (repo, global or system). A global hooksPath, such as a machine-wide hook set, stays in charge; it runs `.githooks/<hook>` itself if it chains to the repo's hooks.
 
 **Guardrails (lint, boundaries, runtime verify):**
 ```bash
@@ -45,7 +48,8 @@ npm run verify               # boots frontend + backend, clicks through the app 
 
 **No comments in code, doc comments included (no JSDoc `/** */`).** Comments go stale, nobody reads them, and they give an agent a place to justify a workaround instead of fixing the cause. Put the contract in a clear name, the TypeScript types, a test, or a lint rule.
 
-- New and edited code adds no comments. Existing comments go when someone edits the code around them.
+- New and edited code adds no comments. The template itself carries none (since 5.26.0); app code's existing comments go when someone edits the code around them.
+- What a comment used to explain lives in a name (`DIFF_EXIT_FILES_DIFFER`), a test, or **Invariants** below.
 - Allowed: lint disable directives (`// oxlint-disable-next-line skateboard/<rule> -- <reason>`), `yagni:` markers (a deliberate shortcut with its ceiling and upgrade path), license headers, and shebangs.
 - Never leave commented-out code; git remembers.
 
@@ -239,6 +243,7 @@ npm run verify               # agent-browser flows against the running app, scre
 - Theme values are plain CSS variables (`:root { --color-app: var(--color-purple-500); }`, `.dark { ... }`), never `@theme`, `@apply` or `@source`
 - Support dark mode with bg-background, bg-accent — never manual `dark:` overrides (`dark:bg-gray-800`), semantic tokens handle it
 - Use semantic color tokens (`bg-background`, `text-foreground`, `border-border`) — never raw colors (`bg-white`, `text-gray-500`)
+- Status colors come from skateboard-ui 5.26+: `success`, `warning`, `info`, `danger`, each as `bg-*`, `bg-*/10`, `text-*`, `border-*`. Red text is `text-danger`: dark `--destructive` (39.6% lightness) is a fill color, too dark to read as text
 - Use `gap-*` between flex/grid children — never `space-x-*` / `space-y-*`, never margin between siblings for spacing
 - Limit palette to 3-5 semantic colors per view — don't rainbow
 - Max 2 font families — 1 heading + 1 body (default: Geist Sans + Geist Mono)
@@ -272,7 +277,7 @@ npm run verify               # agent-browser flows against the running app, scre
 | Text input | `<Input>` + `<Label>` | `<input>` |
 | Modal | `<Dialog>` | custom div |
 | Confirmation | `<AlertDialog>` | `confirm()` |
-| Toast | `toast()` | `alert()` |
+| Toast | `toast()` from `sonner`, with one `<Toaster theme="system" />` mounted in the app layout (skateboard-ui mounts none since 3.0, so without it toasts never show) | `alert()` |
 | Loading | `<Spinner>` / `<Skeleton>` | custom div |
 | Empty state | `<Empty>` | conditional text |
 | Side panel | `<Sheet>` | absolute div |
@@ -489,6 +494,47 @@ skateboard/
 - Stripe HTTPS via system `libcurl` FFI. Never hand-roll TLS. Never add a crate.
 - A crate needs an explicit yes. Do not `cargo add`.
 
+### Invariants
+
+The template's code carries no comments, so the rules a comment used to state live here. Break one and something fails at runtime, not at compile time.
+
+**SQLite (`db.rs`)**
+- Bind text with `SQLITE_TRANSIENT` (`ffi::transient()`), never `SQLITE_STATIC`: SQLite must copy the buffer, because the Rust `String` can drop before `sqlite3_step`.
+- `Db` is `Send`, not `Sync`. The handle opens with `SQLITE_OPEN_FULLMUTEX`, which serializes calls inside libsqlite3, and startup refuses a library built with `SQLITE_THREADSAFE=0` (that build ignores the flag). Sharing `&Db` across threads would interleave `sqlite3_step` on one statement.
+- `prepare` rejects SQL with a second statement after the first (a non-empty `tail`); silently dropping it would run half a typo.
+- A write with `RETURNING` still yields rows: drain them so `changes` counts the whole statement.
+- Read a column with `sqlite3_column_text` before `sqlite3_column_bytes`, and copy the bytes before the next call on the statement.
+
+**libcurl (`stripe.rs`, `hrana.rs`)**
+- `curl_easy_setopt` and `curl_easy_getinfo` are declared variadic and every argument goes at its documented width (`c_long` for long options and `CURLINFO_RESPONSE_CODE`, a pointer otherwise). A non-variadic declaration loses the value on Apple arm64 while `setopt` still returns `CURLE_OK`.
+- `CURLOPT_NOSIGNAL` is always set: without it libcurl times out DNS with process-wide `SIGALRM`.
+- Each module calls `curl_global_init` once (its own `Once`) before its first easy handle. An easy handle is used by one thread at a time (Hrana keeps it behind a `Mutex`); handles and header lists are freed exactly once (their wrappers are neither `Copy` nor `Clone`).
+- Buffers passed to `CURLOPT_WRITEDATA` / `CURLOPT_HEADERDATA` and every pointer option outlive `curl_easy_perform`.
+
+**Hrana (`hrana.rs`)**
+- A baton is single use: send the one from the last response and drop it after an error. Reusing a spent baton fails every later statement on the pooled stream, `ROLLBACK` included.
+
+**Stripe (`stripe.rs`, `routes.rs`)**
+- Webhook signatures: compare in constant time against every `v1` entry and accept any match, because during secret rotation two valid signatures overlap.
+- Checkout never sends `payment_method_types`; it would pin the method list and switch off the methods configured in the Stripe Dashboard.
+- Stripe neither orders nor dedupes deliveries, so subscription events re-read the subscription from Stripe instead of trusting the event's snapshot (a late `created` would demote a paying user).
+
+**HTTP and JSON (`http.rs`, `json.rs`)**
+- Stray CRLFs before the request line are skipped (RFC 7230 §3.5); obsolete header line folding is rejected, not unfolded (§3.2.4).
+- Shutdown unblocks `accept` (no timeout in std) with a throwaway connection to itself.
+- Numbers print like JavaScript: `-0` as `0`, exponents as `1e+21`.
+
+**bcrypt (`kdf.rs`)**
+- `$2a$`, `$2b$` and `$2y$` hashes verify the same; the password gets a NUL terminator; only 23 of the 24 ciphertext bytes are encoded.
+
+**Tests that set environment variables** hold `ENV_LOCK` for the whole test (`set_var` is only sound while no other thread reads the environment).
+
+**Frontend**
+- `public/theme-init.js` is a classic script served from `public/`: it runs while the HTML parses (no light flash before dark mode) and passes CSP `script-src 'self'` without `'unsafe-inline'`. A blocked `localStorage` (iOS web views) falls back to the system scheme.
+- `index.html` keeps zoom enabled (WCAG 2.1 AA 1.4.4) and paints the theme background inline with no opacity gate, so a failed stylesheet shows unstyled content, not a blank page.
+- `vite.config.ts` excludes skateboard-ui from prebundling, so `optimizeDeps.include` must list every CommonJS package it imports, `react/jsx-runtime` included.
+- The updater never syncs `CLAUDE.md` as a file: git serves a symlink as its target string, so it would write the 9 bytes `AGENTS.md`. `SYMLINKS` recreates the link (tested in `scripts/update-skateboard.test.js`).
+
 **Configuration** (`backend/config.json`):
 ```json
 {
@@ -704,8 +750,8 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.24.0
-- skateboard-ui@5.19.0
+- skateboard@5.26.0
+- skateboard-ui@5.26.0
 
 ## Migrating 4.x → 5.0 (exact checklist)
 

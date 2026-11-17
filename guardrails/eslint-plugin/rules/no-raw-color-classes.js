@@ -34,6 +34,7 @@ function suggest(prefix, hue, bw) {
     if (prefix === 'ring' || prefix === 'outline') return `${prefix}-ring`;
     return `${base}-muted (or ${base}-accent)`;
   }
+  if (hue && HUE_TOKEN[hue] === 'destructive' && prefix === 'text') return 'text-danger (dark --destructive is too dark to read as text)';
   if (hue && HUE_TOKEN[hue]) return `${base}-${HUE_TOKEN[hue]}`;
   return `${base}-app (brand color, set via --color-app in src/assets/styles.css)`;
 }
@@ -58,7 +59,7 @@ export default {
     messages: {
       raw:
         'Found the raw color class "{{token}}". Why: raw palette colors and hex values do not follow the theme (dark mode breaks), bypass the 3-5 color palette and the pre-tested contrast of the semantic tokens. ' +
-        'Fix: use {{suggestion}}. Semantic tokens: background, foreground, card, accent, muted, muted-foreground, border, input, ring, destructive, success, warning, info, app.',
+        'Fix: use {{suggestion}}. Semantic tokens: background, foreground, card, accent, muted, muted-foreground, border, input, ring, destructive, danger, success, warning, info, app.',
     },
   },
   create(context) {

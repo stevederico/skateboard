@@ -15,6 +15,24 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.26.0
+
+  Pin skateboard-ui 5.26.0
+  Add status colors
+  Suggest text-danger
+  Remove template comments
+  Document invariants
+  Reword comment fixtures
+  Format Rust backend
+  Check fmt in CI
+  Stamp version anyway
+  List files to resolve
+  Document Toaster mount
+  Fix queue-shed test flake
+  Respect global hooksPath
+  Match updater hooks warning
+  Note: tag 5.25.0 was pushed by mistake onto the 5.24.0 commit (a failed commit did not stop the tag step, and the repo-local core.hooksPath from the old postinstall kept the global tag check from running); 5.25.0 has no release, and 5.26.0 ships these changes
+
 5.24.0
 
   Add invariant tests

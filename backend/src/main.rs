@@ -88,16 +88,21 @@ extern "C" {
 }
 
 fn spawn_cleanup(state: Arc<AppState>) {
-    spawn_periodic(&state, "lockout-cleanup", 15 * 60, routes::run_lockout_cleanup);
-    spawn_periodic(&state, "webhook-cleanup", 60 * 60, routes::run_webhook_cleanup);
+    spawn_periodic(
+        &state,
+        "lockout-cleanup",
+        15 * 60,
+        routes::run_lockout_cleanup,
+    );
+    spawn_periodic(
+        &state,
+        "webhook-cleanup",
+        60 * 60,
+        routes::run_webhook_cleanup,
+    );
 }
 
-fn spawn_periodic(
-    state: &Arc<AppState>,
-    name: &str,
-    period_secs: u64,
-    task: fn(&AppState),
-) {
+fn spawn_periodic(state: &Arc<AppState>, name: &str, period_secs: u64, task: fn(&AppState)) {
     let state_for_thread = Arc::clone(state);
     let spawned = thread::Builder::new()
         .name(name.to_string())

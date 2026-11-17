@@ -7,6 +7,29 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.26.0 — skateboard-ui 5.26.0 status colors, comment-free template, updater stamps.**
+`npm install @stevederico/skateboard-ui@5.26.0 --save-exact`. It adds `success`,
+`warning`, `info` and `danger` tokens with `bg-*`, `bg-*/10`, `text-*` and
+`border-*` classes in light and dark, so delete app-side copies of
+`--color-success` / `--color-warning` / `--color-danger` and their classes from
+`src/assets/styles.css` (or keep them; an app rule still wins). Red text is
+`text-danger`; `no-raw-color-classes` now suggests it. skateboard-ui 5.24.0
+reworked `useListData` on `useQuery` (same API; a key change keeps `loading`
+true until the new request finishes, and `refetch` aborts the request it
+replaces). The template now carries no code comments: what they explained is in
+AGENTS.md → **Invariants**. When the updater brings these files in, it deletes
+the template's old comment lines; keep that, do not restore them. `backend/` is
+`cargo fmt` clean and CI runs `cargo fmt --check`: run `cd backend && cargo fmt`
+after merging. The updater now stamps `skateboardVersion` even when files
+conflict, lists each file still to fix, and exits 1; resolve those files by hand
+and do not re-run with `--baseline`. The template calls no `toast()`; if your app
+does, mount `<Toaster theme="system" />` from `sonner` once in its layout
+(skateboard-ui ships none since 3.0). `postinstall` now sets
+`core.hooksPath .githooks` only when no hooksPath is set at any level, so a global
+hooksPath keeps running; the updater offers the new script and says which hooks
+will run. An app that already has a local `core.hooksPath` from the old
+postinstall keeps it until you run `git config --unset core.hooksPath`.
+
 **5.23.0 — oxlint replaces ESLint, agent-browser replaces Playwright, no JSDoc rule.**
 No runtime change. Install the two global CLIs once per machine:
 `mise use -g npm:oxlint npm:agent-browser` (or `npm install -g oxlint agent-browser`);
@@ -261,5 +284,5 @@ Never touch src/constants.json, backend/config.json, or .env beyond what the upd
 - The updater never touches app-owned files (`src/constants.json`, `src/components/*`, `src/main.tsx`, `src/icons.ts`, `src/assets/styles.css`, `backend/config.json`, `.env*`). Icon **rewrites inside** `src/components/*` are still required for 5.0 — do those manually (updater will not rewrite app imports); `npm run lint` lists every one.
 - skateboard-ui ≥3.10.0 ships its own TypeScript declarations, so the old `src/skateboard-ui.d.ts` shim is deleted on upgrade — a stale copy would shadow the package's real types.
 - `--baseline <version>` forces the 3-way merge baseline when `skateboardVersion` is wrong or was stamped prematurely. It also skips the "Already on latest" early-exit, so you can re-sync an app whose version was stamped without the files actually migrating.
-- If any file ends declined, conflicted, or errored, the updater does **not** stamp `skateboardVersion` — resolve the conflicts, then re-run with `--baseline <old-version>` to finish.
+- If any file ends declined, conflicted, or errored, the updater still stamps `skateboardVersion`, prints those files with what each needs, and exits 1. Resolve them by hand (`git grep -nE '^(<<<<<<<|=======|>>>>>>>)'` must print nothing); re-running would merge against the new version and miss the changes.
 - Apps that customized `backend/server.ts` must port those routes into `backend/src/routes.rs` after the updater deletes the Hono file.

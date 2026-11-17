@@ -5,7 +5,7 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { ALLOWLIST, REMOVED, SYMLINKS, RENAMES, TMP_DIR, ensureSymlink, findMergeDefects, mergeTempFile, threeWayMerge } from './update-skateboard.js';
+import { ALLOWLIST, REMOVED, SYMLINKS, RENAMES, TMP_DIR, ensureSymlink, filesToResolve, findMergeDefects, hooksPathWarning, mergeTempFile, threeWayMerge } from './update-skateboard.js';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 function walkRepo(dir, out = []) {
@@ -162,6 +162,74 @@ describe('per-process temp paths', () => {
   });
 });
 
+describe('filesToResolve', () => {
+  it('keeps conflicted, declined and errored files in order and drops the rest', () => {
+    const results = [
+      { relPath: 'a.rs', status: 'wrote' },
+      { relPath: 'b.rs', status: 'conflicts' },
+      { relPath: 'c.ts', status: 'ok' },
+      { relPath: 'd.ts', status: 'declined' },
+      { relPath: 'e.bin', status: 'error' }
+    ];
+    assert.deepEqual(filesToResolve(results).map(({ relPath }) => relPath), ['b.rs', 'd.ts', 'e.bin']);
+  });
+});
+
+describe('postinstall hooksPath', () => {
+  let root;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'sk-hooks-'));
+    git(root, 'init', '-q');
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  const runPostinstall = (env) => spawnSync('sh', ['-c', TEMPLATE_POSTINSTALL], { cwd: root, env, encoding: 'utf8' });
+  const localHooksPath = (env) => spawnSync('git', ['config', '--local', 'core.hooksPath'], { cwd: root, env, encoding: 'utf8' }).stdout.trim();
+
+  it('is the postinstall the template ships', { skip: !IS_TEMPLATE }, () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    assert.equal(pkg.scripts.postinstall, TEMPLATE_POSTINSTALL);
+  });
+
+  it('sets .githooks when no hooksPath is configured at any level', () => {
+    const env = isolatedGitEnv(root);
+    assert.equal(runPostinstall(env).status, 0);
+    assert.equal(localHooksPath(env), '.githooks');
+  });
+
+  it('leaves a global hooksPath in charge and sets no local one', () => {
+    const env = isolatedGitEnv(root, '[core]\n\thooksPath = /opt/factory/hooks\n');
+    assert.equal(runPostinstall(env).status, 0);
+    assert.equal(localHooksPath(env), '');
+  });
+
+  it('succeeds outside a git repository', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'sk-nogit-'));
+    const run = spawnSync('sh', ['-c', TEMPLATE_POSTINSTALL], { cwd: outside, env: { ...isolatedGitEnv(root), GIT_CEILING_DIRECTORIES: tmpdir() }, encoding: 'utf8' });
+    rmSync(outside, { recursive: true, force: true });
+    assert.equal(run.status, 0);
+  });
+});
+
+describe('hooksPathWarning', () => {
+  it('says the postinstall defers to an existing hooksPath', () => {
+    const warning = hooksPathWarning({ postinstall: TEMPLATE_POSTINSTALL, existingHooks: ['pre-commit'], hooksPath: '/opt/factory/hooks' });
+    assert.match(warning, /core\.hooksPath is already \/opt\/factory\/hooks, so the postinstall leaves it alone/);
+  });
+
+  it('warns that .git/hooks get bypassed when no hooksPath is set', () => {
+    const warning = hooksPathWarning({ postinstall: TEMPLATE_POSTINSTALL, existingHooks: ['pre-commit'], hooksPath: null });
+    assert.match(warning, /existing git hook\(s\) in \.git\/hooks \(pre-commit\) — no core\.hooksPath is set/);
+  });
+
+  it('stays quiet when nothing would be bypassed or the postinstall is unchanged', () => {
+    assert.equal(hooksPathWarning({ postinstall: TEMPLATE_POSTINSTALL, existingHooks: [], hooksPath: null }), null);
+    assert.equal(hooksPathWarning({ postinstall: null, existingHooks: ['pre-commit'], hooksPath: null }), null);
+  });
+});
+
 describe('findMergeDefects', () => {
   it('flags a duplicate declaration that a clean 3-way merge produced', () => {
     const base = 'export function keep() {}\n\nexport function other() {}\n';
@@ -192,6 +260,14 @@ function tagRelease(repo, version, files) {
   git(repo, 'tag', version);
 }
 
+const TEMPLATE_POSTINSTALL = 'git config core.hooksPath >/dev/null 2>&1 || git config core.hooksPath .githooks || true';
+
+function isolatedGitEnv(root, globalConfig = '') {
+  const globalFile = join(root, 'global.gitconfig');
+  writeFileSync(globalFile, globalConfig);
+  return { ...process.env, GIT_CONFIG_GLOBAL: globalFile, GIT_CONFIG_NOSYSTEM: '1' };
+}
+
 const PLUGINS_V1 = 'export function keep() {}\n\nexport function other() {}\n';
 
 function makeTemplate(root) {
@@ -204,7 +280,7 @@ function makeTemplate(root) {
     'vite.plugins.ts': PLUGINS_V1
   });
   tagRelease(repo, '2.0.0', {
-    'package.json': JSON.stringify({ name: 'skateboard', version: '2.0.0', scripts: { postinstall: 'git config core.hooksPath .githooks || true' } }),
+    'package.json': JSON.stringify({ name: 'skateboard', version: '2.0.0', scripts: { postinstall: TEMPLATE_POSTINSTALL } }),
     'AGENTS.md': 'a\nB2\nc\n',
     'vite.plugins.ts': `${PLUGINS_V1}\nexport function helper() {}\n`
   });
@@ -222,7 +298,7 @@ function runUpdater(app, repo, ...args) {
   return spawnSync(process.execPath, [UPDATER, '--yes', ...args], {
     cwd: app,
     encoding: 'utf8',
-    env: { ...process.env, SKATEBOARD_REPO: repo, SKATEBOARD_BRANCH: '' }
+    env: { ...isolatedGitEnv(dirname(app)), SKATEBOARD_REPO: repo, SKATEBOARD_BRANCH: '' }
   });
 }
 
@@ -257,7 +333,7 @@ describe('updater main against a local template', () => {
     assert.equal(readFileSync(join(app, 'AGENTS.md'), 'utf8'), 'a\nB2\nc\n');
   });
 
-  it('withholds the version stamp and exits 1 when a clean merge ships a duplicate declaration', () => {
+  it('stamps the version, lists the file and exits 1 when a clean merge ships a duplicate declaration', () => {
     const app = makeApp(root, { name: 'app', skateboardVersion: '1.0.0', scripts: {} }, {
       'AGENTS.md': 'a\nb\nc\n',
       'vite.plugins.ts': `export function helper() {}\n\n${PLUGINS_V1}`
@@ -265,14 +341,16 @@ describe('updater main against a local template', () => {
     const run = runUpdater(app, repo);
     assert.equal(run.status, 1, run.stdout + run.stderr);
     assert.match(run.stdout, /DEFECT/);
-    assert.equal(readPkg(app).skateboardVersion, '1.0.0');
+    assert.match(run.stdout, /still need a hand fix:\n {2}vite\.plugins\.ts {2}\(conflict markers or merge defects to fix\)/);
+    assert.equal(readPkg(app).skateboardVersion, '2.0.0');
   });
 
-  it('withholds the version stamp and exits 1 when a file conflicts', () => {
+  it('stamps the version, lists the conflicted file and exits 1 when a file conflicts', () => {
     const app = makeApp(root, { name: 'app', skateboardVersion: '1.0.0', scripts: {} }, { 'AGENTS.md': 'a\nmine\nc\n' });
     const run = runUpdater(app, repo);
     assert.equal(run.status, 1, run.stdout + run.stderr);
-    assert.equal(readPkg(app).skateboardVersion, '1.0.0');
+    assert.match(run.stdout, /still need a hand fix:\n {2}AGENTS\.md {2}\(conflict markers or merge defects to fix\)/);
+    assert.equal(readPkg(app).skateboardVersion, '2.0.0');
   });
 
   it('stops when already on latest, and --baseline forces a re-sync', () => {

@@ -88,14 +88,19 @@ pub struct LockoutStore {
 
 impl LockoutStore {
     pub fn new() -> LockoutStore {
-        LockoutStore { inner: Mutex::new(HashMap::new()) }
+        LockoutStore {
+            inner: Mutex::new(HashMap::new()),
+        }
     }
 
     pub fn is_locked(&self, email: &str, peer_ip: &str, now_ms: i64) -> LockStatus {
         let key = Self::key(email, peer_ip);
         let mut map = self.lock();
         let Some(record) = map.get(&key).cloned() else {
-            return LockStatus { locked: false, remaining_time: 0 };
+            return LockStatus {
+                locked: false,
+                remaining_time: 0,
+            };
         };
         match record.locked_until {
             Some(until) if now_ms < until => LockStatus {
@@ -104,9 +109,15 @@ impl LockoutStore {
             },
             Some(_) => {
                 map.remove(&key);
-                LockStatus { locked: false, remaining_time: 0 }
+                LockStatus {
+                    locked: false,
+                    remaining_time: 0,
+                }
             }
-            None => LockStatus { locked: false, remaining_time: 0 },
+            None => LockStatus {
+                locked: false,
+                remaining_time: 0,
+            },
         }
     }
 

@@ -6,6 +6,8 @@ import path from 'node:path';
 import rule, { cssClassNames } from './no-unknown-classes.js';
 import { runRuleTests } from '../lib/ruleTester.js';
 
+const BLOCK_COMMENT_OPEN = '/' + '*';
+
 const CLASSES = [
   'flex', 'grid', 'gap-2', 'p-4', 'px-2', 'text-sm', 'font-medium', 'hidden', 'opacity-50',
   'bg-accent', 'bg-muted', 'bg-primary', 'text-primary-foreground', 'h-8', 'h-10', 'rounded-md', 'border',
@@ -13,7 +15,7 @@ const CLASSES = [
 ];
 
 const APP_CSS = String.raw`
-/* .commented-out { color: red; } */
+${BLOCK_COMMENT_OPEN} .commented-out { color: red; } */
 @media (min-width: 40.5rem) { .brand-card { padding: 1rem; } }
 .hover\:glow:hover { box-shadow: 0 0 4px var(--color-app); }
 .tile > .tile-title, a[href$=".pdf"] { background: url("bg.v2.png"); margin: 0.5rem; }

@@ -35,16 +35,7 @@ mod ffi {
     pub const SQLITE_FLOAT: c_int = 2;
     pub const SQLITE_NULL: c_int = 5;
 
-    /// `SQLITE_TRANSIENT` — tells SQLite to copy the bound buffer immediately.
-    ///
-    /// Defined in `sqlite3.h` as `((sqlite3_destructor_type)-1)`. Binding text
-    /// with `SQLITE_STATIC` instead would hand SQLite a pointer into a Rust
-    /// `String` that may be dropped before `sqlite3_step` runs — a
-    /// use-after-free. This is the whole reason the constant exists here.
     pub fn transient() -> Destructor {
-        // SAFETY: transmuting the sentinel integer -1 into the destructor
-        // function-pointer slot is exactly what the C macro does; both are
-        // pointer-sized, and SQLite compares the value rather than calling it.
         unsafe { std::mem::transmute::<isize, Destructor>(-1isize) }
     }
 
@@ -184,18 +175,10 @@ pub struct Db {
     store: Store,
 }
 
-// SAFETY: the handle is opened with SQLITE_OPEN_FULLMUTEX, so libsqlite3
-// serializes every call on it internally. Moving it to another thread is
-// therefore sound. `Sync` is deliberately NOT implemented: sharing `&Db` across
-// threads would let two threads interleave `sqlite3_step` on the same statement.
 unsafe impl Send for Db {}
 
 impl Drop for Db {
     fn drop(&mut self) {
-        // SAFETY: `handle` came from a successful sqlite3_open_v2 and has not
-        // been closed before (Drop runs once). sqlite3_close_v2 tolerates
-        // outstanding statements, and this type finalizes every statement it
-        // prepares before returning, so none are outstanding.
         if let Store::Local(handle) = &self.store {
             unsafe {
                 ffi::sqlite3_close_v2(*handle);
@@ -211,8 +194,6 @@ struct Stmt<'a> {
 
 impl Drop for Stmt<'_> {
     fn drop(&mut self) {
-        // SAFETY: `ptr` came from a successful sqlite3_prepare_v2 on `db`,
-        // which outlives this statement by the `'a` borrow, and Drop runs once.
         unsafe {
             ffi::sqlite3_finalize(self.ptr);
         }
@@ -227,9 +208,6 @@ impl Db {
         let flags =
             ffi::SQLITE_OPEN_READWRITE | ffi::SQLITE_OPEN_CREATE | ffi::SQLITE_OPEN_FULLMUTEX;
 
-        // SAFETY: `filename` is a live NUL-terminated C string for the duration
-        // of the call, `handle` is a valid out-pointer, and a null VFS name
-        // selects the default VFS.
         let rc = unsafe {
             ffi::sqlite3_open_v2(filename.as_ptr(), &mut handle, flags, std::ptr::null())
         };
@@ -246,7 +224,6 @@ impl Db {
             return Err(db.last_error(rc));
         }
 
-        // SAFETY: `handle` is a live connection just returned by open_v2.
         unsafe {
             ffi::sqlite3_busy_timeout(db.local_handle(), BUSY_TIMEOUT_MS);
         }
@@ -275,9 +252,6 @@ impl Db {
         let text =
             CString::new(sql).map_err(|_| DbError::local("SQL contains an interior NUL byte"))?;
 
-        // SAFETY: `text` outlives the call; a null callback/arg means "discard
-        // any rows", and a null errmsg out-pointer means SQLite allocates
-        // nothing for us to free — the message is read from the handle instead.
         let rc = unsafe {
             ffi::sqlite3_exec(
                 self.local_handle(),
@@ -301,15 +275,12 @@ impl Db {
         let stmt = self.prepare(sql)?;
         self.bind(&stmt, params)?;
 
-        // SAFETY: `stmt.ptr` is a live prepared statement owned by `stmt`.
         let ncol = unsafe { ffi::sqlite3_column_count(stmt.ptr) };
         let ncol = if ncol < 0 { 0 } else { ncol };
         let names: Vec<String> = (0..ncol).map(|idx| column_name(&stmt, idx)).collect();
 
         let mut rows = Vec::new();
         loop {
-            // SAFETY: `stmt.ptr` is live and stepped only from this thread,
-            // which holds exclusive access to the connection.
             let rc = unsafe { ffi::sqlite3_step(stmt.ptr) };
             match rc {
                 ffi::SQLITE_ROW => {
@@ -334,18 +305,14 @@ impl Db {
         let stmt = self.prepare(sql)?;
         self.bind(&stmt, params)?;
         loop {
-            // SAFETY: as in `query` — live statement, exclusive access.
             let rc = unsafe { ffi::sqlite3_step(stmt.ptr) };
             match rc {
-                // A write statement with a RETURNING clause still yields rows;
-                // drain them so `changes` reflects the whole statement.
                 ffi::SQLITE_ROW => continue,
                 ffi::SQLITE_DONE => break,
                 _ => return Err(self.last_error(rc)),
             }
         }
 
-        // SAFETY: `handle` is live; both calls only read counters off it.
         let changes = unsafe {
             Changes {
                 changes: i64::from(ffi::sqlite3_changes(self.local_handle())),
@@ -362,11 +329,6 @@ impl Db {
         let mut ptr: *mut ffi::Sqlite3Stmt = std::ptr::null_mut();
         let mut tail: *const c_char = std::ptr::null();
 
-        // SAFETY: `bytes` is a live UTF-8 buffer of exactly `len` bytes for the
-        // duration of the call (an explicit length means no NUL terminator is
-        // required); `ptr` and `tail` are valid out-pointers. On success
-        // `tail` points into `bytes`, just past the statement that was
-        // compiled.
         let rc = unsafe {
             ffi::sqlite3_prepare_v2(
                 self.local_handle(),
@@ -384,10 +346,6 @@ impl Db {
         }
         let stmt = Stmt { _db: self, ptr };
         if has_trailing_statement(bytes, tail) {
-            // `prepare_v2` compiles only the first statement and reports the
-            // rest through `tail`. Discarding that silently means a string
-            // holding two statements runs one and drops the other with no
-            // error anywhere — a typo that looks like it worked.
             return Err(DbError::local(
                 "SQL text contained more than one statement; prepare compiles only the first",
             ));
@@ -400,10 +358,6 @@ impl Db {
             let idx = c_int::try_from(offset + 1)
                 .map_err(|_| DbError::local("too many bound parameters"))?;
 
-            // SAFETY: `stmt.ptr` is live and unstepped. For text, the pointer
-            // and length describe a live `String` buffer, and
-            // `ffi::transient()` (SQLITE_TRANSIENT) makes SQLite copy it before
-            // returning — so the buffer may be dropped afterwards.
             let rc = unsafe {
                 match param {
                     Value::Null => ffi::sqlite3_bind_null(stmt.ptr, idx),
@@ -429,9 +383,6 @@ impl Db {
     }
 
     fn last_error(&self, fallback: c_int) -> DbError {
-        // SAFETY: `handle` is live. sqlite3_errmsg returns a NUL-terminated
-        // UTF-8 string owned by SQLite and valid until the next call on this
-        // handle; it is copied into an owned String before returning.
         unsafe {
             let extended = ffi::sqlite3_extended_errcode(self.local_handle());
             let msg = ffi::sqlite3_errmsg(self.local_handle());
@@ -453,9 +404,6 @@ impl Db {
 }
 
 fn column_name(stmt: &Stmt<'_>, idx: c_int) -> String {
-    // SAFETY: `stmt.ptr` is live and `idx` is below sqlite3_column_count. The
-    // returned string is owned by SQLite and valid while the statement lives;
-    // it is copied here.
     unsafe {
         let ptr = ffi::sqlite3_column_name(stmt.ptr, idx);
         if ptr.is_null() {
@@ -467,11 +415,6 @@ fn column_name(stmt: &Stmt<'_>, idx: c_int) -> String {
 }
 
 fn read_column(stmt: &Stmt<'_>, idx: c_int) -> Value {
-    // SAFETY: `stmt.ptr` is live and positioned on a row (the caller only
-    // reaches here after SQLITE_ROW); `idx` is below sqlite3_column_count.
-    // sqlite3_column_text is called before sqlite3_column_bytes, which is the
-    // order SQLite documents for getting the length of the converted text, and
-    // the bytes are copied out before any further call on the statement.
     unsafe {
         match ffi::sqlite3_column_type(stmt.ptr, idx) {
             ffi::SQLITE_NULL => Value::Null,
@@ -853,22 +796,7 @@ fn user_from_row(row: &Row) -> Option<User> {
     })
 }
 
-/// Verify the linked libsqlite3 was built thread-safe.
-///
-/// `unsafe impl Send for Db` is justified by opening with
-/// `SQLITE_OPEN_FULLMUTEX`, but that flag is only honored when the library was
-/// compiled with `SQLITE_THREADSAFE` set to 1 or 2. A build with
-/// `SQLITE_THREADSAFE=0` ignores it and does no internal locking at all, which
-/// would make moving a handle between worker threads undefined behavior instead
-/// of merely slow. Since the library is the system's and not vendored, this is
-/// checked at runtime rather than assumed.
-///
-/// # Errors
-/// Returns [`DbError`] when `sqlite3_threadsafe()` reports 0, so the process
-/// refuses to serve rather than racing inside the driver.
 fn require_threadsafe_sqlite() -> Result<(), DbError> {
-    // SAFETY: takes no arguments, returns a compile-time constant, and is safe
-    // to call before any connection exists.
     let threadsafe = unsafe { ffi::sqlite3_threadsafe() };
     if threadsafe == 0 {
         return Err(DbError::local(
@@ -1182,14 +1110,17 @@ mod tests {
     fn query_rejects_more_than_one_statement() {
         let tmp = TempDb::new("multi-stmt");
         let pool = Pool::open(&tmp.path(), 1).unwrap();
-        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com"))
+            .unwrap();
 
         let err = pool
             .with(|db| db.run("DELETE FROM Users; DELETE FROM Auths", &[]))
             .expect_err("a second statement must be refused, not dropped");
         assert!(err.message.contains("more than one statement"), "{err}");
         assert!(
-            pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_some(),
+            pool.find_user(&UserQuery::Id("u1".into()))
+                .unwrap()
+                .is_some(),
             "nothing should have run"
         );
     }
@@ -1198,7 +1129,8 @@ mod tests {
     fn query_allows_trailing_semicolons_and_whitespace() {
         let tmp = TempDb::new("trailing-semi");
         let pool = Pool::open(&tmp.path(), 1).unwrap();
-        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com"))
+            .unwrap();
         let rows = pool
             .with(|db| db.query("SELECT _id FROM Users ;  \n", &[]))
             .expect("a trailing semicolon is not a second statement");
@@ -1219,8 +1151,14 @@ mod tests {
             insert_user_tx(db, &sample_user("u2", "b@example.com"))
         })
         .unwrap();
-        assert!(pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_some());
-        assert!(pool.find_user(&UserQuery::Id("u2".into())).unwrap().is_some());
+        assert!(pool
+            .find_user(&UserQuery::Id("u1".into()))
+            .unwrap()
+            .is_some());
+        assert!(pool
+            .find_user(&UserQuery::Id("u2".into()))
+            .unwrap()
+            .is_some());
     }
 
     #[test]
@@ -1233,7 +1171,9 @@ mod tests {
         });
         assert!(result.is_err());
         assert!(
-            pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_none(),
+            pool.find_user(&UserQuery::Id("u1".into()))
+                .unwrap()
+                .is_none(),
             "the first insert must not survive a later failure"
         );
     }
@@ -1250,12 +1190,17 @@ mod tests {
         }));
         assert!(panicked.is_err());
         assert!(
-            pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_none(),
+            pool.find_user(&UserQuery::Id("u1".into()))
+                .unwrap()
+                .is_none(),
             "the panicking transaction must have been rolled back"
         );
         pool.transaction(|db| insert_user_tx(db, &sample_user("u2", "b@example.com")))
             .expect("connection must be reusable after a panic");
-        assert!(pool.find_user(&UserQuery::Id("u2".into())).unwrap().is_some());
+        assert!(pool
+            .find_user(&UserQuery::Id("u2".into()))
+            .unwrap()
+            .is_some());
     }
 
     #[test]
@@ -1274,7 +1219,9 @@ mod tests {
             .expect_err("duplicate credentials must fail");
         assert!(err.message.contains("UNIQUE constraint failed"), "{err}");
         assert!(
-            pool.find_user(&UserQuery::Id("u1".into())).unwrap().is_none(),
+            pool.find_user(&UserQuery::Id("u1".into()))
+                .unwrap()
+                .is_none(),
             "a failed signup must not leave a user row holding the email"
         );
     }
@@ -1283,7 +1230,8 @@ mod tests {
     fn consume_usage_stops_at_the_limit() {
         let tmp = TempDb::new("usage-limit");
         let pool = Pool::open(&tmp.path(), 2).unwrap();
-        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com"))
+            .unwrap();
 
         assert_eq!(pool.consume_usage("u1", 2).unwrap(), Some(1));
         assert_eq!(pool.consume_usage("u1", 2).unwrap(), Some(2));
@@ -1292,7 +1240,10 @@ mod tests {
             None,
             "the third call must be refused rather than counted and undone"
         );
-        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        let user = pool
+            .find_user(&UserQuery::Id("u1".into()))
+            .unwrap()
+            .unwrap();
         assert_eq!(
             user.usage.map(|u| u.count),
             Some(2),
@@ -1311,7 +1262,8 @@ mod tests {
     fn concurrent_consume_usage_never_exceeds_the_limit() {
         let tmp = TempDb::new("usage-race");
         let pool = Arc::new(Pool::open(&tmp.path(), 4).unwrap());
-        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com"))
+            .unwrap();
 
         const LIMIT: i64 = 10;
         const THREADS: usize = 4;
@@ -1337,7 +1289,10 @@ mod tests {
             LIMIT as u64,
             "exactly the limit must be granted across concurrent callers"
         );
-        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        let user = pool
+            .find_user(&UserQuery::Id("u1".into()))
+            .unwrap()
+            .unwrap();
         assert_eq!(user.usage.map(|u| u.count), Some(LIMIT));
     }
 
@@ -1345,17 +1300,24 @@ mod tests {
     fn reset_usage_window_can_consume_the_first_unit() {
         let tmp = TempDb::new("usage-reset");
         let pool = Pool::open(&tmp.path(), 2).unwrap();
-        pool.insert_user(&sample_user("u1", "a@example.com")).unwrap();
+        pool.insert_user(&sample_user("u1", "a@example.com"))
+            .unwrap();
         pool.consume_usage("u1", 100).unwrap();
 
         assert_eq!(pool.reset_usage_window("u1", 5000, true).unwrap(), 1);
-        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        let user = pool
+            .find_user(&UserQuery::Id("u1".into()))
+            .unwrap()
+            .unwrap();
         let usage = user.usage.unwrap();
         assert_eq!(usage.count, 1);
         assert_eq!(usage.reset_at, Some(5000));
 
         assert_eq!(pool.reset_usage_window("u1", 6000, false).unwrap(), 0);
-        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
+        let user = pool
+            .find_user(&UserQuery::Id("u1".into()))
+            .unwrap()
+            .unwrap();
         assert_eq!(user.usage.unwrap().count, 0);
     }
 
@@ -1778,7 +1740,8 @@ mod tests {
     fn falsy_columns_read_back_like_node() {
         let tmp = TempDb::new("falsy");
         let pool = Pool::open(&tmp.path(), 1).expect("pool opens");
-        pool.insert_user(&sample_user("u1", "u1@example.com")).unwrap();
+        pool.insert_user(&sample_user("u1", "u1@example.com"))
+            .unwrap();
         pool.with(|db| {
             db.exec(
                 "UPDATE Users SET subscription_stripeID = '', subscription_status = 'active', \
@@ -1786,8 +1749,14 @@ mod tests {
             )
         })
         .unwrap();
-        let user = pool.find_user(&UserQuery::Id("u1".into())).unwrap().unwrap();
-        assert_eq!(user.subscription, None, "an empty stripe id means no subscription");
+        let user = pool
+            .find_user(&UserQuery::Id("u1".into()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            user.subscription, None,
+            "an empty stripe id means no subscription"
+        );
         assert_eq!(
             user.usage,
             Some(Usage {
@@ -1817,7 +1786,9 @@ mod tests {
         let tmp = TempDb::new("fk-off");
         let pool = Pool::open(&tmp.path(), 2).expect("pool opens");
         for _ in 0..2 {
-            let rows = pool.with(|db| db.query("PRAGMA foreign_keys", &[])).unwrap();
+            let rows = pool
+                .with(|db| db.query("PRAGMA foreign_keys", &[]))
+                .unwrap();
             assert_eq!(rows.first().and_then(|r| r.int("foreign_keys")), Some(0));
         }
         pool.insert_auth(&AuthRecord {

@@ -66,7 +66,9 @@ fn valid_domain_label(label: &str) -> bool {
         _ => {
             b[0].is_ascii_alphanumeric()
                 && b[b.len() - 1].is_ascii_alphanumeric()
-                && b[1..b.len() - 1].iter().all(|c| c.is_ascii_alphanumeric() || *c == b'-')
+                && b[1..b.len() - 1]
+                    .iter()
+                    .all(|c| c.is_ascii_alphanumeric() || *c == b'-')
         }
     }
 }
@@ -86,12 +88,20 @@ mod tests {
 
     #[test]
     fn escapes_every_mapped_character() {
-        assert_eq!(escape_html("<a href=\"x\">&'/"), "&lt;a href=&quot;x&quot;&gt;&amp;&#x27;&#x2F;");
+        assert_eq!(
+            escape_html("<a href=\"x\">&'/"),
+            "&lt;a href=&quot;x&quot;&gt;&amp;&#x27;&#x2F;"
+        );
     }
 
     #[test]
     fn accepts_ordinary_emails() {
-        for e in ["a@b.co", "steve@bixbyapps.com", "first.last+tag@sub.example.org", "x1@y-z.io"] {
+        for e in [
+            "a@b.co",
+            "steve@bixbyapps.com",
+            "first.last+tag@sub.example.org",
+            "x1@y-z.io",
+        ] {
             assert!(validate_email(e), "should accept {e}");
         }
     }

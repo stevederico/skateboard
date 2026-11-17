@@ -43,11 +43,7 @@ impl Session {
 
     fn execute(&self, sql: &str, params: &[Value]) -> Result<Outcome, DbError> {
         let kind = statement_kind(sql);
-        let baton = self
-            .baton
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .clone();
+        let baton = self.baton.lock().unwrap_or_else(|p| p.into_inner()).clone();
         let close = match kind {
             Kind::Begin => false,
             Kind::End => true,
@@ -81,7 +77,6 @@ impl Session {
         let mut slot = self.curl.lock().unwrap_or_else(|p| p.into_inner());
         if slot.is_none() {
             global_init();
-            // SAFETY: curl_easy_init returns a fresh handle or null.
             let handle = EasyHandle(unsafe { curl_easy_init() });
             if handle.0.is_null() {
                 return Err(DbError::remote("curl_easy_init failed".to_string()));
@@ -97,17 +92,11 @@ impl Session {
     }
 }
 
-/// The baton to send with the next statement on this session.
-///
-/// The server hands out a new baton with every response and accepts each one
-/// once. Keeping a used baton after an error made every later statement on the
-/// pooled connection fail, including the `ROLLBACK`.
 fn next_baton(kind: Kind, close: bool, response: Option<&Json>, failed: bool) -> Option<String> {
     if close || kind == Kind::End {
         return None;
     }
     if kind == Kind::Begin && failed {
-        // No transaction opened; the server expires the idle stream.
         return None;
     }
     response?
@@ -119,11 +108,7 @@ fn next_baton(kind: Kind, close: bool, response: Option<&Json>, failed: bool) ->
 
 impl Drop for Session {
     fn drop(&mut self) {
-        let baton = self
-            .baton
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .take();
+        let baton = self.baton.lock().unwrap_or_else(|p| p.into_inner()).take();
         if let Some(baton) = baton {
             let body = json::stringify(&json::obj([
                 ("baton", Json::Str(baton)),
@@ -176,7 +161,10 @@ fn pipeline_body(baton: Option<&str>, sql: &str, params: &[Value], close: bool) 
             "stmt".into(),
             Json::Obj(std::collections::BTreeMap::from([
                 ("sql".into(), json::s(sql)),
-                ("args".into(), Json::Arr(params.iter().map(arg_json).collect())),
+                (
+                    "args".into(),
+                    Json::Arr(params.iter().map(arg_json).collect()),
+                ),
             ])),
         ),
     ]))];
@@ -189,7 +177,9 @@ fn pipeline_body(baton: Option<&str>, sql: &str, params: &[Value], close: bool) 
     json::stringify(&Json::Obj(std::collections::BTreeMap::from([
         (
             "baton".into(),
-            baton.map(|b| Json::Str(b.to_string())).unwrap_or(Json::Null),
+            baton
+                .map(|b| Json::Str(b.to_string()))
+                .unwrap_or(Json::Null),
         ),
         ("requests".into(), Json::Arr(requests)),
     ])))
@@ -399,23 +389,22 @@ extern "C" {
 static CURL_INIT: Once = Once::new();
 
 fn global_init() {
-    CURL_INIT.call_once(|| {
-        // SAFETY: once before any easy handle in this module. stripe.rs has its
-        // own Once; both run curl_global_init, which is safe when not overlapping.
-        unsafe {
-            curl_global_init(CURL_GLOBAL_DEFAULT);
-        }
+    CURL_INIT.call_once(|| unsafe {
+        curl_global_init(CURL_GLOBAL_DEFAULT);
     });
 }
 
-extern "C" fn write_cb(ptr: *mut c_char, size: usize, nmemb: usize, userdata: *mut c_void) -> usize {
+extern "C" fn write_cb(
+    ptr: *mut c_char,
+    size: usize,
+    nmemb: usize,
+    userdata: *mut c_void,
+) -> usize {
     let len = size.saturating_mul(nmemb);
     if ptr.is_null() || userdata.is_null() {
         return 0;
     }
     let result = std::panic::catch_unwind(|| {
-        // SAFETY: libcurl owns `ptr` for this callback and `userdata` is the
-        // Vec passed to CURLOPT_WRITEDATA, which outlives perform.
         unsafe {
             let sink = &mut *(userdata as *mut Vec<u8>);
             sink.extend_from_slice(std::slice::from_raw_parts(ptr as *const u8, len));
@@ -427,14 +416,11 @@ extern "C" fn write_cb(ptr: *mut c_char, size: usize, nmemb: usize, userdata: *m
 
 struct EasyHandle(*mut CURL);
 
-// SAFETY: libcurl allows an easy handle on any thread as long as two threads
-// never use it at once. Session keeps it behind a Mutex.
 unsafe impl Send for EasyHandle {}
 
 impl Drop for EasyHandle {
     fn drop(&mut self) {
         if !self.0.is_null() {
-            // SAFETY: handle from curl_easy_init, freed once.
             unsafe { curl_easy_cleanup(self.0) };
         }
     }
@@ -445,7 +431,6 @@ struct HeaderList(*mut CurlSlist);
 impl Drop for HeaderList {
     fn drop(&mut self) {
         if !self.0.is_null() {
-            // SAFETY: list head from curl_slist_append, freed once.
             unsafe { curl_slist_free_all(self.0) };
         }
     }
@@ -465,7 +450,6 @@ fn http_post(
     for (name, value) in headers {
         let line = CString::new(format!("{name}: {value}"))
             .map_err(|_| DbError::remote("header has a NUL byte".to_string()))?;
-        // SAFETY: list is null or a previous head; `line` is copied by libcurl.
         let next = unsafe { curl_slist_append(list.0, line.as_ptr()) };
         if next.is_null() {
             return Err(DbError::remote("curl_slist_append failed".to_string()));
@@ -474,14 +458,16 @@ fn http_post(
     }
 
     let mut sink: Vec<u8> = Vec::new();
-    // SAFETY: options match libcurl's documented argument widths. Pointers
-    // outlive curl_easy_perform.
     let setup = unsafe {
         let h = handle.0;
         let mut rc = curl_easy_setopt(h, CURLOPT_URL, c_url.as_ptr().cast::<c_void>());
         rc |= curl_easy_setopt(h, CURLOPT_USERAGENT, user_agent.as_ptr().cast::<c_void>());
         rc |= curl_easy_setopt(h, CURLOPT_WRITEFUNCTION, write_cb as CurlCb);
-        rc |= curl_easy_setopt(h, CURLOPT_WRITEDATA, (&mut sink as *mut Vec<u8>).cast::<c_void>());
+        rc |= curl_easy_setopt(
+            h,
+            CURLOPT_WRITEDATA,
+            (&mut sink as *mut Vec<u8>).cast::<c_void>(),
+        );
         rc |= curl_easy_setopt(h, CURLOPT_TIMEOUT_MS, TIMEOUT_MS);
         rc |= curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT_MS, CONNECT_TIMEOUT_MS);
         rc |= curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 0 as c_long);
@@ -500,11 +486,13 @@ fn http_post(
         ));
     }
 
-    // SAFETY: handle is configured; buffers above stay alive through perform.
     let rc = unsafe { curl_easy_perform(handle.0) };
-    // SAFETY: null is a valid value for all three options.
     unsafe {
-        curl_easy_setopt(handle.0, CURLOPT_HTTPHEADER, std::ptr::null_mut::<CurlSlist>());
+        curl_easy_setopt(
+            handle.0,
+            CURLOPT_HTTPHEADER,
+            std::ptr::null_mut::<CurlSlist>(),
+        );
         curl_easy_setopt(handle.0, CURLOPT_WRITEDATA, std::ptr::null_mut::<c_void>());
         curl_easy_setopt(handle.0, CURLOPT_POSTFIELDS, std::ptr::null::<c_void>());
     }
@@ -524,7 +512,6 @@ fn http_post(
     }
 
     let mut status: c_long = 0;
-    // SAFETY: CURLINFO_RESPONSE_CODE writes a long.
     let rc =
         unsafe { curl_easy_getinfo(handle.0, CURLINFO_RESPONSE_CODE, &mut status as *mut c_long) };
     if rc != CURLE_OK {
@@ -564,8 +551,12 @@ mod tests {
 
     #[test]
     fn an_error_inside_a_transaction_keeps_the_new_baton() {
-        let res = doc(r#"{"baton":"b2","results":[{"type":"error","error":{"message":"UNIQUE"}}]}"#);
-        assert_eq!(next_baton(Kind::Stmt, false, Some(&res), true).as_deref(), Some("b2"));
+        let res =
+            doc(r#"{"baton":"b2","results":[{"type":"error","error":{"message":"UNIQUE"}}]}"#);
+        assert_eq!(
+            next_baton(Kind::Stmt, false, Some(&res), true).as_deref(),
+            Some("b2")
+        );
     }
 
     #[test]
@@ -587,7 +578,10 @@ mod tests {
         let res = doc(r#"{"baton":"b4","results":[{"type":"error","error":{"message":"busy"}}]}"#);
         assert_eq!(next_baton(Kind::Begin, false, Some(&res), true), None);
         let ok = doc(r#"{"baton":"b5","results":[]}"#);
-        assert_eq!(next_baton(Kind::Begin, false, Some(&ok), false).as_deref(), Some("b5"));
+        assert_eq!(
+            next_baton(Kind::Begin, false, Some(&ok), false).as_deref(),
+            Some("b5")
+        );
     }
 
     fn fake_sqld() -> String {
@@ -619,7 +613,9 @@ mod tests {
                             if line == "\r\n" {
                                 break;
                             }
-                            if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                            if let Some(v) =
+                                line.to_ascii_lowercase().strip_prefix("content-length:")
+                            {
                                 len = v.trim().parse().unwrap_or(0);
                             }
                         }
@@ -633,9 +629,13 @@ mod tests {
                         } else {
                             let reqs = req.get("requests").and_then(Json::as_arr).unwrap();
                             let closing = reqs.iter().any(|r| r.get_str("type") == Some("close"));
-                            let sql = reqs[0].path("stmt.sql").and_then(|v| v.as_str()).unwrap_or("");
+                            let sql = reqs[0]
+                                .path("stmt.sql")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
                             let result = if sql.contains("FAIL") {
-                                r#"{"type":"error","error":{"message":"constraint failed"}}"#.to_string()
+                                r#"{"type":"error","error":{"message":"constraint failed"}}"#
+                                    .to_string()
                             } else {
                                 r#"{"type":"ok","response":{"type":"execute","result":{"cols":[],"rows":[],"affected_row_count":0,"last_insert_rowid":null}}}"#.to_string()
                             };
@@ -654,7 +654,9 @@ mod tests {
                             "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
                             reply.len()
                         );
-                        if out.write_all(head.as_bytes()).is_err() || out.write_all(reply.as_bytes()).is_err() {
+                        if out.write_all(head.as_bytes()).is_err()
+                            || out.write_all(reply.as_bytes()).is_err()
+                        {
                             return;
                         }
                     }
@@ -669,9 +671,13 @@ mod tests {
         let session = Session::open(&fake_sqld(), "T");
         session.exec("BEGIN IMMEDIATE").expect("begin");
         assert!(session.run("INSERT FAIL", &[]).is_err());
-        session.exec("ROLLBACK").expect("rollback uses the fresh baton");
+        session
+            .exec("ROLLBACK")
+            .expect("rollback uses the fresh baton");
         session.query("SELECT 1", &[]).expect("session still works");
-        session.exec("BEGIN IMMEDIATE").expect("a second transaction opens");
+        session
+            .exec("BEGIN IMMEDIATE")
+            .expect("a second transaction opens");
         session.exec("COMMIT").expect("commit");
         session.query("SELECT 2", &[]).expect("and after it");
     }

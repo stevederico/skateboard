@@ -8,8 +8,8 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.24.0"
-  skateboard-ui: "5.19.0"
+  version: "5.26.0"
+  skateboard-ui: "5.26.0"
   sources:
     - https://github.com/stevederico/skateboard
     - https://github.com/stevederico/skateboard-ui
@@ -21,8 +21,8 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.24.0** | App scaffold (copied into new repos) |
-| **@stevederico/skateboard-ui** | **5.19.0** | Shell + components (npm package — pin exact) |
+| **skateboard** (boilerplate) | **5.26.0** | App scaffold (copied into new repos) |
+| **@stevederico/skateboard-ui** | **5.26.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
 
@@ -329,7 +329,7 @@ npm test
 cd backend && cargo test --locked
 npm run verify:ui   # if present
 
-# 7) Only then treat skateboardVersion as honest (updater stamps it when clean)
+# 7) skateboardVersion is stamped even with conflicts: it is honest only once the listed files are resolved
 ```
 
 **Updater behavior (know this):**
@@ -337,7 +337,7 @@ npm run verify:ui   # if present
 - Deps: **adds** what canonical added, **prunes** what canonical dropped, bumps only non-customized versions
 - Files: 3-way merge — custom routes/tables survive when possible
 - Renames handled (e.g. `.js`→`.ts`, `CLAUDE.md`→`AGENTS.md` + symlink)
-- If any file conflicts/errors: **`skateboardVersion` is NOT stamped** — fix and re-run
+- If any file conflicts/errors: `skateboardVersion` is still stamped, the files to fix are listed, and it exits 1. Fix them by hand; do not re-run
 - Do **not** auto-run on every agent session without user intent
 
 **Conflict hygiene:**
@@ -386,7 +386,7 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 - [ ] `skateboard-ui` exact pin matches intended version; `verify:ui` OK
 - [ ] `typecheck` + tests green
 - [ ] Manual sign-in works (if auth enabled)
-- [ ] `skateboardVersion` only trusted if updater stamped clean or you verified by diff
+- [ ] `skateboardVersion` only trusted once every file the updater listed is resolved, or you verified by diff
 
 ## Agent checklist
 

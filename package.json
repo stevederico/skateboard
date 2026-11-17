@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "5.24.0",
-  "skateboardVersion": "5.24.0",
+  "version": "5.26.0",
+  "skateboardVersion": "5.26.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -13,7 +13,7 @@
     "build": "npm run typecheck && vite build --mode production",
     "prod": "npm run typecheck && vite build --mode production",
     "install-all": "npm install",
-    "postinstall": "git config core.hooksPath .githooks || true",
+    "postinstall": "git config core.hooksPath >/dev/null 2>&1 || git config core.hooksPath .githooks || true",
     "verify:ui": "node scripts/verify-ui-version.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "npm run typecheck && npm run test:build && npm run test:docs",
@@ -26,7 +26,7 @@
     "verify": "node --test --test-reporter=spec guardrails/verify/verify.e2e.js"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "5.19.0",
+    "@stevederico/skateboard-ui": "5.26.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

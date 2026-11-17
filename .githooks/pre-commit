@@ -1,9 +1,4 @@
 #!/bin/sh
-# Pre-commit hook: type-check and cargo-test before committing.
-#
-# Known limitation: tsc/cargo read the working tree, not the git index. If you
-# stage a partial change (git add -p) the check runs against unstaged edits
-# too. Acceptable trade-off; do not attempt to check out the index.
 
 STAGED=$(git diff --cached --name-only)
 

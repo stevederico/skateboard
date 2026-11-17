@@ -1,5 +1,4 @@
-// Pictographic emoji, excluding the typographic symbols © ® ™ (also Extended_Pictographic).
-const EMOJI = /(?![©®™])\p{Extended_Pictographic}/u;
+const PICTOGRAPHIC_EMOJI_EXCEPT_COPYRIGHT_REGISTERED_TRADEMARK = /(?![©®™])\p{Extended_Pictographic}/u;
 
 const ICON_ATTRS = new Set(['icon', 'leftIcon', 'rightIcon', 'startIcon', 'endIcon']);
 
@@ -19,7 +18,7 @@ export default {
   },
   create(context) {
     function check(node, text) {
-      const match = EMOJI.exec(text);
+      const match = PICTOGRAPHIC_EMOJI_EXCEPT_COPYRIGHT_REGISTERED_TRADEMARK.exec(text);
       if (match) context.report({ node, messageId: 'emoji', data: { emoji: match[0] } });
     }
     return {

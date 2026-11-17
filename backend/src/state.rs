@@ -70,13 +70,21 @@ impl AppState {
 
     pub fn resolve_port() -> u16 {
         let raw = config::env("PORT").unwrap_or_default();
-        let digits: String = raw.trim_start().chars().take_while(char::is_ascii_digit).collect();
+        let digits: String = raw
+            .trim_start()
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
         digits.parse::<u16>().unwrap_or(8000)
     }
 
     pub fn resolve_free_usage_limit() -> i64 {
         let raw = config::env("FREE_USAGE_LIMIT").unwrap_or_default();
-        let digits: String = raw.trim_start().chars().take_while(char::is_ascii_digit).collect();
+        let digits: String = raw
+            .trim_start()
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
         digits.parse::<i64>().unwrap_or(20)
     }
 
@@ -118,9 +126,8 @@ impl AppState {
                 "Opening shared libSQL namespace",
                 &[("namespace", crate::json::Json::Str(namespace.clone()))],
             );
-            open_remote_with_retry(&log, &url, &namespace, pool_size, REMOTE_OPEN_RETRY).map_err(|e| {
-                format!("failed to open libsql namespace {namespace} at {url}: {e}")
-            })?
+            open_remote_with_retry(&log, &url, &namespace, pool_size, REMOTE_OPEN_RETRY)
+                .map_err(|e| format!("failed to open libsql namespace {namespace} at {url}: {e}"))?
         } else {
             let conn = PathBuf::from(&cfg.database.connection_string);
             let db_path = if conn.is_absolute() {
@@ -193,8 +200,14 @@ mod tests {
         );
         assert!(result.is_err());
         let took = start.elapsed();
-        assert!(took >= Duration::from_secs(1), "should retry at least once, took {took:?}");
-        assert!(took < Duration::from_secs(5), "should stop near the deadline, took {took:?}");
+        assert!(
+            took >= Duration::from_secs(1),
+            "should retry at least once, took {took:?}"
+        );
+        assert!(
+            took < Duration::from_secs(5),
+            "should stop near the deadline, took {took:?}"
+        );
     }
 
     #[test]

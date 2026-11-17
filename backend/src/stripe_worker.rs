@@ -1,12 +1,10 @@
-use std::sync::mpsc::{self, Receiver, SyncSender, RecvTimeoutError, TrySendError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::json::Json;
-use crate::stripe::{
-    CheckoutParams, CheckoutSession, PortalSession, StripeClient, StripeError,
-};
+use crate::stripe::{CheckoutParams, CheckoutSession, PortalSession, StripeClient, StripeError};
 
 #[cfg(not(test))]
 pub const STRIPE_CALL_TIMEOUT: Duration = Duration::from_secs(10);
@@ -75,9 +73,7 @@ impl StripeWorker {
                 .spawn(move || worker_loop(rx, client))
                 .expect("failed to spawn stripe worker");
         }
-        StripeWorker {
-            tx: Mutex::new(tx),
-        }
+        StripeWorker { tx: Mutex::new(tx) }
     }
 
     pub fn price_id_for_lookup_key(&self, lookup_key: &str) -> Result<Option<String>, StripeError> {
@@ -244,10 +240,14 @@ mod tests {
     #[test]
     fn worker_returns_mocked_price() {
         let mut mock = StripeMock::default();
-        mock.prices.insert("premium_monthly".into(), "price_123".into());
+        mock.prices
+            .insert("premium_monthly".into(), "price_123".into());
         let worker = StripeWorker::spawn(StripeClient::with_mock(mock));
         assert_eq!(
-            worker.price_id_for_lookup_key("premium_monthly").unwrap().as_deref(),
+            worker
+                .price_id_for_lookup_key("premium_monthly")
+                .unwrap()
+                .as_deref(),
             Some("price_123")
         );
     }

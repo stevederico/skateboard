@@ -1,6 +1,8 @@
 import rule from './no-empty-catch.js';
 import { runRuleTests } from '../lib/ruleTester.js';
 
+const LINE_COMMENT = '/'.repeat(2);
+
 runRuleTests('no-empty-catch', rule, {
   valid: [
     'try { run(); } catch (err) { console.error(err); }',
@@ -9,7 +11,7 @@ runRuleTests('no-empty-catch', rule, {
   ],
   invalid: [
     { code: 'try { run(); } catch (err) {}', errors: [{ messageId: 'emptyCatch' }] },
-    { code: 'try { run(); } catch {\n  // ignore\n}', errors: [{ messageId: 'emptyCatch' }] },
+    { code: `try { run(); } catch {\n  ${LINE_COMMENT} ignore\n}`, errors: [{ messageId: 'emptyCatch' }] },
     { code: 'save().catch(() => {});', errors: [{ messageId: 'noopCatch' }] },
     { code: 'save().catch(() => undefined);', errors: [{ messageId: 'noopCatch' }] },
     { code: 'save().catch(function () {});', errors: [{ messageId: 'noopCatch' }] },

@@ -30,7 +30,10 @@ pub fn jwt_sign(payload: &JwtPayload, secret: &str) -> String {
             json::stringify(&Json::Str(payload.user_id.clone())),
             exp
         ),
-        None => format!(r#"{{"userID":{}}}"#, json::stringify(&Json::Str(payload.user_id.clone()))),
+        None => format!(
+            r#"{{"userID":{}}}"#,
+            json::stringify(&Json::Str(payload.user_id.clone()))
+        ),
     };
     let body = base64url_encode(body_json.as_bytes());
     let signing_input = format!("{head}.{body}");
@@ -56,7 +59,10 @@ pub fn jwt_verify(token: &str, secret: &str) -> Result<JwtPayload, JwtError> {
 
     let raw = base64url_decode(body).ok_or(JwtError::Malformed)?;
     let decoded = json::parse(&raw).map_err(|_| JwtError::Malformed)?;
-    let user_id = decoded.get_str("userID").ok_or(JwtError::Malformed)?.to_string();
+    let user_id = decoded
+        .get_str("userID")
+        .ok_or(JwtError::Malformed)?
+        .to_string();
     let exp = match decoded.get("exp") {
         None | Some(Json::Null) => None,
         Some(Json::Num(v)) if v.abs() < MAX_SAFE_EXP && v.fract() == 0.0 => Some(*v as i64),
@@ -80,29 +86,53 @@ mod tests {
 
     #[test]
     fn signs_and_verifies_round_trip() {
-        let p = JwtPayload { user_id: "abc-123".into(), exp: Some(token_expire_timestamp(30)) };
+        let p = JwtPayload {
+            user_id: "abc-123".into(),
+            exp: Some(token_expire_timestamp(30)),
+        };
         let token = jwt_sign(&p, SECRET);
         assert_eq!(jwt_verify(&token, SECRET).unwrap(), p);
     }
 
     #[test]
     fn rejects_wrong_secret() {
-        let token = jwt_sign(&JwtPayload { user_id: "u".into(), exp: Some(token_expire_timestamp(1)) }, SECRET);
+        let token = jwt_sign(
+            &JwtPayload {
+                user_id: "u".into(),
+                exp: Some(token_expire_timestamp(1)),
+            },
+            SECRET,
+        );
         assert_eq!(jwt_verify(&token, "other"), Err(JwtError::BadSignature));
     }
 
     #[test]
     fn rejects_tampered_payload() {
-        let token = jwt_sign(&JwtPayload { user_id: "u".into(), exp: Some(token_expire_timestamp(1)) }, SECRET);
+        let token = jwt_sign(
+            &JwtPayload {
+                user_id: "u".into(),
+                exp: Some(token_expire_timestamp(1)),
+            },
+            SECRET,
+        );
         let mut parts: Vec<&str> = token.split('.').collect();
         let forged = base64url_encode(br#"{"userID":"attacker","exp":9999999999}"#);
         parts[1] = &forged;
-        assert_eq!(jwt_verify(&parts.join("."), SECRET), Err(JwtError::BadSignature));
+        assert_eq!(
+            jwt_verify(&parts.join("."), SECRET),
+            Err(JwtError::BadSignature)
+        );
     }
 
     #[test]
     fn reports_expiry_distinctly() {
-        let token = jwt_sign(&JwtPayload { user_id: "u".into(), exp: Some(crate::config::now_secs() - 10) }, SECRET);
+        let token = jwt_sign(
+            &JwtPayload {
+                user_id: "u".into(),
+                exp: Some(crate::config::now_secs() - 10),
+            },
+            SECRET,
+        );
         assert_eq!(jwt_verify(&token, SECRET), Err(JwtError::Expired));
     }
 
@@ -119,7 +149,10 @@ mod tests {
         let body = base64url_encode(br#"{"sub":"x"}"#);
         let input = format!("{head}.{body}");
         let sig = base64url_encode(&hmac_sha256(SECRET.as_bytes(), input.as_bytes()));
-        assert_eq!(jwt_verify(&format!("{input}.{sig}"), SECRET), Err(JwtError::Malformed));
+        assert_eq!(
+            jwt_verify(&format!("{input}.{sig}"), SECRET),
+            Err(JwtError::Malformed)
+        );
     }
 
     fn signed_with_body(body_json: &str) -> String {
@@ -144,25 +177,52 @@ mod tests {
 
     #[test]
     fn header_segment_is_the_node_literal() {
-        let token = jwt_sign(&JwtPayload { user_id: "u".into(), exp: None }, SECRET);
+        let token = jwt_sign(
+            &JwtPayload {
+                user_id: "u".into(),
+                exp: None,
+            },
+            SECRET,
+        );
         let head = token.split('.').next().unwrap();
         assert_eq!(head, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
     }
 
     #[test]
     fn payload_segment_puts_user_id_before_exp_like_node() {
-        let with_exp = jwt_sign(&JwtPayload { user_id: "u".into(), exp: Some(1_700_000_000) }, SECRET);
+        let with_exp = jwt_sign(
+            &JwtPayload {
+                user_id: "u".into(),
+                exp: Some(1_700_000_000),
+            },
+            SECRET,
+        );
         assert_eq!(
             with_exp.split('.').nth(1).unwrap(),
             base64url_encode(br#"{"userID":"u","exp":1700000000}"#)
         );
-        let without_exp = jwt_sign(&JwtPayload { user_id: "u".into(), exp: None }, SECRET);
-        assert_eq!(without_exp.split('.').nth(1).unwrap(), base64url_encode(br#"{"userID":"u"}"#));
+        let without_exp = jwt_sign(
+            &JwtPayload {
+                user_id: "u".into(),
+                exp: None,
+            },
+            SECRET,
+        );
+        assert_eq!(
+            without_exp.split('.').nth(1).unwrap(),
+            base64url_encode(br#"{"userID":"u"}"#)
+        );
     }
 
     #[test]
     fn signature_is_compared_as_base64url_text_not_decoded_bytes() {
-        let token = jwt_sign(&JwtPayload { user_id: "u".into(), exp: None }, SECRET);
+        let token = jwt_sign(
+            &JwtPayload {
+                user_id: "u".into(),
+                exp: None,
+            },
+            SECRET,
+        );
         let (input, sig) = token.rsplit_once('.').unwrap();
         let padded = format!("{input}.{sig}=");
         assert_eq!(jwt_verify(&padded, SECRET), Err(JwtError::BadSignature));
@@ -175,14 +235,27 @@ mod tests {
 
     #[test]
     fn rejects_non_numeric_exp() {
-        for body in [r#"{"userID":"u","exp":"9999999999"}"#, r#"{"userID":"u","exp":true}"#] {
-            assert_eq!(jwt_verify(&signed_with_body(body), SECRET), Err(JwtError::Malformed), "{body}");
+        for body in [
+            r#"{"userID":"u","exp":"9999999999"}"#,
+            r#"{"userID":"u","exp":true}"#,
+        ] {
+            assert_eq!(
+                jwt_verify(&signed_with_body(body), SECRET),
+                Err(JwtError::Malformed),
+                "{body}"
+            );
         }
     }
 
     #[test]
     fn exp_zero_never_expires_like_node() {
         let token = signed_with_body(r#"{"userID":"u","exp":0}"#);
-        assert_eq!(jwt_verify(&token, SECRET), Ok(JwtPayload { user_id: "u".into(), exp: Some(0) }));
+        assert_eq!(
+            jwt_verify(&token, SECRET),
+            Ok(JwtPayload {
+                user_id: "u".into(),
+                exp: Some(0)
+            })
+        );
     }
 }

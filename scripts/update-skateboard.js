@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, chmodSync, readdirSync, lstatSync, readlinkSync, symlinkSync, unlinkSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -95,10 +95,6 @@ const ALLOWLIST = [
   ])
 ];
 
-// CLAUDE.md is a symlink to AGENTS.md (the open-standard source of truth). It is NOT
-// on the ALLOWLIST because `git show HEAD:CLAUDE.md` serves the symlink's TARGET STRING
-// ("AGENTS.md"), not file content — syncing it as a regular file would overwrite the
-// app's CLAUDE.md with the 9-byte string "AGENTS.md". ensureSymlink recreates the link.
 const SYMLINKS = { 'CLAUDE.md': 'AGENTS.md' };
 
 const REMOVED = [
@@ -214,6 +210,9 @@ function showAtRef(ref, relPath) {
   }
 }
 
+const DIFF_EXIT_FILES_DIFFER = 1;
+const GIT_MERGE_FILE_HARD_ERROR = 255;
+
 function showDiff(curContent, incomingContent, label) {
   const a = join(tmpdir(), 'sk-cur.tmp');
   const b = join(tmpdir(), 'sk-inc.tmp');
@@ -222,9 +221,7 @@ function showDiff(curContent, incomingContent, label) {
   try {
     execSync(`diff -u "${a}" "${b}" | head -60`, { stdio: 'inherit' });
   } catch (err) {
-    // diff exits 1 when the files differ, which is the expected case. Anything else (no
-    // `diff` binary, unreadable temp file) is surfaced but must not abort the update.
-    if (err?.status !== 1) console.error(`[warn] could not show diff for ${label}: ${err?.message ?? err}`);
+    if (err?.status !== DIFF_EXIT_FILES_DIFFER) console.error(`[warn] could not show diff for ${label}: ${err?.message ?? err}`);
   }
   rmSync(a, { force: true });
   rmSync(b, { force: true });
@@ -253,9 +250,8 @@ function threeWayMerge(appContent, baseContent, newContent) {
   } catch (e) {
     conflicts = typeof e.status === 'number' && e.status > 0 ? e.status : 1;
     merged = e.stdout?.toString() ?? appContent;
-    // Exit 255 (git's hard-error code, e.g. "Cannot merge binary files") or an empty
-    // merge of non-empty input means the output is garbage, not a merge result.
-    if (e.status === 255 || (merged === '' && appContent !== '')) {
+    const isUnmergeable = e.status === GIT_MERGE_FILE_HARD_ERROR || (merged === '' && appContent !== '');
+    if (isUnmergeable) {
       conflicts = -1;
       merged = appContent;
     }
@@ -469,7 +465,29 @@ async function ensureSymlink(linkRel, targetRel, { root = APP_ROOT, confirmFn = 
   return 'wrote';
 }
 
-async function mergePackageJson(baselineTag, stamp = true) {
+function existingGitHooks(root) {
+  const hooksDir = join(root, '.git', 'hooks');
+  return existsSync(hooksDir) ? readdirSync(hooksDir).filter(f => !f.endsWith('.sample')) : [];
+}
+
+function configuredHooksPath(cwd) {
+  try {
+    return execFileSync('git', ['config', 'core.hooksPath'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function hooksPathWarning({ postinstall, existingHooks, hooksPath }) {
+  if (!String(postinstall ?? '').includes('hooksPath')) return null;
+  if (hooksPath) {
+    return `core.hooksPath is already ${hooksPath}, so the postinstall leaves it alone: .githooks/ runs only if the hooks there call it (my-factory 0.19+ does).`;
+  }
+  if (!existingHooks.length) return null;
+  return `existing git hook(s) in .git/hooks (${existingHooks.join(', ')}) — no core.hooksPath is set, so the postinstall sets it to .githooks and bypasses them; move them into .githooks/ to keep them running.`;
+}
+
+async function mergePackageJson(baselineTag) {
   const newPkg = JSON.parse(showAtRef('HEAD', 'package.json'));
   const appPkg = readJSON(join(APP_ROOT, 'package.json'));
   const baseRaw = baselineTag ? showAtRef(baselineTag, 'package.json') : null;
@@ -510,7 +528,7 @@ async function mergePackageJson(baselineTag, stamp = true) {
     removes.workspaces = JSON.stringify(appPkg.workspaces);
   }
 
-  const versionChanged = stamp && appPkg.skateboardVersion !== newPkg.version;
+  const versionChanged = appPkg.skateboardVersion !== newPkg.version;
   if (!Object.keys(adds).length && !Object.keys(removes).length && !Object.keys(updates).length && !versionChanged) {
     console.log('\n[ok] package.json — no changes needed');
     return;
@@ -523,15 +541,13 @@ async function mergePackageJson(baselineTag, stamp = true) {
   for (const [k, v] of Object.entries(updates)) console.log(`  ~ ${k}: ${v}`);
   if (!basePkg) console.log(`  ⚠ no baseline tag for ${appPkg.skateboardVersion} — add-only; cannot prune removed deps or detect customized versions.`);
 
-  if (String(adds['scripts.postinstall'] ?? '').includes('hooksPath')) {
-    const hooksDir = join(APP_ROOT, '.git', 'hooks');
-    const existingHooks = existsSync(hooksDir)
-      ? readdirSync(hooksDir).filter(f => !f.endsWith('.sample'))
-      : [];
-    if (existingHooks.length) {
-      console.log(`  ⚠ existing git hook(s) in .git/hooks (${existingHooks.join(', ')}) — the postinstall core.hooksPath script will bypass them; move them into .githooks/ to keep them running.`);
-    }
-  }
+  const isPostinstallChanging = 'scripts.postinstall' in adds || 'scripts.postinstall' in updates;
+  const warning = hooksPathWarning({
+    postinstall: isPostinstallChanging ? newPkg.scripts?.postinstall : null,
+    existingHooks: existingGitHooks(APP_ROOT),
+    hooksPath: configuredHooksPath(APP_ROOT)
+  });
+  if (warning) console.log(`  ⚠ ${warning}`);
 
   if (!(await confirm('Apply package.json updates?'))) {
     console.log('[kept] package.json');
@@ -561,12 +577,29 @@ async function mergePackageJson(baselineTag, stamp = true) {
       else if (basePkg && name in baseS && appS[name] === baseS[name]) appS[name] = cmd;
     }
   }
-  if (stamp) appPkg.skateboardVersion = newPkg.version;
+  appPkg.skateboardVersion = newPkg.version;
   if (basePkg && !newPkg.workspaces && appPkg.workspaces) {
     delete appPkg.workspaces;
   }
   writeJSON(join(APP_ROOT, 'package.json'), appPkg);
   console.log('[wrote] package.json');
+}
+
+const UNRESOLVED_LABELS = {
+  conflicts: 'conflict markers or merge defects to fix',
+  declined: 'kept your copy; merge the template change by hand',
+  error: 'could not merge; compare with the template by hand'
+};
+
+function filesToResolve(results) {
+  return results.filter(({ status }) => status in UNRESOLVED_LABELS);
+}
+
+function printFilesToResolve(toResolve, version) {
+  console.log(`\n⚠ skateboardVersion is stamped ${version}, but ${toResolve.length} file(s) still need a hand fix:`);
+  for (const { relPath, status } of toResolve) console.log(`  ${relPath}  (${UNRESOLVED_LABELS[status]})`);
+  console.log('  Do not re-run the updater for these: it would merge against the new version and miss the changes.');
+  console.log("  Duplicate declarations and markers inside comments compile clean, so check with: git grep -nE '^(<<<<<<<|=======|>>>>>>>)'");
 }
 
 async function main() {
@@ -609,9 +642,9 @@ async function main() {
     : `⚠ No tag for ${baselineArg || currentVersion} — falling back to overwrite/add-only (no merge or prune).`);
   console.log(SKIP_NOTE);
 
-  const statuses = [];
+  const results = [];
   for (const relPath of ALLOWLIST) {
-    statuses.push(await syncFile(relPath, baselineTag));
+    results.push({ relPath, status: await syncFile(relPath, baselineTag) });
   }
 
   for (const relPath of REMOVED) {
@@ -621,24 +654,21 @@ async function main() {
     if (await confirm(`Delete ${relPath}?`)) {
       rmSync(dst, { force: true });
       console.log(`[removed] ${relPath}`);
-      statuses.push('wrote');
+      results.push({ relPath, status: 'wrote' });
     } else {
       console.log(`[kept]  ${relPath}`);
-      statuses.push('declined');
+      results.push({ relPath, status: 'declined' });
     }
   }
 
   for (const [linkRel, targetRel] of Object.entries(SYMLINKS)) {
-    statuses.push(await ensureSymlink(linkRel, targetRel));
+    results.push({ relPath: linkRel, status: await ensureSymlink(linkRel, targetRel) });
   }
 
-  const blocked = statuses.filter(s => s === 'declined' || s === 'conflicts' || s === 'error').length;
-  await mergePackageJson(baselineTag, blocked === 0);
-  if (blocked) {
-    console.log(`\n⚠ ${blocked} file(s) declined/conflicted or carry merge defects (conflict markers / duplicate declarations).`);
-    console.log(`  skateboardVersion left at ${currentVersion}. Resolve the flagged files, then re-run with --baseline ${currentVersion}.`);
-    console.log(`  NOTE: markers inside JSDoc and duplicate functions COMPILE CLEAN — do not trust 'npm run typecheck' alone;`);
-    console.log(`  confirm with: git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- '*.ts' '*.tsx'`);
+  await mergePackageJson(baselineTag);
+  const toResolve = filesToResolve(results);
+  if (toResolve.length) {
+    printFilesToResolve(toResolve, newPkg.version);
     process.exitCode = 1;
   }
 
@@ -670,4 +700,4 @@ const isMain = (() => {
 
 if (isMain) main().catch(e => { console.error(e); process.exit(1); });
 
-export { ALLOWLIST, REMOVED, RENAMES, SYMLINKS, TMP_DIR, ensureSymlink, findMergeDefects, mergeTempFile, threeWayMerge };
+export { ALLOWLIST, REMOVED, RENAMES, SYMLINKS, TMP_DIR, ensureSymlink, filesToResolve, findMergeDefects, hooksPathWarning, mergeTempFile, threeWayMerge };

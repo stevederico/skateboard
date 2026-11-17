@@ -93,11 +93,6 @@ impl Json {
     }
 }
 
-/// Build a `Json::Obj` from key/value pairs.
-///
-/// ```ignore
-/// obj([("status", Json::Str("ok".into()))])
-/// ```
 pub fn obj<const N: usize>(pairs: [(&str, Json); N]) -> Json {
     let mut m = BTreeMap::new();
     for (k, v) in pairs {
@@ -370,7 +365,8 @@ impl<'a> Parser<'a> {
                 self.i += 1;
             }
         }
-        let text = std::str::from_utf8(&self.b[start..self.i]).map_err(|_| self.err("bad number"))?;
+        let text =
+            std::str::from_utf8(&self.b[start..self.i]).map_err(|_| self.err("bad number"))?;
         text.parse::<f64>()
             .map(Json::Num)
             .map_err(|_| self.err("bad number"))
@@ -449,7 +445,6 @@ pub fn format_number(x: f64) -> String {
         return "null".to_string();
     }
     if x == 0.0 {
-        // Covers -0.0, which JS prints as "0".
         return "0".to_string();
     }
     if x.fract() == 0.0 && x.abs() < 1e21 {
@@ -457,7 +452,6 @@ pub fn format_number(x: f64) -> String {
     }
     let repr = format!("{x}");
     if repr.contains('e') {
-        // Rust prints exponents as `1e21`; JS prints `1e+21`.
         return repr.replacen('e', "e+", 1).replace("e+-", "e-");
     }
     repr

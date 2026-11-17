@@ -6,6 +6,7 @@ runRuleTests('no-raw-color-classes', rule, {
     '<div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4" />',
     '<div className="h-px bg-border" />',
     '<p className="text-muted-foreground text-destructive bg-app text-sm" />',
+    '<p className="text-danger text-success bg-warning/10 border-info" />',
     '<div className="bg-background text-foreground border-border ring-ring bg-accent" />',
     'const c = cn("text-2xl font-semibold tabular-nums @[250px]/card:text-3xl");',
     'const label = "bg-white";',
@@ -22,6 +23,14 @@ runRuleTests('no-raw-color-classes', rule, {
     {
       code: '<p className="hover:bg-red-500" />',
       errors: [{ messageId: 'raw', data: { token: 'hover:bg-red-500', suggestion: 'bg-destructive' } }],
+    },
+    {
+      code: '<p className="text-red-600" />',
+      errors: [{ messageId: 'raw', data: { token: 'text-red-600', suggestion: 'text-danger (dark --destructive is too dark to read as text)' } }],
+    },
+    {
+      code: '<p className="text-green-600" />',
+      errors: [{ messageId: 'raw', data: { token: 'text-green-600', suggestion: 'text-success' } }],
     },
     {
       code: '<div className="border border-zinc-200/50" />',

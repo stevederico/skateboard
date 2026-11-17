@@ -320,7 +320,9 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        let cores = thread::available_parallelism().map(|n| n.get()).unwrap_or(2);
+        let cores = thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(2);
         let threads = (cores * 4).max(8);
         Config {
             port: 8000,
@@ -349,7 +351,6 @@ fn trigger(inner: &Inner) {
     if inner.stop.swap(true, Ordering::SeqCst) {
         return;
     }
-    // `accept` has no timeout in std, so unblock it with a throwaway connection.
     for addr in wake_addrs(inner.addr) {
         if TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok() {
             break;
@@ -622,7 +623,6 @@ fn read_request(
     let mut line = Vec::new();
     let head_deadline = Instant::now() + head_timeout;
 
-    // RFC 7230 §3.5: tolerate stray CRLFs before the request line.
     loop {
         let n = read_line_limited(
             reader,
@@ -679,7 +679,6 @@ fn read_request(
         if raw.is_empty() {
             break;
         }
-        // Obsolete line folding is rejected rather than unfolded (RFC 7230 §3.2.4).
         if raw[0] == b' ' || raw[0] == b'\t' {
             return Err(HttpError::new(400, "Bad Request"));
         }
@@ -1195,11 +1194,12 @@ mod tests {
 
     fn connect(s: &Server) -> TcpStream {
         let addr = s.local_addr();
-        let target = wake_addrs(addr)
+        let c = wake_addrs(addr)
             .into_iter()
-            .find(|a| TcpStream::connect_timeout(a, Duration::from_millis(500)).is_ok())
-            .unwrap_or(addr);
-        let c = TcpStream::connect_timeout(&target, Duration::from_secs(2)).expect("connect");
+            .find_map(|a| TcpStream::connect_timeout(&a, Duration::from_millis(500)).ok())
+            .unwrap_or_else(|| {
+                TcpStream::connect_timeout(&addr, Duration::from_secs(2)).expect("connect")
+            });
         c.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         c
     }
@@ -1210,7 +1210,11 @@ mod tests {
             let mut line = String::new();
             let n = r.read_line(&mut line).ok()?;
             if n == 0 {
-                return if head.is_empty() { None } else { Some((head, Vec::new())) };
+                return if head.is_empty() {
+                    None
+                } else {
+                    Some((head, Vec::new()))
+                };
             }
             if line == "\r\n" {
                 break;
@@ -1260,12 +1264,14 @@ mod tests {
         let mut w = c.try_clone().unwrap();
         let mut r = StdBufReader::new(c);
 
-        w.write_all(b"GET /one HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+        w.write_all(b"GET /one HTTP/1.1\r\nHost: x\r\n\r\n")
+            .unwrap();
         let (h1, b1) = read_one(&mut r).unwrap();
         assert!(h1.contains("Connection: keep-alive"), "{h1}");
         assert_eq!(b1, b"GET /one");
 
-        w.write_all(b"GET /two HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+        w.write_all(b"GET /two HTTP/1.1\r\nHost: x\r\n\r\n")
+            .unwrap();
         let (_, b2) = read_one(&mut r).unwrap();
         assert_eq!(b2, b"GET /two");
         s.shutdown(Duration::from_secs(2));
@@ -1344,7 +1350,8 @@ mod tests {
     #[test]
     fn differing_duplicate_content_length_is_400() {
         let s = boot(ok_handler);
-        let raw = b"POST /p HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\nContent-Length: 5\r\n\r\nabcde";
+        let raw =
+            b"POST /p HTTP/1.1\r\nHost: x\r\nContent-Length: 3\r\nContent-Length: 5\r\n\r\nabcde";
         let (head, _) = round_trip(&s, raw);
         assert!(head.starts_with("HTTP/1.1 400 Bad Request"), "{head}");
         s.shutdown(Duration::from_secs(2));
@@ -1400,7 +1407,7 @@ mod tests {
         started_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("worker picked up the blocking request");
-        let _queued = connect(&s);
+        let queued = connect(&s);
         thread::sleep(Duration::from_millis(100));
         let mut shed = connect(&s);
         shed.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
@@ -1408,9 +1415,11 @@ mod tests {
         let outcome = shed.read(&mut buf);
         let _ = release_tx.send(());
         assert!(
-            matches!(outcome, Ok(0)) || matches!(&outcome, Err(e) if e.kind() == ErrorKind::ConnectionReset),
+            matches!(outcome, Ok(0))
+                || matches!(&outcome, Err(e) if e.kind() == ErrorKind::ConnectionReset),
             "a connection past the queue must be closed at once, got {outcome:?}"
         );
+        drop((busy, queued));
         s.shutdown(Duration::from_secs(2));
     }
 
@@ -1483,7 +1492,8 @@ mod tests {
         cfg.read_timeout = Duration::from_secs(2);
         let s = serve(cfg, ok_handler).expect("bind");
         let mut c = connect(&s);
-        c.write_all(b"GET /p HTTP/1.1\r\nHost: x\r\nX-Slow: ").unwrap();
+        c.write_all(b"GET /p HTTP/1.1\r\nHost: x\r\nX-Slow: ")
+            .unwrap();
         c.flush().unwrap();
         thread::sleep(Duration::from_millis(250));
         let _ = c.write_all(b"v\r\n\r\n");
@@ -1508,7 +1518,8 @@ mod tests {
         let mut w = c.try_clone().unwrap();
         let mut r = StdBufReader::new(c);
 
-        w.write_all(b"GET /boom HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+        w.write_all(b"GET /boom HTTP/1.1\r\nHost: x\r\n\r\n")
+            .unwrap();
         let (h1, _) = read_one(&mut r).unwrap();
         assert!(h1.starts_with("HTTP/1.1 500 Internal Server Error"), "{h1}");
 
@@ -1594,7 +1605,10 @@ mod tests {
         s.wait();
         let t0 = std::time::Instant::now();
         s.shutdown(Duration::from_secs(2));
-        assert!(t0.elapsed() < Duration::from_secs(3), "shutdown overran grace");
+        assert!(
+            t0.elapsed() < Duration::from_secs(3),
+            "shutdown overran grace"
+        );
     }
 
     #[test]
@@ -1728,7 +1742,10 @@ mod tests {
         std::os::unix::fs::symlink(root.join("inside.txt"), root.join("alias.txt")).unwrap();
 
         assert!(serve_file(&root, "/escape.txt").is_none());
-        assert_eq!(serve_file(&root, "/alias.txt").expect("in-root link").body, b"fine");
+        assert_eq!(
+            serve_file(&root, "/alias.txt").expect("in-root link").body,
+            b"fine"
+        );
 
         std::fs::remove_dir_all(&base).ok();
     }
@@ -1736,7 +1753,10 @@ mod tests {
     #[test]
     fn content_type_falls_back_to_octet_stream() {
         assert_eq!(content_type(Path::new("a.woff2")), "font/woff2");
-        assert_eq!(content_type(Path::new("a.WEBMANIFEST")), "application/manifest+json");
+        assert_eq!(
+            content_type(Path::new("a.WEBMANIFEST")),
+            "application/manifest+json"
+        );
         assert_eq!(content_type(Path::new("a.bin")), "application/octet-stream");
         assert_eq!(content_type(Path::new("noext")), "application/octet-stream");
     }
