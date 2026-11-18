@@ -1,8 +1,8 @@
 {
   "name": "skateboard",
   "private": false,
-  "version": "5.28.0",
-  "skateboardVersion": "5.28.0",
+  "version": "5.29.0",
+  "skateboardVersion": "5.29.0",
   "type": "module",
   "engines": {
     "node": ">=24.0.0"
@@ -23,7 +23,7 @@
     "lint": "oxlint",
     "test:guardrails": "node --test \"guardrails/eslint-plugin/**/*.test.js\"",
     "depcruise": "node guardrails/node_modules/dependency-cruiser/bin/dependency-cruiser.mjs --config .dependency-cruiser.js .",
-    "verify": "node --test --test-concurrency=1 --test-reporter=spec \"guardrails/verify/*.e2e.js\""
+    "verify": "bash guardrails/verify/app.sh"
   },
   "dependencies": {
     "@stevederico/skateboard-ui": "5.26.0",

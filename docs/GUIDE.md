@@ -1847,7 +1847,7 @@ Then install, sync the version label, and validate:
 npm install                                # root deps + lockfile
 npm run typecheck && npm run test
 npm run guardrails:install && npm run lint && npm run depcruise # guardrails (oxlint is a global CLI); messages name each fix
-npm run verify # click through the running app with agent-browser (ports 5173 + 8000 free, or SKATEBOARD_FRONTEND_PORT / SKATEBOARD_BACKEND_PORT)
+npm run verify # bash + agent-browser: every page and flow against the built app on a free port (needs my-factory)
 cd backend && cargo test --locked
 ```
 

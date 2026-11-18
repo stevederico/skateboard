@@ -41,10 +41,10 @@ describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
     const missing = ['eslint-plugin', 'verify']
       .flatMap(dir => walkRepo(join(REPO, 'guardrails', dir)))
       .filter(f => !f.endsWith('.DS_Store'))
-      .filter(f => f !== 'guardrails/verify/verify.e2e.js')
+      .filter(f => f !== 'guardrails/verify/flows.sh')
       .filter(f => !ALLOWLIST.includes(f));
-    assert.ok(!ALLOWLIST.includes('guardrails/verify/verify.e2e.js'), 'verify.e2e.js asserts template views; apps own theirs');
-    assert.ok(ALLOWLIST.includes('guardrails/verify/smoke.e2e.js'), 'smoke.e2e.js must be synced');
+    assert.ok(!ALLOWLIST.includes('guardrails/verify/flows.sh'), 'flows.sh asserts template views; apps own theirs');
+    assert.ok(ALLOWLIST.includes('guardrails/verify/app.sh'), 'app.sh must be synced');
     assert.deepEqual(missing, [], `guardrails files missing from ALLOWLIST: ${missing.join(', ')}`);
     for (const f of ['.oxlintrc.json', '.dependency-cruiser.js', 'guardrails/package.json', 'guardrails/package-lock.json']) {
       assert.ok(ALLOWLIST.includes(f), `${f} must be synced`);
@@ -53,6 +53,13 @@ describe('ALLOWLIST completeness', { skip: !IS_TEMPLATE }, () => {
 
   it('allowlists the build infra new in 4.5.0', () => {
     assert.ok(ALLOWLIST.includes('vite.plugins.ts'), 'vite.plugins.ts must be synced');
+  });
+
+  it('drops the Node verify files from apps; the bash app.sh replaces them (5.29.0)', () => {
+    for (const f of ['paths.js', 'browser.js', 'servers.js', 'smoke.e2e.js', 'ports.e2e.js', 'verify.e2e.js'].map(f => `guardrails/verify/${f}`)) {
+      assert.ok(REMOVED.includes(f), `${f} must be removed`);
+      assert.ok(!ALLOWLIST.includes(f), `${f} must not be synced`);
+    }
   });
 
   it('drops ESLint, Playwright and require-jsdoc-on-exports from apps (5.23.0)', () => {

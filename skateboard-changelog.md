@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.29.0
+
+  Runtime verify in bash
+  Remove Node verify files
+
 5.28.0
 
   Add smoke verify

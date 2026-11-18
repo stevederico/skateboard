@@ -74,11 +74,7 @@ const ALLOWLIST = [
   'SECURITY.md',
   '.oxlintrc.json',
   '.dependency-cruiser.js',
-  'guardrails/verify/paths.js',
-  'guardrails/verify/browser.js',
-  'guardrails/verify/servers.js',
-  'guardrails/verify/smoke.e2e.js',
-  'guardrails/verify/ports.e2e.js',
+  'guardrails/verify/app.sh',
   'guardrails/package.json',
   'guardrails/package-lock.json',
   'guardrails/eslint-plugin/index.js',
@@ -144,7 +140,13 @@ const REMOVED = [
   'eslint.config.js',
   'guardrails/verify/playwright.config.js',
   'guardrails/eslint-plugin/rules/require-jsdoc-on-exports.js',
-  'guardrails/eslint-plugin/rules/require-jsdoc-on-exports.test.js'
+  'guardrails/eslint-plugin/rules/require-jsdoc-on-exports.test.js',
+  'guardrails/verify/paths.js',
+  'guardrails/verify/browser.js',
+  'guardrails/verify/servers.js',
+  'guardrails/verify/smoke.e2e.js',
+  'guardrails/verify/ports.e2e.js',
+  'guardrails/verify/verify.e2e.js'
 ];
 
 const RENAMES = {

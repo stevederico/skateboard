@@ -23,11 +23,11 @@ export default {
         'Found an import of "{{source}}". Why: the template lints with oxlint alone since skateboard 5.23.0; it loads guardrails/eslint-plugin through `jsPlugins` in .oxlintrc.json, so ESLint, its parsers and rule packs would be a second linter with its own config that nothing runs. ' +
         'Fix: delete the import and the package. Write the check as a rule in guardrails/eslint-plugin/rules/ (zero dependencies, the ESLint rule API oxlint implements) and enable it in .oxlintrc.json.',
       playwright:
-        'Found an import of "{{source}}". Why: runtime verify drives the agent-browser CLI since skateboard 5.23.0 (guardrails/verify/verify.e2e.js); Playwright brings a second browser driver and a browser download the template does not use. ' +
-        'Fix: delete the import and the package; add the flow to guardrails/verify/verify.e2e.js with its `browser(...)` helper (agent-browser commands such as `open`, `find role button click --name ...`, `wait --text`).',
+        'Found an import of "{{source}}". Why: runtime verify drives the agent-browser CLI from bash (guardrails/verify/flows.sh, run by the my-factory verify runner); Playwright brings a second browser driver and a browser download the template does not use. ' +
+        'Fix: delete the import and the package; add the flow to guardrails/verify/flows.sh with the runner helpers (`go`, `click`, `fill_in`, `see`, `at_url`).',
       configFile:
-        'Found the file {{file}}. Why: the template runs oxlint (configured in .oxlintrc.json) and agent-browser (guardrails/verify/verify.e2e.js); an ESLint or Playwright config is either ignored or pulls the old toolchain back in. ' +
-        'Fix: delete it; lint settings go in .oxlintrc.json `overrides`, verify settings in guardrails/verify/verify.e2e.js.',
+        'Found the file {{file}}. Why: the template runs oxlint (configured in .oxlintrc.json) and agent-browser (guardrails/verify/app.sh and flows.sh); an ESLint or Playwright config is either ignored or pulls the old toolchain back in. ' +
+        'Fix: delete it; lint settings go in .oxlintrc.json `overrides`, verify settings in guardrails/verify/app.sh.',
     },
   },
   create(context) {

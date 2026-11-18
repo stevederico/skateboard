@@ -7,6 +7,18 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.29.0 — runtime verify is bash.** `npm run verify` runs
+`bash guardrails/verify/app.sh` (synced), which hands the app to the my-factory
+runner (`verify/verify.sh`): it builds the frontend, serves `dist/` from the Rust
+backend on a free port, opens every page and runs the flows in
+`guardrails/verify/flows.sh`. The updater removes the Node verify files
+(`paths.js`, `browser.js`, `servers.js`, `smoke.e2e.js`, `ports.e2e.js`,
+`verify.e2e.js`). If your app had its own flows in `verify.e2e.js`, rewrite them
+as bash functions in `guardrails/verify/flows.sh` (copy the template's file for
+the helpers: `go`, `click`, `fill_in`, `see`, `at_url`, `api`). Install my-factory
+first, or set `FACTORY_HOME` to it. CI `verify.yml` still runs the old Node flows
+and needs the runner before it works again.
+
 **5.27.0 — configurable dev and verify ports.** `SKATEBOARD_FRONTEND_PORT`
 (default 5173) and `SKATEBOARD_BACKEND_PORT` (default 8000) move Vite, the
 backend, the dev backend URL, the dev CORS list and `npm run verify` together

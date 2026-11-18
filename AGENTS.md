@@ -12,13 +12,13 @@ npm run front          # Same as start
 cd backend && cargo run   # Backend on :8000
 ```
 
-**Ports:** `SKATEBOARD_FRONTEND_PORT` (default 5173) and `SKATEBOARD_BACKEND_PORT` (default 8000) move the whole dev setup, so several copies of an app can run side by side. Export both in the shell that runs the frontend, the backend and `npm run verify`:
+**Ports:** `SKATEBOARD_FRONTEND_PORT` (default 5173) and `SKATEBOARD_BACKEND_PORT` (default 8000) move the whole dev setup, so several copies of an app can run side by side. Export both in the shell that runs the frontend and the backend:
 
 ```bash
 export SKATEBOARD_FRONTEND_PORT=5301 SKATEBOARD_BACKEND_PORT=8301
 npm run start                # Vite on :5301, strictly (fails rather than moving to another port)
 cd backend && cargo run      # backend on :8301; allows CORS from :5301
-npm run verify               # verify boots its own servers on :5301 and :8301
+npm run verify               # needs neither: verify serves the built app on a free port of its own
 ```
 
 - Vite: `server.port` and `strictPort` come from `SKATEBOARD_FRONTEND_PORT`; `devBackendPortPlugin` (dev server only) rewrites `devBackendURL` in `src/constants.json` to `http://localhost:$SKATEBOARD_BACKEND_PORT/api`. Builds never read either variable.
@@ -48,7 +48,7 @@ npm run guardrails:install   # once: dependency-cruiser (+ TypeScript 5) into gu
 npm run lint                 # oxlint + the local guardrails plugin (see Guardrails)
 npm run test:guardrails      # rule tests (each case runs through oxlint)
 npm run depcruise            # whole-graph import boundaries (.dependency-cruiser.js)
-npm run verify               # boots frontend + backend, clicks through the app with agent-browser
+npm run verify               # builds the app, serves it from the backend, clicks through it with agent-browser
 ```
 
 `oxlint` and `agent-browser` are global CLIs, not project dependencies: `mise use -g npm:oxlint npm:agent-browser` (or `npm install -g oxlint agent-browser`).
@@ -160,7 +160,7 @@ npm run guardrails:install   # once: installs dependency-cruiser (+ TypeScript 5
 npm run lint                 # oxlint: all guardrails over src/, scripts/, vite.*, guardrails/
 npm run test:guardrails      # node --test: every rule's valid/invalid cases, each linted by the real oxlint
 npm run depcruise            # dependency-cruiser over the whole import graph
-npm run verify               # agent-browser flows against the running app, screenshots to verify-artifacts/
+npm run verify               # bash + agent-browser: every page and flow against the built app, logs to verify-artifacts/
 ```
 
 - **Linter:** oxlint (a global CLI) is the only linter. `.oxlintrc.json` at the root loads the plugin through `jsPlugins`, turns oxlint's own categories off (`plugins: []`, `correctness: off`), enables the four core rules (`no-var`, `prefer-const`, `object-shorthand`, `prefer-template`), and splits the plugin's rules into two `overrides`: base rules on every linted file, app (React/UI) rules on `src/` only. It also fails on warnings and on unused disable directives. `guardrails/eslint-plugin/index.test.js` asserts the overrides list exactly the plugin's `BASE_RULES` and `APP_RULES`.
@@ -170,7 +170,7 @@ npm run verify               # agent-browser flows against the running app, scre
 - **Disabling:** only with `// oxlint-disable-next-line skateboard/<rule> -- <reason>` (oxlint also honors `eslint-disable-*`); unused disables fail lint.
 - **Layers:** `guardrails/eslint-plugin/layers.js` is the layer table (`ui` = src/components, `app` = rest of src/, `server` = backend/, `tooling` = scripts/, `build` = vite.*, `guardrails`) and the allowed import edges. `skateboard/layer-boundaries` enforces it per file, and `.dependency-cruiser.js` generates its layer rules from the same table (never hand-copy a layer into either).
 - **Boundaries (`npm run depcruise`):** dependency-cruiser resolves every import on disk, so it proves what one file cannot: the layer table across the graph, no circular dependencies, no orphan modules, no devDependencies or Node builtins in `src/`, no packages missing from `package.json`, no unresolvable imports (including deep paths a package's `exports` map does not expose), no relative paths into `node_modules/`, no imports of test files. Each rule's `comment` states the root cause and the fix. Needs `npm ci` and `npm run guardrails:install` first.
-- **Runtime verify (`npm run verify`):** runs every `guardrails/verify/*.e2e.js`. `smoke.e2e.js` (synced to apps) opens the landing page, every `constants.json` page under `/app/`, settings, terms and the 404, and fails on any uncaught exception, console error or unexpected failed request; apps need no flow code for it. `verify.e2e.js` (template-owned; apps may add their own, it is not synced) drives the `agent-browser` CLI through landing, guest entry, sign up, the main view, sidebar, command menu, settings, sign out, sign in, a legal page and the 404, against the real Vite dev server (:5173, or `SKATEBOARD_FRONTEND_PORT`) and the real Rust backend (`cargo run` on :8000, or `SKATEBOARD_BACKEND_PORT`; throwaway SQLite under `verify-artifacts/`; nothing is mocked). Elements are found in agent-browser's accessibility snapshot by role and name (`guardrails/verify/browser.js`), the way a screen reader sees them. It fails on uncaught exceptions, console errors and unexpected failed requests (HTTP 4xx/5xx), and saves full-page screenshots to `verify-artifacts/screenshots/` (gitignored). agent-browser launches its own headless Chrome or Chromium in a private session (`--session skateboard-verify-<pid>`, config `verify-artifacts/agent-browser.json`, so a personal agent-browser config that attaches to a running browser is not used); set `AGENT_BROWSER_EXECUTABLE_PATH` if it cannot find one. Its ports must be free. `guardrails/verify/ports.e2e.js` then boots both servers on two random free ports and checks the frontend, the backend, the dev backend URL and CORS (the files run one at a time). Unit tests stay on `node --test` too, so flow files are named `*.e2e.js`, never `*.test.js` / `*.spec.js`. When you change a view the flows assert, update the flow in the same change.
+- **Runtime verify (`npm run verify`):** bash, no Node. `guardrails/verify/app.sh` (synced) hands the app to the my-factory runner (`verify/verify.sh`, found through the global `core.hooksPath` or `FACTORY_HOME`). The runner builds the frontend once (`vite build`), starts the real Rust backend serving `dist/` on a free port (throwaway SQLite under `verify-artifacts/`; nothing is mocked), and drives the `agent-browser` CLI. It opens the landing page, every `constants.json` page under `/app/`, settings, terms and the 404, then runs the flows in `guardrails/verify/flows.sh` (template-owned, not synced, so an app keeps its own or has none): landing, guest entry, sign up, the main view, sidebar, command menu, settings, sign out, sign in and the terms page. Flows are bash functions chained with `&&` over the runner helpers `go`, `click`, `fill_in`, `press`, `see` (a regex over the accessibility snapshot), `not_see`, `gone`, `at_url`, `api`, `expect_eq`, `js_true` and `lit` (escapes a literal for a regex). It fails on any uncaught exception, console error or failed request (HTTP 4xx/5xx) not listed in `VERIFY_ALLOW`. agent-browser launches its own headless Chrome or Chromium in a private session; set `AGENT_BROWSER_EXECUTABLE_PATH` if it cannot find one. When you change a view a flow asserts, update the flow in the same change.
 - **CI:** `.github/workflows/ci.yml` job `guardrails` runs lint, rule tests and depcruise; `.github/workflows/verify.yml` runs the flows on every pull request, uploads the screenshots, and keeps one PR comment linking them.
 
 **Written rules that are NOT linted (and why):**
@@ -480,7 +480,7 @@ skateboard/
 │   └── config.json      # Backend config with database settings
 ├── guardrails/
 │   ├── eslint-plugin/   # Local lint rules for oxlint jsPlugins (one per written "never" rule)
-│   ├── verify/          # agent-browser flows for `npm run verify`
+│   ├── verify/          # app.sh + flows.sh (bash) for `npm run verify`
 │   └── package.json     # Nested: dependency-cruiser + TypeScript 5 (not root deps)
 ├── .oxlintrc.json       # oxlint: loads the guardrails plugin, base/app overrides
 ├── .dependency-cruiser.js  # Import-graph boundaries, generated from the layer table
@@ -763,7 +763,7 @@ Canonical pins live in this repo’s `package.json` (`version` / `skateboardVers
 **Reference:** [docs/GUIDE.md](docs/GUIDE.md) - Architecture, API, Schema, Deployment, Migration (consolidated)
 
 **Version:**
-- skateboard@5.28.0
+- skateboard@5.29.0
 - skateboard-ui@5.26.0
 
 ## Migrating 4.x → 5.0 (exact checklist)
@@ -887,7 +887,7 @@ a version in `package.json`:
 - `backend/src/*` - Rust server
 - `vite.config.ts` - Build configuration
 - `src/assets/styles.css` - Theme variables (merge carefully)
-- `.oxlintrc.json`, `.dependency-cruiser.js`, `guardrails/` - Lint, boundary and runtime-verify guardrails (template-owned; `smoke.e2e.js` checks every page of any app; `verify.e2e.js` asserts the template's own views and is not synced, so an app keeps its own or has none)
+- `.oxlintrc.json`, `.dependency-cruiser.js`, `guardrails/` - Lint, boundary and runtime-verify guardrails (template-owned; `guardrails/verify/app.sh` checks every page of any app; `guardrails/verify/flows.sh` asserts the template's own views and is not synced, so an app keeps its own or has none)
 
 ### Never Auto-Update (app-specific)
 - `constants.json` - App configuration

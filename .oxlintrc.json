@@ -26,7 +26,6 @@
         "vite.*.js",
         ".dependency-cruiser.js",
         "guardrails/eslint-plugin/**/*.js",
-        "guardrails/verify/**/*.js",
         "**/{tailwind,postcss}.config.{js,cjs,mjs,ts}",
         "**/{eslint,playwright,playwright-ct}.config.{js,cjs,mjs,ts,mts,cts}",
         "**/.eslintrc.{js,cjs}"
