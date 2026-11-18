@@ -1,0 +1,10 @@
+Landing page	/	landing
+Guest access	/	guest_settings
+Sign up	/signup	sign_up
+Dashboard	/app/home	dashboard
+Empty state	/app/home	analytics
+Command menu	/app/home	command_menu
+Settings	/app/home	settings
+Sign out	/app/settings	sign_out
+Sign in	/signin	sign_in
+Terms	/terms	terms

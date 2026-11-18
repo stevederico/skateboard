@@ -7,6 +7,12 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.30.0 — feature map.** `features.tsv` (template-owned, not synced) names
+each feature, the page it starts on and the flow in `guardrails/verify/flows.sh`
+that tests it; `npm run verify` runs each flow under its feature's name and
+fails a feature with no flow. `flows.sh` no longer defines `verify_flows`. To
+adopt it, copy the template's `features.tsv` and keep the lines your app has.
+
 **5.29.0 — runtime verify is bash.** `npm run verify` runs
 `bash guardrails/verify/app.sh` (synced), which hands the app to the my-factory
 runner (`verify/verify.sh`): it builds the frontend, serves `dist/` from the Rust

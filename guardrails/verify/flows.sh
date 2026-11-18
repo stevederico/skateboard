@@ -52,7 +52,8 @@ analytics() {
 }
 
 command_menu() {
-  press Control+k &&
+  h1 "$home_title" &&
+    press Control+k &&
     see combobox &&
     js_true "(() => { const id = document.querySelector('dialog:has([role=combobox]), [role=dialog]:has([role=combobox])')?.getAttribute('aria-labelledby'); return !!id && document.getElementById(id)?.textContent === 'Command Menu'; })()" "the open dialog is not labelled Command Menu" &&
     click option Projects &&
@@ -97,17 +98,4 @@ terms() {
   go /terms &&
     see "Welcome to the $(lit "$(const .companyName)") Application\." &&
     not_see '_COMPANY_|_WEBSITE_|_EMAIL_'
-}
-
-verify_flows() {
-  flow "landing page shows the product, features, pricing and legal links" landing
-  flow "the call to action opens the app for a guest, and settings asks them to sign in" guest_settings
-  flow "sign up creates an account and a backend session" sign_up
-  flow "the app shows the dashboard and every sidebar page" dashboard
-  flow "the sidebar opens a page with an empty state" analytics
-  flow "Ctrl+K opens the command menu, and it navigates" command_menu
-  flow "settings shows the account, plan and version" settings
-  flow "sign out asks first, then ends the session" sign_out
-  flow "sign in rejects a wrong password, then signs in" sign_in
-  flow "the terms page fills in the company name" terms
 }
