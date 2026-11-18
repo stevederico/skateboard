@@ -7,6 +7,11 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.32.0 — random walk.** `npm run verify` ends with 30 random clicks and
+typing and fails on a crash, a console error, a 5xx, a blank page or a broken
+value on screen. `guardrails/verify/app.sh` (synced) skips the payment buttons
+(`VERIFY_RANDOM_SKIP`), which need Stripe keys.
+
 **5.31.0 — state chart.** `states.tsv` (template-owned, not synced) lists
 the app's states as a user sees them, the steps between them, and rules: a
 guest never sees the account, and only signing up or in reaches the app as a
