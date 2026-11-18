@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify Report</title>
+<style>
+  :root { --bg: #fff; --fg: #1a1a1a; --muted: #555; --card: #f4f4f4; --ok: #2e7d32; --fail: #c62828; --line: #ddd; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111; --fg: #eee; --muted: #aaa; --card: #1c1c1c; --line: #333; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 22px/1.5 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 44px; margin: 0 0 4px; }
+  h2 { font-size: 32px; margin: 40px 0 12px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  ol.checks { list-style: none; padding: 0; }
+  ol.checks > li { background: var(--card); border-left: 12px solid var(--ok); border-radius: 10px; padding: 14px 18px; margin: 0 0 14px; }
+  ol.checks > li.fail { border-left-color: var(--fail); }
+  ol.outline li { margin: 4px 0; }
+  pre { white-space: pre-wrap; font-size: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow-x: auto; }
+  img, video { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Verify Report</h1>
+<p class="sub">2026-11-18 13:51 · 20 passed, 0 failed</p>
+<h2>Video</h2>
+<video controls preload="metadata" src="run.webm"></video>
+<h2>Checks</h2>
+<ol class="checks">
+<li class="ok"><b>✅ page /</b><img src="shots/01-page--.png" alt="page /" loading="lazy"></li>
+<li class="ok"><b>✅ page /app/home</b><img src="shots/02-page--app-home.png" alt="page /app/home" loading="lazy"></li>
+<li class="ok"><b>✅ page /app/analytics</b><img src="shots/03-page--app-analytics.png" alt="page /app/analytics" loading="lazy"></li>
+<li class="ok"><b>✅ page /app/projects</b><img src="shots/04-page--app-projects.png" alt="page /app/projects" loading="lazy"></li>
+<li class="ok"><b>✅ page /app/team</b><img src="shots/05-page--app-team.png" alt="page /app/team" loading="lazy"></li>
+<li class="ok"><b>✅ page /app/settings</b><img src="shots/06-page--app-settings.png" alt="page /app/settings" loading="lazy"></li>
+<li class="ok"><b>✅ page /terms</b><img src="shots/07-page--terms.png" alt="page /terms" loading="lazy"></li>
+<li class="ok"><b>✅ page /this-route-does-not-exist</b><img src="shots/08-page--this-route-does-not-exist.png" alt="page /this-route-does-not-exist" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Landing page</b><img src="shots/09-feature--landing-page.png" alt="feature: Landing page" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Guest access</b><img src="shots/10-feature--guest-access.png" alt="feature: Guest access" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Sign up</b><img src="shots/11-feature--sign-up.png" alt="feature: Sign up" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Dashboard</b><img src="shots/12-feature--dashboard.png" alt="feature: Dashboard" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Empty state</b><img src="shots/13-feature--empty-state.png" alt="feature: Empty state" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Command menu</b><img src="shots/14-feature--command-menu.png" alt="feature: Command menu" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Settings</b><img src="shots/15-feature--settings.png" alt="feature: Settings" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Sign out</b><img src="shots/16-feature--sign-out.png" alt="feature: Sign out" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Sign up after an account</b><img src="shots/17-feature--sign-up-after-an-account.png" alt="feature: Sign up after an account" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Sign in</b><img src="shots/18-feature--sign-in.png" alt="feature: Sign in" loading="lazy"></li>
+<li class="ok"><b>✅ feature: Terms</b><img src="shots/19-feature--terms.png" alt="feature: Terms" loading="lazy"></li>
+<li class="ok"><b>✅ property: 30 random clicks and typing kept every rule (seed 746196844)</b><img src="shots/20-property--30-random-clicks-and-typing-ke.png" alt="property: 30 random clicks and typing kept every rule (seed 746196844)" loading="lazy"></li>
+</ol>
+<h2>State chart</h2>
+<ol class="outline">
+<li>guest on landing <i>(start)</i><ol><li>click Get Started → guest in app</li><li>open sign up → guest signing up</li><li>open sign in → guest signing in</li><li>open terms → guest reads terms</li></ol></li>
+<li>guest reads terms<ol><li>go back → guest on landing</li></ol></li>
+<li>guest in app<ol><li>open settings → guest asked to sign in</li><li>go home → guest on landing</li></ol></li>
+<li>guest asked to sign in<ol><li>open sign in → guest signing in</li><li>go back → guest in app</li></ol></li>
+<li>guest signing up<ol><li>sign up → user in app</li><li>close → guest on landing</li></ol></li>
+<li>guest signing in<ol><li>sign in → user in app</li><li>wrong password → guest sees sign-in error</li><li>close → guest on landing</li></ol></li>
+<li>guest sees sign-in error<ol><li>sign in → user in app</li><li>close → guest on landing</li></ol></li>
+<li>user in app<ol><li>open command menu → user in command menu</li><li>open settings → user sees account</li></ol></li>
+<li>user in command menu<ol><li>pick a page → user in app</li><li>close → user in app</li></ol></li>
+<li>user sees account<ol><li>go back → user in app</li><li>sign out → user confirming sign out</li></ol></li>
+<li>user confirming sign out<ol><li>cancel → user sees account</li><li>confirm → guest on landing</li></ol></li>
+<li>Rules<ol><li>never: guest sees account</li><li>only by sign up|sign in: user in app</li><li>only by sign up|sign in: user sees account</li></ol></li>
+</ol>
+<h2>Feature map</h2>
+<ol class="outline">
+<li>Landing page<ol><li>page: /</li><li>flow: landing</li></ol></li>
+<li>Guest access<ol><li>page: /</li><li>flow: guest_settings</li></ol></li>
+<li>Sign up<ol><li>page: /signup</li><li>flow: sign_up</li></ol></li>
+<li>Dashboard<ol><li>page: /app/home</li><li>flow: dashboard</li></ol></li>
+<li>Empty state<ol><li>page: /app/home</li><li>flow: analytics</li></ol></li>
+<li>Command menu<ol><li>page: /app/home</li><li>flow: command_menu</li></ol></li>
+<li>Settings<ol><li>page: /app/home</li><li>flow: settings</li></ol></li>
+<li>Sign out<ol><li>page: /app/settings</li><li>flow: sign_out</li></ol></li>
+<li>Sign up after an account<ol><li>page: /signup</li><li>flow: sign_up_again</li></ol></li>
+<li>Sign in<ol><li>page: /signin</li><li>flow: sign_in</li></ol></li>
+<li>Terms<ol><li>page: /terms</li><li>flow: terms</li></ol></li>
+</ol>
+</main>
+</body>
+</html>
