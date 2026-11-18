@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.33.0
+
+  Fix fuzz bugs
+
 5.32.0
 
   Random walk

@@ -37,6 +37,7 @@ fn dispatch(state: &AppState, req: &Request) -> Response {
         {
             unhandled(state, req, "Intentional integration test error")
         }
+        ("GET", "/api/signup/options") => signup_options(),
         ("POST", "/api/signup") => signup(state, req),
         ("POST", "/api/signin") => signin(state, req),
         ("POST", "/api/signout") => signout(state, req),
@@ -55,6 +56,10 @@ fn dispatch(state: &AppState, req: &Request) -> Response {
         ("GET" | "HEAD", _) => static_or_spa(state, req),
         _ => not_found(),
     }
+}
+
+fn signup_options() -> Response {
+    json_res(200, &json::obj([("turnstileSiteKey", json::Json::Null)]))
 }
 
 fn health(state: &AppState) -> Response {
@@ -383,7 +388,7 @@ fn signup(state: &AppState, req: &Request) -> Response {
         return err_json(400, "Name required (max 100 characters)");
     }
     email = email.to_lowercase().trim().to_string();
-    let name = validation::escape_html(name.trim());
+    let name = name.trim().to_string();
 
     let hash = match kdf::hash_password(password) {
         Ok(h) => h,
@@ -619,8 +624,7 @@ fn me_put(state: &AppState, req: &Request) -> Response {
     let Some(name) = body.get_str("name") else {
         return err_json(400, "No valid fields to update");
     };
-    let sanitized = validation::escape_html(name.trim());
-    match state.pool.update_user_set_name(&user_id, &sanitized) {
+    match state.pool.update_user_set_name(&user_id, name.trim()) {
         Ok(0) => err_json(400, "No changes made"),
         Ok(_) => match state.pool.find_user(&UserQuery::Id(user_id)) {
             Ok(Some(u)) => json_res(200, &user_json(&u)),
@@ -1465,6 +1469,32 @@ mod tests {
         let body = json_body(&res);
         assert_eq!(body.get_str("status"), Some("ok"));
         assert!(body.get_i64("timestamp").is_some());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn signup_options_answers_without_turnstile() {
+        let (state, dir) = test_state();
+        let res = handle(&state, Request::for_test("GET", "/api/signup/options"));
+        assert_eq!(res.status, 200);
+        assert!(json_body(&res)
+            .get("turnstileSiteKey")
+            .is_some_and(|v| v.is_null()));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn signup_keeps_the_name_as_typed() {
+        let (state, dir) = test_state();
+        let mut req = Request::for_test("POST", "/api/signup");
+        req.set_test_body(
+            r#"{"email":"al@example.com","password":"secret1","name":"<b>Al</b> & 'Co' 🎉"}"#
+                .as_bytes()
+                .to_vec(),
+        );
+        let res = handle(&state, req);
+        assert_eq!(res.status, 201, "{}", String::from_utf8_lossy(&res.body));
+        assert_eq!(json_body(&res).get_str("name"), Some("<b>Al</b> & 'Co' 🎉"));
         std::fs::remove_dir_all(&dir).ok();
     }
 

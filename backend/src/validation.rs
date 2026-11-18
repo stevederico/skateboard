@@ -1,19 +1,3 @@
-pub fn escape_html(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#x27;"),
-            '/' => out.push_str("&#x2F;"),
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
 pub fn utf16_len(s: &str) -> usize {
     s.chars().map(char::len_utf16).sum()
 }
@@ -85,14 +69,6 @@ pub fn validate_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn escapes_every_mapped_character() {
-        assert_eq!(
-            escape_html("<a href=\"x\">&'/"),
-            "&lt;a href=&quot;x&quot;&gt;&amp;&#x27;&#x2F;"
-        );
-    }
 
     #[test]
     fn accepts_ordinary_emails() {

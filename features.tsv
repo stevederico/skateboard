@@ -6,5 +6,6 @@ Empty state	/app/home	analytics
 Command menu	/app/home	command_menu
 Settings	/app/home	settings
 Sign out	/app/settings	sign_out
+Sign up after an account	/signup	sign_up_again
 Sign in	/signin	sign_in
 Terms	/terms	terms

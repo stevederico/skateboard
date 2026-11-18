@@ -13,7 +13,7 @@ const() { jq -r "$1" "$c"; }
 VERIFY_BUILD="node_modules/.bin/vite build --mode production"
 VERIFY_START=start_backend
 VERIFY_HEALTH="/api/health"
-VERIFY_ALLOW='^(404 .*/api/signup/options|401 .*/api/(me|signin))$'
+VERIFY_ALLOW='^401 .*/api/(me|signin)$'
 VERIFY_RANDOM_SKIP='subscribe|upgrade|checkout|billing'
 
 start_backend() {

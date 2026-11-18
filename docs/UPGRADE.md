@@ -7,6 +7,14 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.33.0 — fuzz fixes.** The factory's fuzz robot found three bugs. The
+backend now answers `GET /api/signup/options` (it was a 404 on every auth
+dialog), and it stores names as typed instead of HTML-escaping them, so React
+shows `<b>Al</b>` rather than `&lt;b&gt;Al…`. Names saved before 5.33.0 stay
+escaped in the database until the user renames. skateboard-ui 5.27.0 opens the
+auth dialog in the mode its route asks for and keeps emoji whole in avatar
+initials. Pin `@stevederico/skateboard-ui` to 5.27.0.
+
 **5.32.0 — random walk.** `npm run verify` ends with 30 random clicks and
 typing and fails on a crash, a console error, a 5xx, a blank page or a broken
 value on screen. `guardrails/verify/app.sh` (synced) skips the payment buttons

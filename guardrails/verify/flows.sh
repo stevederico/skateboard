@@ -1,5 +1,5 @@
 user_email="verify-$(date +%s)@example.com"
-user_name="Verify User"
+user_name="Verify <b>User</b> 🎉"
 user_password="verify-pass-1"
 home_title="$(const '.pages[0].title')"
 tagline="$(lit "$(const .tagline)")"
@@ -20,7 +20,17 @@ guest_settings() {
     at_url '/app/home$' &&
     h1 "$home_title" &&
     click button Settings &&
-    see 'Sign in to access your account settings\.'
+    see 'Sign in to access your account settings\.' &&
+    click button "Sign In" &&
+    see 'dialog "Sign In"' &&
+    press Escape &&
+    gone 'dialog "Sign In"'
+}
+
+sign_up_again() {
+  see 'dialog "Sign Up"' &&
+    press Escape &&
+    gone 'dialog "Sign Up"'
 }
 
 sign_up() {
