@@ -141,12 +141,7 @@ const REMOVED = [
   'guardrails/verify/playwright.config.js',
   'guardrails/eslint-plugin/rules/require-jsdoc-on-exports.js',
   'guardrails/eslint-plugin/rules/require-jsdoc-on-exports.test.js',
-  'guardrails/verify/paths.js',
-  'guardrails/verify/browser.js',
-  'guardrails/verify/servers.js',
-  'guardrails/verify/smoke.e2e.js',
-  'guardrails/verify/ports.e2e.js',
-  'guardrails/verify/verify.e2e.js'
+  ...['paths.js', 'browser.js', 'servers.js', 'smoke.e2e.js', 'ports.e2e.js', 'verify.e2e.js'].map(f => `guardrails/verify/${f}`)
 ];
 
 const RENAMES = {

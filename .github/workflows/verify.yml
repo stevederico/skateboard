@@ -1,6 +1,6 @@
 name: Verify
 # Runtime verification: boots the Vite frontend and the Rust backend, drives agent-browser
-# through the main flows (guardrails/verify/verify.e2e.js) and uploads the screenshots.
+# through the main flows (guardrails/verify/flows.sh) and uploads the screenshots.
 on:
   pull_request:
   workflow_dispatch:

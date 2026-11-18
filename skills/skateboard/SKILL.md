@@ -8,7 +8,7 @@ description: >
   running update-skateboard.js, fixing template drift, migrating 4.x → 5.0,
   or the user says skateboard / skateboard-ui.
 metadata:
-  version: "5.29.0"
+  version: "5.29.1"
   skateboard-ui: "5.26.0"
   sources:
     - https://github.com/stevederico/skateboard
@@ -21,7 +21,7 @@ metadata:
 
 | Package | Version | Role |
 |---|---|---|
-| **skateboard** (boilerplate) | **5.29.0** | App scaffold (copied into new repos) |
+| **skateboard** (boilerplate) | **5.29.1** | App scaffold (copied into new repos) |
 | **@stevederico/skateboard-ui** | **5.26.0** | Shell + components (npm package — pin exact) |
 
 Docs: https://stevederico.github.io/skateboard/ · Boilerplate: https://github.com/stevederico/skateboard · UI: https://github.com/stevederico/skateboard-ui
@@ -396,4 +396,4 @@ Optional backfills (vendored into **app** `src/components/`, not the npm package
 4. Never commit secrets; never ship `.env` via symlink/Docker context
 5. Teach **TS** frontend paths (`main.tsx`) and **Rust** backend (`backend/src/`)
 6. **Upgrades:** two channels — UI npm + `update-skateboard.js` for vendored backend; never bump the version label alone
-7. **Guardrails:** `oxlint` and `agent-browser` are global CLIs; `npm run guardrails:install` once, then `npm run lint` (oxlint) and `npm run depcruise` before finishing; every message says why and the exact fix. After a UI or auth change run `npm run verify` and update `guardrails/verify/verify.e2e.js` if a view it asserts changed (AGENTS.md → Guardrails)
+7. **Guardrails:** `oxlint` and `agent-browser` are global CLIs; `npm run guardrails:install` once, then `npm run lint` (oxlint) and `npm run depcruise` before finishing; every message says why and the exact fix. After a UI or auth change run `npm run verify` and update `guardrails/verify/flows.sh` if a view it asserts changed (AGENTS.md → Guardrails)

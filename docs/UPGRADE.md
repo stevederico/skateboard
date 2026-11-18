@@ -53,14 +53,14 @@ hooksPath keeps running; the updater offers the new script and says which hooks
 will run. An app that already has a local `core.hooksPath` from the old
 postinstall keeps it until you run `git config --unset core.hooksPath`.
 
-**5.28.0 — generic smoke verify.** `guardrails/verify/smoke.e2e.js` (synced) opens every page in `src/constants.json` `pages`, plus landing, settings, terms and 404, and fails on uncaught exceptions, console errors or unexpected failed requests. `npm run verify` now runs `guardrails/verify/*.e2e.js`. The updater no longer syncs `verify.e2e.js`: delete the template's copy from an app unless you rewrote it for the app's own pages.
+**5.28.0 — generic smoke verify.** `smoke.e2e.js` (synced; replaced by `app.sh` in 5.29.0) opens every page in `src/constants.json` `pages`, plus landing, settings, terms and 404, and fails on uncaught exceptions, console errors or unexpected failed requests. `npm run verify` now runs `guardrails/verify/*.e2e.js`. The updater no longer syncs `verify.e2e.js`: delete the template's copy from an app unless you rewrote it for the app's own pages.
 
 **5.23.0 — oxlint replaces ESLint, agent-browser replaces Playwright, no JSDoc rule.**
 No runtime change. Install the two global CLIs once per machine:
 `mise use -g npm:oxlint npm:agent-browser` (or `npm install -g oxlint agent-browser`);
 they are not project dependencies. The updater syncs `.oxlintrc.json` (loads
 `guardrails/eslint-plugin` through `jsPlugins`; base rules on every linted file,
-app rules on `src/` only), the new `guardrails/verify/browser.js` and
+app rules on `src/` only), the new verify `browser.js` (removed in 5.29.0) and
 `servers.js`, and a `guardrails/package.json` that keeps only dependency-cruiser
 and TypeScript 5. It offers to delete `eslint.config.js`,
 `guardrails/verify/playwright.config.js` and the `require-jsdoc-on-exports` rule:
@@ -71,7 +71,7 @@ code is edited). Accept the `lint` and `verify` script updates, re-run
 `.oxlintrc.json` `overrides`, and `// eslint-disable-next-line` comments keep
 working (oxlint honors them; `oxlint-disable-next-line` is the new spelling).
 If you merged your own flows into `verify.e2e.js`, rewrite them with the helpers
-in `guardrails/verify/browser.js` (`findRole`, `click`, `fill`, `expectText`,
+in the verify `browser.js` (`findRole`, `click`, `fill`, `expectText`,
 `expectUrl`), which read agent-browser's accessibility snapshot by role and name.
 Remove `verify-artifacts/playwright` if present. The workflows are not synced:
 copy `.github/workflows/ci.yml` (job `guardrails`) and `verify.yml`, which install
@@ -140,7 +140,7 @@ names the fix. `npm run verify` boots the Vite frontend and the Rust backend
 and clicks through the app in Chromium (first run:
 `cd guardrails && npx --no-install playwright install chromium`); its flows
 assert the template's views and `src/constants.json` names, so merge
-`guardrails/verify/verify.e2e.js` with your app's own pages. Add
+the verify `verify.e2e.js` (now `flows.sh`) with your app's own pages. Add
 `verify-artifacts/` to `.gitignore` if the updater did not. The workflows
 (`.github/workflows/ci.yml` job `guardrails`, `verify.yml`) are not synced;
 copy them from the reference repo.
