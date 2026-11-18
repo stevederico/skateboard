@@ -203,7 +203,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.30.0 | Boilerplate (this repo) |
+| **skateboard** | v5.31.0 | Boilerplate (this repo) |
 | **skateboard-ui** | v5.26.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (JSX via tsconfig `react-jsx`) |
 | **CSS** | plain | Styling: skateboard-ui `styles.css` + `src/assets/styles.css`, no Tailwind |

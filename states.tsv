@@ -1,0 +1,28 @@
+start	guest on landing
+step	guest on landing	click Get Started	guest in app
+step	guest on landing	open sign up	guest signing up
+step	guest on landing	open sign in	guest signing in
+step	guest on landing	open terms	guest reads terms
+step	guest reads terms	go back	guest on landing
+step	guest in app	open settings	guest asked to sign in
+step	guest in app	go home	guest on landing
+step	guest asked to sign in	open sign in	guest signing in
+step	guest asked to sign in	go back	guest in app
+step	guest signing up	sign up	user in app
+step	guest signing up	close	guest on landing
+step	guest signing in	sign in	user in app
+step	guest signing in	wrong password	guest sees sign-in error
+step	guest signing in	close	guest on landing
+step	guest sees sign-in error	sign in	user in app
+step	guest sees sign-in error	close	guest on landing
+step	user in app	open command menu	user in command menu
+step	user in command menu	pick a page	user in app
+step	user in command menu	close	user in app
+step	user in app	open settings	user sees account
+step	user sees account	go back	user in app
+step	user sees account	sign out	user confirming sign out
+step	user confirming sign out	cancel	user sees account
+step	user confirming sign out	confirm	guest on landing
+never	guest sees account
+only	user in app	sign up|sign in
+only	user sees account	sign up|sign in

@@ -7,6 +7,12 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.31.0 — state chart.** `states.tsv` (template-owned, not synced) lists
+the app's states as a user sees them, the steps between them, and rules: a
+guest never sees the account, and only signing up or in reaches the app as a
+user. `npm run verify` checks every path through it before the app starts. To
+adopt it, copy the template's file and add your app's screens.
+
 **5.30.0 — feature map.** `features.tsv` (template-owned, not synced) names
 each feature, the page it starts on and the flow in `guardrails/verify/flows.sh`
 that tests it; `npm run verify` runs each flow under its feature's name and

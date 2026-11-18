@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.31.0
+
+  State chart
+
 5.30.0
 
   Feature map
