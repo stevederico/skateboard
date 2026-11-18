@@ -7,6 +7,10 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.34.0 — pull requests.** AGENTS.md says how changes reach skateboard now:
+a branch, then the factory's `review/pr.sh`, which attaches verify's proof and
+starts a robot review. Apps are not affected.
+
 **5.33.0 — fuzz fixes.** The factory's fuzz robot found three bugs. The
 backend now answers `GET /api/signup/options` (it was a 404 on every auth
 dialog), and it stores names as typed instead of HTML-escaping them, so React
