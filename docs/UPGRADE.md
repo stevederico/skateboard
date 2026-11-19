@@ -7,6 +7,22 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.37.0 — CI verify by hand.** `.github/workflows/verify.yml` no longer runs
+on every pull request, since CI cannot reach the private Garden runner; run it
+from Actions when you need it. Verify runs locally through `garden pr`, and
+AGENTS.md now says `garden pr <body.md>` instead of the script path.
+
+**5.35.0 — Garden.** The factory repo is now Garden (`~/Projects/garden`).
+`guardrails/verify/app.sh` (synced) reads `GARDEN_VERIFY` and `GARDEN_HOME`
+instead of `FACTORY_VERIFY` and `FACTORY_HOME`. Run the updater; with the old
+file, verify starts itself over and over.
+
+**5.34.0 — pull requests.** AGENTS.md says how changes reach skateboard now:
+a branch, then `garden pr` (Garden's `review/pr.sh`), which attaches verify's proof and
+starts a robot review. Apps get the bullet through the updater, but it applies
+only to repos in Garden's `GARDEN_PR_REPOS`; apps not listed still push to
+master.
+
 **5.33.0 — fuzz fixes.** The factory's fuzz robot found three bugs. The
 backend now answers `GET /api/signup/options` (it was a 404 on every auth
 dialog), and it stores names as typed instead of HTML-escaping them, so React
@@ -33,15 +49,15 @@ fails a feature with no flow. `flows.sh` no longer defines `verify_flows`. To
 adopt it, copy the template's `features.tsv` and keep the lines your app has.
 
 **5.29.0 — runtime verify is bash.** `npm run verify` runs
-`bash guardrails/verify/app.sh` (synced), which hands the app to the my-factory
+`bash guardrails/verify/app.sh` (synced), which hands the app to the Garden
 runner (`verify/verify.sh`): it builds the frontend, serves `dist/` from the Rust
 backend on a free port, opens every page and runs the flows in
 `guardrails/verify/flows.sh`. The updater removes the Node verify files
 (`paths.js`, `browser.js`, `servers.js`, `smoke.e2e.js`, `ports.e2e.js`,
 `verify.e2e.js`). If your app had its own flows in `verify.e2e.js`, rewrite them
 as bash functions in `guardrails/verify/flows.sh` (copy the template's file for
-the helpers: `go`, `click`, `fill_in`, `see`, `at_url`, `api`). Install my-factory
-first, or set `FACTORY_HOME` to it. CI `verify.yml` still runs the old Node flows
+the helpers: `go`, `click`, `fill_in`, `see`, `at_url`, `api`). Install Garden
+first, or set `GARDEN_HOME` to it. CI `verify.yml` still runs the old Node flows
 and needs the runner before it works again.
 
 **5.27.0 — configurable dev and verify ports.** `SKATEBOARD_FRONTEND_PORT`

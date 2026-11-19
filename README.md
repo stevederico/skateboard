@@ -203,7 +203,7 @@ Built with the latest and greatest:
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | **React** | v19 | UI Framework |
-| **skateboard** | v5.33.0 | Boilerplate (this repo) |
+| **skateboard** | v5.37.0 | Boilerplate (this repo) |
 | **skateboard-ui** | v5.27.0 | Application Shell, Components, Theming |
 | **Vite** | v8 | Build Tool & Dev Server (JSX via tsconfig `react-jsx`) |
 | **CSS** | plain | Styling: skateboard-ui `styles.css` + `src/assets/styles.css`, no Tailwind |
@@ -292,7 +292,7 @@ npm run guardrails:install    # once: dependency-cruiser into guardrails/
 npm run lint                  # oxlint guardrails (rules from AGENTS.md)
 npm run test:guardrails       # rule tests
 npm run depcruise             # import-graph boundaries
-npm run verify                # bash: build, serve from the backend on a free port, click through every page and flow (needs my-factory)
+npm run verify                # bash: build, serve from the backend on a free port, click through every page and flow (needs Garden)
 ```
 
 <br />

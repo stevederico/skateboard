@@ -479,7 +479,7 @@ function configuredHooksPath(cwd) {
 function hooksPathWarning({ postinstall, existingHooks, hooksPath }) {
   if (!String(postinstall ?? '').includes('hooksPath')) return null;
   if (hooksPath) {
-    return `core.hooksPath is already ${hooksPath}, so the postinstall leaves it alone: .githooks/ runs only if the hooks there call it (my-factory 0.19+ does).`;
+    return `core.hooksPath is already ${hooksPath}, so the postinstall leaves it alone: .githooks/ runs only if the hooks there call it (Garden 0.19+ does).`;
   }
   if (!existingHooks.length) return null;
   return `existing git hook(s) in .git/hooks (${existingHooks.join(', ')}) — no core.hooksPath is set, so the postinstall sets it to .githooks and bypasses them; move them into .githooks/ to keep them running.`;
