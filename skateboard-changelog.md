@@ -15,6 +15,11 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.37.0
+
+  CI verify by hand
+  Say garden pr
+
 5.36.0
 
   Fix review findings

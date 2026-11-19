@@ -7,13 +7,18 @@ Two ways to bring an existing app up to the latest skateboard template:
 
 **4.x → 5.0 is a breaking major.** Follow the full checklist in [`AGENTS.md` → Migrating 4.x → 5.0](../AGENTS.md#migrating-4x-50-exact-checklist) (icons, DynamicIcon, Vite/SWC, ui pin `5.0.0`, Rust backend). Do not only run the updater.
 
+**5.37.0 — CI verify by hand.** `.github/workflows/verify.yml` no longer runs
+on every pull request, since CI cannot reach the private Garden runner; run it
+from Actions when you need it. Verify runs locally through `garden pr`, and
+AGENTS.md now says `garden pr <body.md>` instead of the script path.
+
 **5.35.0 — Garden.** The factory repo is now Garden (`~/Projects/garden`).
 `guardrails/verify/app.sh` (synced) reads `GARDEN_VERIFY` and `GARDEN_HOME`
 instead of `FACTORY_VERIFY` and `FACTORY_HOME`. Run the updater; with the old
 file, verify starts itself over and over.
 
 **5.34.0 — pull requests.** AGENTS.md says how changes reach skateboard now:
-a branch, then the factory's `review/pr.sh`, which attaches verify's proof and
+a branch, then `garden pr` (Garden's `review/pr.sh`), which attaches verify's proof and
 starts a robot review. Apps get the bullet through the updater, but it applies
 only to repos in Garden's `GARDEN_PR_REPOS`; apps not listed still push to
 master.
