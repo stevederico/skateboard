@@ -14,7 +14,9 @@ file, verify starts itself over and over.
 
 **5.34.0 — pull requests.** AGENTS.md says how changes reach skateboard now:
 a branch, then the factory's `review/pr.sh`, which attaches verify's proof and
-starts a robot review. Apps are not affected.
+starts a robot review. Apps get the bullet through the updater, but it applies
+only to repos in Garden's `GARDEN_PR_REPOS`; apps not listed still push to
+master.
 
 **5.33.0 — fuzz fixes.** The factory's fuzz robot found three bugs. The
 backend now answers `GET /api/signup/options` (it was a 404 on every auth
