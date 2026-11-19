@@ -15,6 +15,10 @@
     that's why this file keeps the `skateboard-` prefix (so scaffolds don't inherit it).
 -->
 
+5.35.0
+
+  Follow Garden rename
+
 5.34.0
 
   Pull request flow

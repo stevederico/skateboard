@@ -1,7 +1,7 @@
-if [ -z "${FACTORY_VERIFY:-}" ]; then
-  runner="${FACTORY_HOME:-$(dirname "$(git config --global core.hooksPath 2> /dev/null || echo .)")}/verify/verify.sh"
+if [ -z "${GARDEN_VERIFY:-}" ]; then
+  runner="${GARDEN_HOME:-$(dirname "$(git config --global core.hooksPath 2> /dev/null || echo .)")}/verify/verify.sh"
   [ -f "$runner" ] || {
-    printf 'verify: the my-factory runner is not installed (looked for %s). Install my-factory, or set FACTORY_HOME to its folder.\n' "$runner" >&2
+    printf 'verify: the Garden runner is not installed (looked for %s). Install Garden, or set GARDEN_HOME to its folder.\n' "$runner" >&2
     exit 1
   }
   exec bash "$runner" "$0"
